@@ -19,7 +19,7 @@ class SettingsStore(private val context: Context) {
     private val scryfallUpdatedAtKey = stringPreferencesKey("scryfall_updated_at")
     private val lastScryfallCheckKey = longPreferencesKey("scryfall_last_check")
 
-    val themeId: Flow<String> = context.dataStore.data.map { it[themeKey] ?: "catppuccin" }
+    val themeId: Flow<String> = context.dataStore.data.map { it[themeKey] ?: "nord" }
     val darkMode: Flow<Boolean> = context.dataStore.data.map { it[darkKey] ?: true }
 
     suspend fun setTheme(id: String) {
