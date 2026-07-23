@@ -95,6 +95,9 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Meta screen uses Jsoup to parse the MTGGoldfish metagame HTML in-app
   (no WebView or browser redirect); data scoped to `#metagame-decks-container`;
   network request on Dispatchers.IO. Standard format auto-loaded on launch.
+- Custom `User-Agent: MtGCardTracker/1.0` set on `HttpURLConnection` requests
+  (Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents;
+  Jsoup connections send a reasonable default).
 - `fallbackToDestructiveMigration()` is used because the app is pre-release (v2
   added the `scryfall_cards` table).
 
