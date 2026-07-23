@@ -59,12 +59,13 @@ app/src/main/java/com/gitlab/abelnightroad/
    metagame page via Jsoup, scopes parsing to `#metagame-decks-container`,
    extracts deck data from `.archetype-tile` elements (cover image from
    `.card-image-tile` background-image CSS, name, meta %, cost), sorts by
-   meta % descending, and displays in a scrollable list. Other formats
-   selectable via FilterChips.
+   meta % descending, and displays in a 2-column `LazyVerticalGrid`.
+   Other formats selectable via FilterChips.
 7. Main screen has a FAB to quickly add a card manually (autocomplete from
    scryfall_cards reference table).
 8. Settings screen has sections wrapped in Cards: Theme selector, Backup &
-   Restore (export/import collection as JSON via SAF), and About.
+   Restore (export/import collection as JSON via SAF), Scryfall Reference Data
+   (last update date), and About.
 
 ## Manual add + autocomplete (data flow)
 

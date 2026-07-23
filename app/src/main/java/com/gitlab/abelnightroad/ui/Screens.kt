@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +18,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -601,7 +605,41 @@ private fun SettingsScreen(
             }
 
             Spacer(Modifier.height(12.dp))
-            AboutCard(scryfallUpdatedAt = scryfallUpdatedAt)
+            ScryfallCard(scryfallUpdatedAt = scryfallUpdatedAt)
+
+            Spacer(Modifier.height(12.dp))
+            AboutCard()
+        }
+    }
+}
+
+@Composable
+private fun ScryfallCard(scryfallUpdatedAt: String?) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Scryfall Reference Data", style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(Modifier.height(8.dp))
+            if (scryfallUpdatedAt != null) {
+                Text(
+                    "Last update: ${scryfallUpdatedAt.take(10)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Not yet synced — will update automatically on launch",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Card images provided by Scryfall.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -773,47 +811,47 @@ private fun MetaScreen(onBack: () -> Unit) {
                     }
                 }
                 is MetaState.Success -> {
-                    LazyColumn(Modifier.padding(horizontal = 16.dp)) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        Modifier.padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         items(state.decks) { deck ->
                             Card(
-                                Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                Modifier.fillMaxWidth(),
                                 elevation = CardDefaults.cardElevation(1.dp)
                             ) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (deck.coverImageUrl.isNotBlank()) {
-                                        AsyncImage(
-                                            model = deck.coverImageUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(40.dp)
-                                        )
-                                    }
-                                    Column(
-                                        Modifier.weight(1f).padding(horizontal = 8.dp)
+                                Column(Modifier.padding(8.dp)) {
+                                    Box(
+                                        Modifier.fillMaxWidth().aspectRatio(1f),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text(deck.name,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold)
-                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            if (deck.metaPercentage.isNotBlank()) {
-                                                Text(deck.metaPercentage,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.primary)
-                                            }
-                                            if (deck.winRate.isNotBlank()) {
-                                                Text("\u00b7 ${deck.winRate}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
+                                        if (deck.coverImageUrl.isNotBlank()) {
+                                            AsyncImage(
+                                                model = deck.coverImageUrl,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
                                         }
                                     }
-                                    if (deck.cost.isNotBlank()) {
-                                        Text(deck.cost,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(deck.name,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1)
+                                    Spacer(Modifier.height(2.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        if (deck.metaPercentage.isNotBlank()) {
+                                            Text(deck.metaPercentage,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary)
+                                        }
+                                        if (deck.cost.isNotBlank()) {
+                                            Text(deck.cost,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
                                     }
                                 }
                             }
@@ -826,7 +864,7 @@ private fun MetaScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun AboutCard(scryfallUpdatedAt: String? = null) {
+private fun AboutCard() {
     Card(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         elevation = CardDefaults.cardElevation(2.dp)
@@ -836,25 +874,12 @@ private fun AboutCard(scryfallUpdatedAt: String? = null) {
                 Icon(painterResource(R.drawable.ic_info), null, Modifier.padding(end = 8.dp))
                 Text("About", style = MaterialTheme.typography.titleMedium)
             }
+            Spacer(Modifier.height(8.dp))
             Text(
                 "MtG Card Tracker helps Magic: The Gathering collectors find cards across " +
-                    "their boxes and binders. Card images by Scryfall.",
-                Modifier.padding(top = 8.dp)
+                    "their boxes and binders.",
+                style = MaterialTheme.typography.bodySmall
             )
-            Spacer(Modifier.height(4.dp))
-            if (scryfallUpdatedAt != null) {
-                Text(
-                    "Last Scryfall update: ${scryfallUpdatedAt.take(10)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    "Scryfall data not yet synced — will update automatically",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }
