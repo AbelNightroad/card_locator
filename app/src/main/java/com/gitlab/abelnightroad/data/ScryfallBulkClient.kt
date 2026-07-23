@@ -6,6 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -45,8 +46,18 @@ object ScryfallBulkClient {
             connectTimeout = 30_000
             readTimeout = 30_000
             setRequestProperty("User-Agent", USER_AGENT)
+            setRequestProperty("Accept", "application/json")
+            instanceFollowRedirects = true
         }
         try {
+            conn.connect()
+            val code = conn.responseCode
+            if (code != HttpURLConnection.HTTP_OK) {
+                val errorBody = try {
+                    conn.errorStream?.bufferedReader()?.readText() ?: "no error body"
+                } catch (_: Exception) { "no error body" }
+                throw IOException("Scryfall API returned $code: $errorBody")
+            }
             conn.inputStream.bufferedReader().use { parseMeta(it.readText()) }
         } finally {
             conn.disconnect()
@@ -66,8 +77,17 @@ object ScryfallBulkClient {
             connectTimeout = 30_000
             readTimeout = 0
             setRequestProperty("User-Agent", USER_AGENT)
+            instanceFollowRedirects = true
         }
         try {
+            conn.connect()
+            val code = conn.responseCode
+            if (code != HttpURLConnection.HTTP_OK) {
+                val errorBody = try {
+                    conn.errorStream?.bufferedReader()?.readText() ?: "no error body"
+                } catch (_: Exception) { "no error body" }
+                throw IOException("Scryfall download returned $code: $errorBody")
+            }
             val total = conn.contentLengthLong
             conn.inputStream.use { input ->
                 dest.outputStream().use { out ->

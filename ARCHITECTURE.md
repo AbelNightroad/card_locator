@@ -28,7 +28,7 @@ app/src/main/java/com/gitlab/abelnightroad/
     └── ui/
     ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings
     ├── MainViewModel.kt
-    ├── MetaViewModel.kt           # fetch + parse MTGGoldfish metagame via Jsoup (#metagame-decks-container)
+    ├── MetaViewModel.kt           # parse MTGGoldfish archetype-tiles from #metagame-decks-container
     ├── ImportViewModel.kt         # CSV import
     ├── ScryfallImportViewModel.kt # bulk JSON import
     ├── ManualAddViewModel.kt      # manual add + autocomplete
@@ -57,9 +57,10 @@ app/src/main/java/com/gitlab/abelnightroad/
 5. Drawer -> Import CSV, Add Card, Meta, Settings.
 6. Meta screen -> auto-loads Standard on startup; fetches the MTGGoldfish
    metagame page via Jsoup, scopes parsing to `#metagame-decks-container`,
-   extracts deck data (cover image, name, meta %, cost), sorts by meta %
-   descending, and displays in a scrollable list. Other formats selectable
-   via FilterChips.
+   extracts deck data from `.archetype-tile` elements (cover image from
+   `.card-image-tile` background-image CSS, name, meta %, cost), sorts by
+   meta % descending, and displays in a scrollable list. Other formats
+   selectable via FilterChips.
 7. Main screen has a FAB to quickly add a card manually (autocomplete from
    scryfall_cards reference table).
 8. Settings screen has sections wrapped in Cards: Theme selector, Backup &
@@ -92,12 +93,14 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Reference table from Scryfall bulk data enables offline autocomplete; imported
   once and streamed so memory stays flat.
 - Themes in separate files; default **Nord (dark)**.
-- Meta screen uses Jsoup to parse the MTGGoldfish metagame HTML in-app
-  (no WebView or browser redirect); data scoped to `#metagame-decks-container`;
-  network request on Dispatchers.IO. Standard format auto-loaded on launch.
-- Custom `User-Agent: MtGCardTracker/1.0` set on `HttpURLConnection` requests
-  (Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents;
-  Jsoup connections send a reasonable default).
+- Meta screen uses Jsoup to parse archetype-tile divs from `#metagame-decks-container`
+  (MTGGoldfish no longer uses HTML tables; cover image extracted from
+  `.card-image-tile` background-image CSS via regex). Standard auto-loaded.
+- Custom `User-Agent: MtGCardTracker/1.0` set on all HTTP connections (Jsoup
+  `.userAgent()` + `HttpURLConnection.setRequestProperty`).
+  Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents.
+  Both `getDefaultCardsMeta()` and `download()` check `responseCode` and read
+  `errorStream` on non-200 for precise diagnostics.
 - `fallbackToDestructiveMigration()` is used because the app is pre-release (v2
   added the `scryfall_cards` table).
 

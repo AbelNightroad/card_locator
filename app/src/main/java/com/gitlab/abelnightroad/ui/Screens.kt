@@ -841,10 +841,16 @@ private fun AboutCard(scryfallUpdatedAt: String? = null) {
                     "their boxes and binders. Card images by Scryfall.",
                 Modifier.padding(top = 8.dp)
             )
-            scryfallUpdatedAt?.let { date ->
-                Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(4.dp))
+            if (scryfallUpdatedAt != null) {
                 Text(
-                    "Last Scryfall update: ${date.take(10)}",
+                    "Last Scryfall update: ${scryfallUpdatedAt.take(10)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Scryfall data not yet synced — will update automatically",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
