@@ -352,11 +352,9 @@ private fun TagRow(tagCount: TagCount, onClick: (String) -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("${tagCount.cardCount} cards", style = MaterialTheme.typography.bodyMedium)
-                if (tagCount.totalValue > 0) {
-                    Text("\$${"%.2f".format(tagCount.totalValue)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Text("\$${"%.2f".format(tagCount.totalValue)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
