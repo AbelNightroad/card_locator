@@ -44,8 +44,11 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -370,43 +373,70 @@ private fun CardListScreen(
     ) { padding ->
         LazyColumn(Modifier.padding(padding).padding(horizontal = 8.dp)) {
             items(cards, key = { it.id }) { card ->
-                Card(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(card.name, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                "${card.setName} \u00b7 ${card.rarity}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                val dismissState = rememberSwipeToDismissBoxState(
+                    confirmValueChange = {
+                        if (it == SwipeToDismissBoxValue.EndToStart) {
+                            scope.launch { repository.deleteCard(card.id) }
+                            true
+                        } else false
+                    }
+                )
+                SwipeToDismissBox(
+                    state = dismissState,
+                    backgroundContent = {
+                        Box(
+                            Modifier.fillMaxSize().padding(vertical = 4.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Card(
+                                Modifier.fillMaxSize(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
+                                    Text("\u2715  Delete",
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(end = 20.dp))
+                                }
+                            }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                onClick = { scope.launch { repository.decrementQuantity(card.id) } },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Text("\u2212", fontWeight = FontWeight.Bold)
+                    },
+                    enableDismissFromStartToEnd = false,
+                    enableDismissFromEndToStart = true
+                ) {
+                    Card(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(card.name, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "${card.setName} \u00b7 ${card.rarity}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
-                            Text("${card.quantity}",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold)
-                            IconButton(
-                                onClick = { scope.launch { repository.incrementQuantity(card.id) } },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Text("+", fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            IconButton(
-                                onClick = { scope.launch { repository.deleteCard(card.id) } },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Text("\u2715", color = MaterialTheme.colorScheme.error)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { scope.launch { repository.decrementQuantity(card.id) } },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Text("\u2212", fontWeight = FontWeight.Bold)
+                                }
+                                Text("${card.quantity}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold)
+                                IconButton(
+                                    onClick = { scope.launch { repository.incrementQuantity(card.id) } },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Text("+", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
