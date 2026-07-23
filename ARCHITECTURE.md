@@ -55,7 +55,7 @@ app/src/main/java/com/gitlab/abelnightroad/
    (+/- buttons) and delete (✕).
 3. Tap a card -> fullscreen Scryfall image overlay.
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
-5. Drawer -> Import CSV, Add Card, Meta, Settings.
+5. Drawer -> Import CSV, Manage Tags, Meta, Settings.
 6. Meta screen -> auto-loads Standard on startup; fetches the MTGGoldfish
    metagame page via Jsoup, scopes parsing to `#metagame-decks-container`,
    extracts deck data from `.archetype-tile` elements (cover image from

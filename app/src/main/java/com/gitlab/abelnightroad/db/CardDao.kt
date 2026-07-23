@@ -49,6 +49,12 @@ interface CardDao {
     @Query("DELETE FROM cards WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("DELETE FROM cards WHERE tag = :tag")
+    suspend fun deleteByTag(tag: String)
+
+    @Query("UPDATE cards SET tag = :newTag WHERE tag = :oldTag")
+    suspend fun renameTag(oldTag: String, newTag: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(cards: List<CardEntity>)
 

@@ -39,6 +39,10 @@ class CardRepository(private val dao: CardDao) {
 
     suspend fun deleteCard(id: Long) = dao.deleteById(id)
 
+    suspend fun deleteByTag(tag: String) = dao.deleteByTag(tag)
+
+    suspend fun renameTag(oldTag: String, newTag: String) = dao.renameTag(oldTag, newTag)
+
     /**
      * Imports a ManaBox CSV, tagging every row with [tag] (a storage location).
      * Rows are appended; existing rows for the same tag are replaced on re-import.

@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,6 +48,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -108,7 +110,7 @@ fun AppNavigation(
             ModalDrawerSheet {
                 DrawerContent(
                     onImport = { navigateTo(Screen.Import) },
-                    onAddCard = { navigateTo(Screen.AddCard) },
+                    onManageTags = { navigateTo(Screen.ManageTags) },
                     onMeta = { navigateTo(Screen.Meta) },
                     onSettings = { navigateTo(Screen.Settings) },
                     onMain = { navigateTo(Screen.Main) }
@@ -140,6 +142,10 @@ fun AppNavigation(
                 scryfall = scryfall,
                 onBack = { screen = Screen.Main }
             )
+            Screen.ManageTags -> ManageTagsScreen(
+                repository = repository,
+                onBack = { screen = Screen.Main }
+            )
             Screen.Settings -> SettingsScreen(
                 viewModel = mainViewModel,
                 repository = repository,
@@ -161,6 +167,7 @@ sealed interface Screen {
     data class Cards(val tag: String) : Screen
     data object Import : Screen
     data object AddCard : Screen
+    data object ManageTags : Screen
     data object Settings : Screen
     data object Meta : Screen
 }
@@ -168,7 +175,7 @@ sealed interface Screen {
 @Composable
 private fun DrawerContent(
     onImport: () -> Unit,
-    onAddCard: () -> Unit,
+    onManageTags: () -> Unit,
     onMeta: () -> Unit,
     onSettings: () -> Unit,
     onMain: () -> Unit
@@ -188,9 +195,9 @@ private fun DrawerContent(
             modifier = Modifier.clickable(onClick = onImport)
         )
         ListItem(
-            headlineContent = { Text("Add Card") },
+            headlineContent = { Text("Manage Tags") },
             leadingContent = { Icon(painterResource(R.drawable.ic_add), null) },
-            modifier = Modifier.clickable(onClick = onAddCard)
+            modifier = Modifier.clickable(onClick = onManageTags)
         )
         ListItem(
             headlineContent = { Text("Meta") },
@@ -407,7 +414,8 @@ private fun CardListScreen(
                     enableDismissFromEndToStart = true
                 ) {
                     Card(
-                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            .clickable { onCardClick(card) },
                         elevation = CardDefaults.cardElevation(2.dp)
                     ) {
                         Row(
@@ -454,10 +462,13 @@ private fun FullscreenOverlay(scryfallId: String, onDismiss: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             Card(
-                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                modifier = Modifier.fillMaxWidth(0.8f)
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable(onClick = onDismiss)
             ) {
-                CardImage(scryfallId = scryfallId, modifier = Modifier.fillMaxSize(), large = true)
+                Box(Modifier.aspectRatio(5f / 7f)) {
+                    CardImage(scryfallId = scryfallId, modifier = Modifier.fillMaxSize(), large = true)
+                }
             }
         }
     }
@@ -821,8 +832,8 @@ private fun ManualAddScreen(
 @Composable
 private fun MetaScreen(onBack: () -> Unit) {
     val formats = listOf(
-        "Standard", "Modern", "Pioneer", "Historic", "Explorer", "Timeless",
-        "Alchemy", "Pauper", "Legacy", "Vintage", "Premodern", "Commander", "Brawl"
+        "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
+        "Premodern", "Commander", "Brawl"
     )
     var selectedFormat by remember { mutableStateOf("Standard") }
     val metaViewModel: MetaViewModel = viewModel()
@@ -931,6 +942,103 @@ private fun MetaScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ManageTagsScreen(
+    repository: CardRepository,
+    onBack: () -> Unit
+) {
+    val tags by repository.tagCounts.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    var deleteTag by remember { mutableStateOf<String?>(null) }
+    var renameTag by remember { mutableStateOf<String?>(null) }
+    var newTagName by remember { mutableStateOf("") }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Manage Tags") },
+                navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } }
+            )
+        }
+    ) { padding ->
+        LazyColumn(Modifier.padding(padding).padding(16.dp)) {
+            items(tags, key = { it.tag }) { tagCount ->
+                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(tagCount.tag, style = MaterialTheme.typography.titleSmall)
+                            Text("${tagCount.cardCount} cards",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        IconButton(
+                            onClick = {
+                                newTagName = tagCount.tag
+                                renameTag = tagCount.tag
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Text("\u270E", fontWeight = FontWeight.Bold)
+                        }
+                        IconButton(
+                            onClick = { deleteTag = tagCount.tag },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Text("\u2715", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    deleteTag?.let { tag ->
+        AlertDialog(
+            onDismissRequest = { deleteTag = null },
+            title = { Text("Delete tag \"$tag\"?") },
+            text = { Text("All ${tags.firstOrNull { it.tag == tag }?.cardCount ?: 0} cards in this tag will be permanently deleted.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch { repository.deleteByTag(tag) }
+                    deleteTag = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTag = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    renameTag?.let { oldTag ->
+        AlertDialog(
+            onDismissRequest = { renameTag = null },
+            title = { Text("Rename tag") },
+            text = {
+                OutlinedTextField(
+                    value = newTagName,
+                    onValueChange = { newTagName = it },
+                    label = { Text("New name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (newTagName.isNotBlank() && newTagName != oldTag) {
+                        scope.launch { repository.renameTag(oldTag, newTagName) }
+                    }
+                    renameTag = null
+                }) { Text("Rename") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameTag = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 
