@@ -70,6 +70,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 import com.gitlab.abelnightroad.R
 import com.gitlab.abelnightroad.data.BackupStore
 import com.gitlab.abelnightroad.data.CardRepository
@@ -640,21 +642,28 @@ private fun SettingsScreen(
         Column(Modifier.padding(padding).padding(16.dp)) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Theme", style = MaterialTheme.typography.titleMedium)
+                    Text("Appearance", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
-                    Box {
-                        OutlinedButton(onClick = { expanded = true }) {
-                            Text(THEMES.first { it.id == themeId }.label)
-                        }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            THEMES.forEach { theme ->
-                                DropdownMenuItem(
-                                    text = { Text(theme.label) },
-                                    onClick = {
-                                        viewModel.setTheme(theme.id)
-                                        expanded = false
-                                    }
-                                )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Current Theme", style = MaterialTheme.typography.bodyLarge)
+                        Box {
+                            OutlinedButton(onClick = { expanded = true }) {
+                                Text(THEMES.first { it.id == themeId }.label)
+                            }
+                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                THEMES.forEach { theme ->
+                                    DropdownMenuItem(
+                                        text = { Text(theme.label) },
+                                        onClick = {
+                                            viewModel.setTheme(theme.id)
+                                            expanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -930,10 +939,18 @@ private fun MetaScreen(onBack: () -> Unit) {
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (deck.coverImageUrl.isNotBlank()) {
-                                                    AsyncImage(
-                                                        model = deck.coverImageUrl,
+                                                    val painter = rememberAsyncImagePainter(
+                                                        ImageRequest.Builder(LocalContext.current)
+                                                            .data(deck.coverImageUrl)
+                                                            .crossfade(true)
+                                                            .setHeader("User-Agent", "MtGCardTracker/1.0")
+                                                            .build()
+                                                    )
+                                                    androidx.compose.foundation.Image(
+                                                        painter = painter,
                                                         contentDescription = null,
-                                                        modifier = Modifier.fillMaxSize()
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
                                                     )
                                                 }
                                             }
