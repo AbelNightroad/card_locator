@@ -1,0 +1,7 @@
+*.iml
+.gradle
+build/
+app/build/
+local.properties
+.keystore_secret.txt
+app/keystore.jks
