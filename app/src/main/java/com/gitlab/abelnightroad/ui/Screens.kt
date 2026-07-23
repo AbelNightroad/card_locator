@@ -642,7 +642,7 @@ private fun SettingsScreen(
         Column(Modifier.padding(padding).padding(16.dp)) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Appearance", style = MaterialTheme.typography.titleMedium)
+                    Text("Appearance", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -698,7 +698,7 @@ private fun SettingsScreen(
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Backup & Restore", style = MaterialTheme.typography.titleMedium)
+                    Text("Backup & Restore", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = { exportLauncher.launch("card_tracker_backup.json") },
@@ -734,7 +734,7 @@ private fun ScryfallCard(scryfallUpdatedAt: String?) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Scryfall Reference Data", style = MaterialTheme.typography.titleMedium)
+                Text("Scryfall Reference Data", style = MaterialTheme.typography.titleLarge)
             }
             Spacer(Modifier.height(8.dp))
             if (scryfallUpdatedAt != null) {
@@ -1162,7 +1162,7 @@ private fun AboutCard() {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(painterResource(R.drawable.ic_info), null, Modifier.padding(end = 8.dp))
-                Text("About", style = MaterialTheme.typography.titleMedium)
+                Text("About", style = MaterialTheme.typography.titleLarge)
             }
             Spacer(Modifier.height(8.dp))
             Text(
