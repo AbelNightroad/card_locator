@@ -21,6 +21,7 @@ class SettingsStore(private val context: Context) {
 
     val themeId: Flow<String> = context.dataStore.data.map { it[themeKey] ?: "nord" }
     val darkMode: Flow<Boolean> = context.dataStore.data.map { it[darkKey] ?: true }
+    val scryfallUpdatedAt: Flow<String?> = context.dataStore.data.map { it[scryfallUpdatedAtKey] }
 
     suspend fun setTheme(id: String) {
         context.dataStore.edit { it[themeKey] = id }

@@ -492,6 +492,7 @@ private fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themeId by viewModel.themeId.collectAsState(initial = "nord")
+    val scryfallUpdatedAt by viewModel.scryfallUpdatedAt.collectAsState(initial = null)
     var expanded by remember { mutableStateOf(false) }
     var backupStatus by remember { mutableStateOf("") }
 
@@ -600,7 +601,7 @@ private fun SettingsScreen(
             }
 
             Spacer(Modifier.height(12.dp))
-            AboutCard()
+            AboutCard(scryfallUpdatedAt = scryfallUpdatedAt)
         }
     }
 }
@@ -821,7 +822,7 @@ private fun MetaScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun AboutCard() {
+private fun AboutCard(scryfallUpdatedAt: String? = null) {
     Card(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         elevation = CardDefaults.cardElevation(2.dp)
@@ -836,6 +837,14 @@ private fun AboutCard() {
                     "their boxes and binders. Card images by Scryfall.",
                 Modifier.padding(top = 8.dp)
             )
+            scryfallUpdatedAt?.let { date ->
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Last Scryfall update: ${date.take(10)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

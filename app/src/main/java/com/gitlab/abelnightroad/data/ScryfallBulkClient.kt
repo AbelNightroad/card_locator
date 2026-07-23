@@ -20,7 +20,7 @@ object ScryfallBulkClient {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    private const val META_URL = "https://api.scryfall.com/bulk-data/default-cards"
+    private const val META_URL = "https://api.scryfall.com/bulk-data/default_cards"
 
     @Serializable
     private data class BulkDataResponse(

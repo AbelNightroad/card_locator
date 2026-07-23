@@ -24,6 +24,7 @@ class MainViewModel(
 
     val themeId = settings.themeId
     val darkMode = settings.darkMode
+    val scryfallUpdatedAt = settings.scryfallUpdatedAt
 
     fun searchFlow(query: String) = repository.searchByName(query)
 
