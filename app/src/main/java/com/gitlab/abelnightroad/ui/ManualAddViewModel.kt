@@ -71,7 +71,7 @@ class ManualAddViewModel(
                     quantity = qty,
                     manaBoxId = "",
                     scryfallId = card.id,
-                    purchasePrice = 0.0,
+                    purchasePrice = card.priceUsd ?: 0.0,
                     misprint = false,
                     altered = false,
                     condition = condition.value.ifBlank { "Near Mint" },

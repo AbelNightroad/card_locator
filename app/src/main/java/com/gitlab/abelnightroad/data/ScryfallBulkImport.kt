@@ -112,6 +112,7 @@ private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
         rarity = rarity,
         manaCost = manaCost,
         typeLine = typeLine,
-        oracleText = oracleText
+        oracleText = oracleText,
+        priceUsd = prices.usd?.toDoubleOrNull()
     )
 }

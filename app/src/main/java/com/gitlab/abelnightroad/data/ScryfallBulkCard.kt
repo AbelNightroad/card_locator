@@ -9,6 +9,13 @@ import kotlinx.serialization.Serializable
  * modelled; unknown keys are ignored by the JSON decoder.
  */
 @Serializable
+data class ScryfallPrices(
+    val usd: String? = null,
+    @SerialName("usd_foil") val usdFoil: String? = null,
+    @SerialName("usd_etched") val usdEtched: String? = null
+)
+
+@Serializable
 data class ScryfallBulkCard(
     val id: String = "",
     val name: String = "",
@@ -18,5 +25,6 @@ data class ScryfallBulkCard(
     val rarity: String = "",
     @SerialName("mana_cost") val manaCost: String = "",
     @SerialName("type_line") val typeLine: String = "",
-    @SerialName("oracle_text") val oracleText: String = ""
+    @SerialName("oracle_text") val oracleText: String = "",
+    val prices: ScryfallPrices = ScryfallPrices()
 )
