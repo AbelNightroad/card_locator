@@ -346,15 +346,18 @@ private fun TagRow(tagCount: TagCount, onClick: (String) -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(tagCount.tag, style = MaterialTheme.typography.titleMedium)
+            Text(tagCount.tag, style = MaterialTheme.typography.titleMedium)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("${tagCount.cardCount} cards", style = MaterialTheme.typography.bodyMedium)
                 if (tagCount.totalValue > 0) {
                     Text("\$${"%.2f".format(tagCount.totalValue)}",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Text("${tagCount.cardCount} cards", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
