@@ -25,11 +25,16 @@ class MainViewModel(
     val themeId = settings.themeId
     val darkMode = settings.darkMode
     val scryfallUpdatedAt = settings.scryfallUpdatedAt
+    val fontId = settings.fontId
 
     fun searchFlow(query: String) = repository.searchByName(query)
 
     fun setSearch(value: String) {
         _search.value = value
+    }
+
+    fun clearSearch() {
+        _search.value = ""
     }
 
     fun toggleMultiCopyOnly() {
@@ -42,5 +47,9 @@ class MainViewModel(
 
     fun setDarkMode(dark: Boolean) {
         viewModelScope.launch { settings.setDarkMode(dark) }
+    }
+
+    fun setFont(id: String) {
+        viewModelScope.launch { settings.setFont(id) }
     }
 }

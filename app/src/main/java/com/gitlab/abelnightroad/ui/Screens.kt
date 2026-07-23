@@ -59,6 +59,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,6 +77,8 @@ import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.gitlab.abelnightroad.R
+import com.gitlab.abelnightroad.ui.theme.FONTS
+import com.gitlab.abelnightroad.ui.theme.fontFamilyFor
 import com.gitlab.abelnightroad.data.BackupStore
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
@@ -125,7 +131,7 @@ fun AppNavigation(
                 viewModel = mainViewModel,
                 onTagClick = { screen = Screen.Cards(it) },
                 onCardClick = { selectedCard = it },
-                onAddCard = { screen = Screen.AddCard },
+                onAddCard = { screen = Screen.AddCard() },
                 onMenuClick = { scope.launch { drawerState.open() } }
             )
             is Screen.Cards -> CardListScreen(
@@ -139,14 +145,16 @@ fun AppNavigation(
                 scryfall = scryfall,
                 onBack = { screen = Screen.Main }
             )
-            Screen.AddCard -> ManualAddScreen(
+            is Screen.AddCard -> ManualAddScreen(
                 repository = repository,
                 scryfall = scryfall,
-                onBack = { screen = Screen.Main }
+                onBack = { screen = Screen.Main },
+                initialTag = s.initialTag
             )
             Screen.ManageTags -> ManageTagsScreen(
                 repository = repository,
-                onBack = { screen = Screen.Main }
+                onBack = { screen = Screen.Main },
+                onAddCard = { tag -> screen = Screen.AddCard(tag) }
             )
             Screen.Settings -> SettingsScreen(
                 viewModel = mainViewModel,
@@ -159,6 +167,16 @@ fun AppNavigation(
         }
     }
 
+    BackHandler(enabled = screen != Screen.Main || selectedCard != null) {
+        if (selectedCard != null) {
+            selectedCard = null
+        } else if (drawerState.isOpen) {
+            scope.launch { drawerState.close() }
+        } else {
+            screen = Screen.Main
+        }
+    }
+
     selectedCard?.let { card ->
         FullscreenOverlay(scryfallId = card.scryfallId, onDismiss = { selectedCard = null })
     }
@@ -168,7 +186,7 @@ sealed interface Screen {
     data object Main : Screen
     data class Cards(val tag: String) : Screen
     data object Import : Screen
-    data object AddCard : Screen
+    data class AddCard(val initialTag: String = "") : Screen
     data object ManageTags : Screen
     data object Settings : Screen
     data object Meta : Screen
@@ -270,6 +288,11 @@ private fun MainScreen(
                     leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
                     singleLine = true
                 )
+                if (search.isNotBlank()) {
+                    IconButton(onClick = viewModel::clearSearch) {
+                        Icon(Icons.Default.Close, "Clear search")
+                    }
+                }
                 IconButton(
                     onClick = viewModel::toggleMultiCopyOnly,
                     modifier = Modifier.padding(start = 4.dp)
@@ -308,14 +331,14 @@ private fun TagList(tags: List<TagCount>, onTagClick: (String) -> Unit) {
         return
     }
     LazyColumn(Modifier.padding(horizontal = 8.dp)) {
-        items(tags) { tag -> TagRow(tag.tag, tag.cardCount, onTagClick) }
+        items(tags) { tag -> TagRow(tag, onTagClick) }
     }
 }
 
 @Composable
-private fun TagRow(tag: String, count: Long, onClick: (String) -> Unit) {
+private fun TagRow(tagCount: TagCount, onClick: (String) -> Unit) {
     Card(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick(tag) },
+        Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick(tagCount.tag) },
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
@@ -323,8 +346,15 @@ private fun TagRow(tag: String, count: Long, onClick: (String) -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(tag, style = MaterialTheme.typography.titleMedium)
-            Text("$count cards", style = MaterialTheme.typography.bodyMedium)
+            Column {
+                Text(tagCount.tag, style = MaterialTheme.typography.titleMedium)
+                if (tagCount.totalValue > 0) {
+                    Text("\$${"%.2f".format(tagCount.totalValue)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Text("${tagCount.cardCount} cards", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -485,21 +515,13 @@ private fun ImportScreen(
 ) {
     val context = LocalContext.current
     val importVm = viewModel { ImportViewModel(repository) }
-    val bulkVm = viewModel { ScryfallImportViewModel(scryfall) }
     val state by importVm.state.collectAsState()
-    val bulkState by bulkVm.state.collectAsState()
     var tag by remember { mutableStateOf("MegaBox-01") }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let { importVm.importUri(context, it, tag.ifBlank { "Imported" }) }
-    }
-
-    val bulkLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { bulkVm.importUri(context, it) }
     }
 
     Scaffold(
@@ -540,33 +562,6 @@ private fun ImportScreen(
                 else -> Unit
             }
 
-            HorizontalDivider(Modifier.padding(vertical = 16.dp))
-            Text(
-                "Scryfall reference data",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                "Reference data auto-syncs on launch: if the table is empty it is populated, " +
-                    "and every 15 days it checks Scryfall for a newer \"Default Cards\" bulk " +
-                    "file. You can also import a file manually. The downloaded jsonl.gz is " +
-                    "always deleted after import.",
-                Modifier.padding(top = 4.dp)
-            )
-            Button(
-                onClick = { bulkLauncher.launch("*/*") },
-                modifier = Modifier.padding(top = 16.dp).fillMaxWidth()
-            ) {
-                Text("Choose Scryfall bulk file (jsonl.gz / json)")
-            }
-            when (val b = bulkState) {
-                is ScryfallImportViewModel.State.Done ->
-                    Text("Imported ${b.inserted} reference cards.", Modifier.padding(top = 16.dp))
-                is ScryfallImportViewModel.State.Error ->
-                    Text("Error: ${b.message}", Modifier.padding(top = 16.dp))
-                is ScryfallImportViewModel.State.Importing ->
-                    Text("Importing reference cards...", Modifier.padding(top = 16.dp))
-                else -> Unit
-            }
         }
     }
 }
@@ -581,8 +576,10 @@ private fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themeId by viewModel.themeId.collectAsState(initial = "nord")
+    val fontId by viewModel.fontId.collectAsState(initial = "roboto")
     val scryfallUpdatedAt by viewModel.scryfallUpdatedAt.collectAsState(initial = null)
     var expanded by remember { mutableStateOf(false) }
+    var fontExpanded by remember { mutableStateOf(false) }
     var backupStatus by remember { mutableStateOf("") }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -667,6 +664,30 @@ private fun SettingsScreen(
                             }
                         }
                     }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Font", style = MaterialTheme.typography.bodyLarge)
+                        Box {
+                            OutlinedButton(onClick = { fontExpanded = true }) {
+                                Text(FONTS.first { it.id == fontId }.label)
+                            }
+                            DropdownMenu(expanded = fontExpanded, onDismissRequest = { fontExpanded = false }) {
+                                FONTS.forEach { font ->
+                                    DropdownMenuItem(
+                                        text = { Text(font.label) },
+                                        onClick = {
+                                            viewModel.setFont(font.id)
+                                            fontExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -741,7 +762,8 @@ private fun ScryfallCard(scryfallUpdatedAt: String?) {
 private fun ManualAddScreen(
     repository: CardRepository,
     scryfall: ScryfallRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    initialTag: String = ""
 ) {
     val context = LocalContext.current
     val viewModel: ManualAddViewModel = viewModel { ManualAddViewModel(repository, scryfall) }
@@ -754,6 +776,12 @@ private fun ManualAddScreen(
     val condition by viewModel.condition.collectAsState()
     val tag by viewModel.tag.collectAsState()
     val tagCounts by repository.tagCounts.collectAsState(initial = emptyList())
+
+    LaunchedEffect(initialTag) {
+        if (initialTag.isNotBlank() && tag.isBlank()) {
+            viewModel.tag.value = initialTag
+        }
+    }
 
     LaunchedEffect(saved) {
         if (saved) {
@@ -971,6 +999,9 @@ private fun MetaScreen(onBack: () -> Unit) {
                                                         fontWeight = FontWeight.SemiBold,
                                                         color = MaterialTheme.colorScheme.primary)
                                                 }
+                                                if (deck.metaPercentage.isNotBlank() && deck.cost.isNotBlank()) {
+                                                    Spacer(Modifier.width(12.dp))
+                                                }
                                                 if (deck.cost.isNotBlank()) {
                                                     Text(deck.cost,
                                                         style = MaterialTheme.typography.bodyMedium,
@@ -991,13 +1022,16 @@ private fun MetaScreen(onBack: () -> Unit) {
 @Composable
 private fun ManageTagsScreen(
     repository: CardRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onAddCard: (String) -> Unit
 ) {
     val tags by repository.tagCounts.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var deleteTag by remember { mutableStateOf<String?>(null) }
     var renameTag by remember { mutableStateOf<String?>(null) }
     var newTagName by remember { mutableStateOf("") }
+    var addTagName by remember { mutableStateOf("") }
+    var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -1005,6 +1039,11 @@ private fun ManageTagsScreen(
                 title = { Text("Manage Tags") },
                 navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddDialog = true }) {
+                Icon(painterResource(R.drawable.ic_add), "New Tag")
+            }
         }
     ) { padding ->
         LazyColumn(Modifier.padding(padding).padding(16.dp)) {
@@ -1080,6 +1119,32 @@ private fun ManageTagsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { renameTag = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddDialog = false },
+            title = { Text("New Tag") },
+            text = {
+                OutlinedTextField(
+                    value = addTagName,
+                    onValueChange = { addTagName = it },
+                    label = { Text("Tag name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (addTagName.isNotBlank()) {
+                        onAddCard(addTagName)
+                    }
+                    showAddDialog = false
+                }) { Text("Add Cards") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddDialog = false }) { Text("Cancel") }
             }
         )
     }

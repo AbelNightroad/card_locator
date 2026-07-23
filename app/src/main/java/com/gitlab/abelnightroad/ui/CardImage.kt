@@ -4,12 +4,12 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
 import com.gitlab.abelnightroad.data.ScryfallImage
@@ -29,8 +29,9 @@ fun CardImage(
             .build()
     )
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        when (painter.state) {
+        when (val state = painter.state) {
             is AsyncImagePainter.State.Loading -> CircularProgressIndicator()
+            is AsyncImagePainter.State.Error -> Text("Failed to load image")
             else -> Image(
                 painter = painter,
                 contentDescription = null,

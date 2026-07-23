@@ -9,10 +9,12 @@ import com.gitlab.abelnightroad.ui.theme.themeById
 fun AppTheme(
     themeId: String,
     dark: Boolean,
+    fontId: String = "roboto",
     content: @Composable () -> Unit
 ) {
     val theme = remember(themeId) { themeById(themeId) }
     val colorScheme = if (dark) theme.dark else theme.light
+    val fontFamily = remember(fontId) { fontFamilyFor(fontId) }
     MaterialTheme(
         colorScheme = colorScheme,
         typography = MaterialTheme.typography,

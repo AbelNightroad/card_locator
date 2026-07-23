@@ -47,7 +47,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeId by mainViewModel.themeId.collectAsState(initial = "nord")
             val dark by mainViewModel.darkMode.collectAsState(initial = true)
-            AppTheme(themeId = themeId, dark = dark) {
+            val fontId by mainViewModel.fontId.collectAsState(initial = "roboto")
+            AppTheme(themeId = themeId, dark = dark, fontId = fontId) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppNavigation(
                         mainViewModel = mainViewModel,

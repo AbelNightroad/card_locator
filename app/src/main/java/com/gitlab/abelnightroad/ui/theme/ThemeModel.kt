@@ -1,6 +1,23 @@
 package com.gitlab.abelnightroad.ui.theme
 
 import androidx.compose.material3.ColorScheme
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import com.gitlab.abelnightroad.R
+
+enum class AppFont(val id: String, val label: String) {
+    ROBOTO("roboto", "Roboto"),
+    INTER("inter", "Inter"),
+    PLUS_JAKARTA_SANS("plus_jakarta_sans", "Plus Jakarta Sans")
+}
+
+val FONTS = AppFont.entries
+
+fun fontFamilyFor(fontId: String): FontFamily = when (fontId) {
+    "inter" -> FontFamily(Font(R.font.inter))
+    "plus_jakarta_sans" -> FontFamily(Font(R.font.plus_jakarta_sans))
+    else -> FontFamily.Default
+}
 
 /**
  * A named theme with a light and dark ColorScheme. Each concrete theme (Catppuccin,
