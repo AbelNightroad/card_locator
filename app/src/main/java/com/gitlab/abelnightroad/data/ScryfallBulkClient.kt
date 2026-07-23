@@ -21,6 +21,7 @@ object ScryfallBulkClient {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private const val META_URL = "https://api.scryfall.com/bulk-data/default_cards"
+    private const val USER_AGENT = "MtGCardTracker/1.0"
 
     @Serializable
     private data class BulkDataResponse(
@@ -43,6 +44,7 @@ object ScryfallBulkClient {
             requestMethod = "GET"
             connectTimeout = 30_000
             readTimeout = 30_000
+            setRequestProperty("User-Agent", USER_AGENT)
         }
         try {
             conn.inputStream.bufferedReader().use { parseMeta(it.readText()) }
@@ -63,6 +65,7 @@ object ScryfallBulkClient {
         val conn = (URL(uri).openConnection() as HttpURLConnection).apply {
             connectTimeout = 30_000
             readTimeout = 0
+            setRequestProperty("User-Agent", USER_AGENT)
         }
         try {
             val total = conn.contentLengthLong
