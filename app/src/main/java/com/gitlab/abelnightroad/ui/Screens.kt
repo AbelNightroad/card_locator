@@ -107,7 +107,7 @@ fun AppNavigation(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(Modifier.width(280.dp)) {
                 DrawerContent(
                     onImport = { navigateTo(Screen.Import) },
                     onManageTags = { navigateTo(Screen.ManageTags) },
@@ -990,7 +990,8 @@ private fun ManageTagsScreen(
                             onClick = { deleteTag = tagCount.tag },
                             modifier = Modifier.size(36.dp)
                         ) {
-                            Text("\u2715", color = MaterialTheme.colorScheme.error)
+                            Icon(painterResource(R.drawable.ic_delete), null,
+                                tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
