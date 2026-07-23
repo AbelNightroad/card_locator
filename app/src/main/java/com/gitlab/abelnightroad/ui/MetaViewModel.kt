@@ -11,8 +11,10 @@ import org.jsoup.Jsoup
 data class MetaDeckEntry(
     val rank: Int,
     val name: String,
+    val coverImageUrl: String,
     val metaPercentage: String,
     val winRate: String,
+    val cost: String,
     val tournaments: String
 )
 
@@ -42,6 +44,7 @@ class MetaViewModel : ViewModel() {
                     val winIdx = headers.indexOfFirst { it.contains("Win", ignoreCase = true) }
                     val eventIdx = headers.indexOfFirst { it.contains("Event", ignoreCase = true) || it.contains("Tournament", ignoreCase = true) || it.contains("Match", ignoreCase = true) }
                     val rankIdx = headers.indexOfFirst { it == "#" || it.contains("Rank", ignoreCase = true) }
+                    val priceIdx = headers.indexOfFirst { it.contains("Price", ignoreCase = true) || it.contains("Cost", ignoreCase = true) || it == "$" }
 
                     if (deckIdx == -1) continue
 
@@ -51,16 +54,20 @@ class MetaViewModel : ViewModel() {
                         val rank = if (rankIdx != -1 && rankIdx < cols.size)
                             cols[rankIdx].text().trim().toIntOrNull() ?: (i + 1)
                         else i + 1
-                        val deckName = if (deckIdx < cols.size) {
-                            val link = cols[deckIdx].select("a").first()
-                            link?.text()?.trim() ?: cols[deckIdx].text().trim()
-                        } else continue
+                        val deckCell = if (deckIdx < cols.size) cols[deckIdx] else continue
+                        val link = deckCell.select("a").first()
+                        val deckName = link?.text()?.trim() ?: deckCell.text().trim()
+                        val img = deckCell.select("img").first()
+                        val imgSrc = img?.attr("src")?.let { src ->
+                            if (src.startsWith("http")) src else "https://www.mtggoldfish.com$src"
+                        } ?: ""
                         val metaPct = if (metaIdx != -1 && metaIdx < cols.size) cols[metaIdx].text().trim() else ""
                         val winRate = if (winIdx != -1 && winIdx < cols.size) cols[winIdx].text().trim() else ""
+                        val cost = if (priceIdx != -1 && priceIdx < cols.size) cols[priceIdx].text().trim() else ""
                         val events = if (eventIdx != -1 && eventIdx < cols.size) cols[eventIdx].text().trim() else ""
 
                         if (deckName.isNotBlank()) {
-                            decks.add(MetaDeckEntry(rank, deckName, metaPct, winRate, events))
+                            decks.add(MetaDeckEntry(rank, deckName, imgSrc, metaPct, winRate, cost, events))
                         }
                     }
                     if (decks.isNotEmpty()) break
@@ -69,7 +76,10 @@ class MetaViewModel : ViewModel() {
                 if (decks.isEmpty()) {
                     _state.value = MetaState.Error("No metagame data found for $format")
                 } else {
-                    _state.value = MetaState.Success(format, decks)
+                    val sorted = decks.sortedByDescending {
+                        it.metaPercentage.removeSuffix("%").toDoubleOrNull() ?: 0.0
+                    }.mapIndexed { idx, entry -> entry.copy(rank = idx + 1) }
+                    _state.value = MetaState.Success(format, sorted)
                 }
             } catch (e: Exception) {
                 _state.value = MetaState.Error(e.message ?: "Failed to load metagame data")

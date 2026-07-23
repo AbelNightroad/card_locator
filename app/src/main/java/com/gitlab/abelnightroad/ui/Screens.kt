@@ -7,8 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -61,7 +60,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.gitlab.abelnightroad.R
+import com.gitlab.abelnightroad.data.BackupStore
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.data.SettingsStore
@@ -69,7 +70,9 @@ import com.gitlab.abelnightroad.db.CardSearchResult
 import com.gitlab.abelnightroad.db.MultiCopyCard
 import com.gitlab.abelnightroad.db.TagCount
 import com.gitlab.abelnightroad.ui.theme.THEMES
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -133,6 +136,7 @@ fun AppNavigation(
             )
             Screen.Settings -> SettingsScreen(
                 viewModel = mainViewModel,
+                repository = repository,
                 onBack = { screen = Screen.Main }
             )
             Screen.Meta -> MetaScreen(
@@ -480,9 +484,62 @@ private fun ImportScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+private fun SettingsScreen(
+    viewModel: MainViewModel,
+    repository: CardRepository,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val themeId by viewModel.themeId.collectAsState(initial = "nord")
     var expanded by remember { mutableStateOf(false) }
+    var backupStatus by remember { mutableStateOf("") }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val cards = repository.getAllCards()
+                    val json = BackupStore.encode(cards)
+                    context.contentResolver.openOutputStream(it)?.use { out ->
+                        out.write(json.toByteArray(Charsets.UTF_8))
+                    }
+                    withContext(Dispatchers.Main) {
+                        backupStatus = "Exported ${cards.size} cards"
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        backupStatus = "Export failed: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val text = context.contentResolver.openInputStream(it)?.use { input ->
+                        input.bufferedReader(Charsets.UTF_8).readText()
+                    } ?: throw Exception("Could not read file")
+                    val cards = BackupStore.decode(text)
+                    repository.replaceAll(cards)
+                    withContext(Dispatchers.Main) {
+                        backupStatus = "Restored ${cards.size} cards"
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        backupStatus = "Restore failed: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -493,25 +550,56 @@ private fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         }
     ) { padding ->
         Column(Modifier.padding(padding).padding(16.dp)) {
-            Text("Theme", style = MaterialTheme.typography.titleMedium)
-            Box {
-                OutlinedButton(onClick = { expanded = true }) {
-                    Text(THEMES.first { it.id == themeId }.label)
-                }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    THEMES.forEach { theme ->
-                        DropdownMenuItem(
-                            text = { Text(theme.label) },
-                            onClick = {
-                                viewModel.setTheme(theme.id)
-                                expanded = false
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Theme", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Box {
+                        OutlinedButton(onClick = { expanded = true }) {
+                            Text(THEMES.first { it.id == themeId }.label)
+                        }
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                            THEMES.forEach { theme ->
+                                DropdownMenuItem(
+                                    text = { Text(theme.label) },
+                                    onClick = {
+                                        viewModel.setTheme(theme.id)
+                                        expanded = false
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Backup & Restore", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { exportLauncher.launch("card_tracker_backup.json") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Export collection as JSON")
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Restore collection from JSON")
+                    }
+                    if (backupStatus.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(backupStatus, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
             AboutCard()
         }
     }
@@ -619,7 +707,7 @@ private fun ManualAddScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MetaScreen(onBack: () -> Unit) {
     val formats = listOf(
@@ -638,17 +726,12 @@ private fun MetaScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        Column(Modifier.padding(padding).padding(16.dp)) {
-            Text(
-                "Format",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(Modifier.height(8.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+        Column(Modifier.padding(padding)) {
+            LazyRow(
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                formats.forEach { format ->
+                items(formats) { format ->
                     FilterChip(
                         selected = selectedFormat == format,
                         onClick = {
@@ -659,8 +742,6 @@ private fun MetaScreen(onBack: () -> Unit) {
                     )
                 }
             }
-
-            Spacer(Modifier.height(16.dp))
 
             when (val state = metaState) {
                 is MetaState.Idle -> {
@@ -687,42 +768,46 @@ private fun MetaScreen(onBack: () -> Unit) {
                     }
                 }
                 is MetaState.Success -> {
-                    LazyColumn {
+                    LazyColumn(Modifier.padding(horizontal = 16.dp)) {
                         items(state.decks) { deck ->
                             Card(
                                 Modifier.fillMaxWidth().padding(vertical = 3.dp),
                                 elevation = CardDefaults.cardElevation(1.dp)
                             ) {
                                 Row(
-                                    Modifier.fillMaxWidth().padding(12.dp),
+                                    Modifier.fillMaxWidth().padding(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        "${deck.rank}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.width(32.dp),
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                                        Text(deck.name, style = MaterialTheme.typography.titleSmall)
-                                        Row {
+                                    if (deck.coverImageUrl.isNotBlank()) {
+                                        AsyncImage(
+                                            model = deck.coverImageUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(40.dp)
+                                        )
+                                    }
+                                    Column(
+                                        Modifier.weight(1f).padding(horizontal = 8.dp)
+                                    ) {
+                                        Text(deck.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                             if (deck.metaPercentage.isNotBlank()) {
                                                 Text(deck.metaPercentage,
                                                     style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    color = MaterialTheme.colorScheme.primary)
                                             }
                                             if (deck.winRate.isNotBlank()) {
-                                                Text(" \u00b7 ${deck.winRate}",
+                                                Text("\u00b7 ${deck.winRate}",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
                                     }
-                                    if (deck.tournaments.isNotBlank()) {
-                                        Text(deck.tournaments,
+                                    if (deck.cost.isNotBlank()) {
+                                        Text(deck.cost,
                                             style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }

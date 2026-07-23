@@ -19,6 +19,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── ScryfallBulkImport.kt      # streaming parser (gzip + array/jsonl) -> scryfall_cards
 │   ├── ScryfallRepository.kt      # reference table queries + bulk import
 │   ├── ScryfallImage.kt           # Scryfall image URL builder
+│   ├── BackupStore.kt             # kotlinx.serialization DTOs for JSON backup/restore
 │   └── SettingsStore.kt           # DataStore: theme id + dark mode
 ├── db/
 │   ├── AppDatabase.kt             # v2: cards + scryfall_cards
@@ -54,11 +55,14 @@ app/src/main/java/com/gitlab/abelnightroad/
 3. Tap a card -> fullscreen Scryfall image overlay.
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
 5. Drawer -> Import CSV, Add Card, Meta, Settings.
-6. Meta screen -> pick a format via FilterChips; fetches the MTGGoldfish
-   metagame page via Jsoup, parses the deck table, and displays deck names
-   with metagame %, win rate, and tournament count in a scrollable list.
+6. Meta screen -> pick a format via FilterChips in a scrollable LazyRow;
+   fetches the MTGGoldfish metagame page via Jsoup, parses the deck table
+   (cover image, name, meta %, cost), sorts by meta % descending, and
+   displays in a scrollable list.
 7. Main screen has a FAB to quickly add a card manually (autocomplete from
    scryfall_cards reference table).
+8. Settings screen has sections wrapped in Cards: Theme selector, Backup &
+   Restore (export/import collection as JSON via SAF), and About.
 
 ## Manual add + autocomplete (data flow)
 
@@ -111,3 +115,4 @@ Room instrumented tests need JDK <= 21).
 ## Git conventions
 
 - Commit after every discrete change; never add `Co-Authored-By` trailers.
+- Always follows the git conventional commits for best practice

@@ -22,6 +22,14 @@ class CardRepository(private val dao: CardDao) {
 
     suspend fun isEmpty(): Boolean = dao.count() == 0
 
+    suspend fun getAllCards(): List<CardEntity> = dao.getAll()
+
+    /** Replaces the entire collection with a new set of cards. */
+    suspend fun replaceAll(cards: List<CardEntity>) {
+        dao.clear()
+        if (cards.isNotEmpty()) dao.insertAll(cards)
+    }
+
     /** Inserts a single manually-added card. */
     suspend fun addCard(card: CardEntity) = dao.insert(card)
 

@@ -46,6 +46,9 @@ interface CardDao {
     @Query("DELETE FROM cards")
     suspend fun clear()
 
+    @Query("SELECT * FROM cards")
+    suspend fun getAll(): List<CardEntity>
+
     @Query("SELECT COUNT(*) FROM cards")
     suspend fun count(): Int
 
