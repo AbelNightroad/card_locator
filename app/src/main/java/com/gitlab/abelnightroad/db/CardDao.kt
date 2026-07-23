@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 
 data class TagCount(
     val tag: String,
-    val cardCount: Int
+    val cardCount: Long
 )
 
 data class CardSearchResult(
@@ -68,7 +68,7 @@ interface CardDao {
     suspend fun count(): Int
 
     @Query(
-        "SELECT tag, COUNT(*) AS cardCount FROM cards " +
+        "SELECT tag, COALESCE(SUM(quantity), 0) AS cardCount FROM cards " +
             "GROUP BY tag ORDER BY tag COLLATE NOCASE ASC"
     )
     fun tagCounts(): Flow<List<TagCount>>

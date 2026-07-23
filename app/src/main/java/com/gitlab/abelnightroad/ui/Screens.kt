@@ -311,7 +311,7 @@ private fun TagList(tags: List<TagCount>, onTagClick: (String) -> Unit) {
 }
 
 @Composable
-private fun TagRow(tag: String, count: Int, onClick: (String) -> Unit) {
+private fun TagRow(tag: String, count: Long, onClick: (String) -> Unit) {
     Card(
         Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick(tag) },
         elevation = CardDefaults.cardElevation(2.dp)
@@ -917,43 +917,51 @@ private fun MetaScreen(onBack: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(state.decks) { deck ->
-                            Card(
-                                Modifier.fillMaxWidth(),
-                                elevation = CardDefaults.cardElevation(1.dp)
-                            ) {
-                                Column(Modifier.padding(8.dp)) {
-                                    Box(
-                                        Modifier.fillMaxWidth().aspectRatio(1f),
-                                        contentAlignment = Alignment.Center
+                                    Card(
+                                        Modifier.fillMaxWidth(),
+                                        elevation = CardDefaults.cardElevation(1.dp)
                                     ) {
-                                        if (deck.coverImageUrl.isNotBlank()) {
-                                            AsyncImage(
-                                                model = deck.coverImageUrl,
-                                                contentDescription = null,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
+                                        Column(
+                                            Modifier.padding(8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Box(
+                                                Modifier.fillMaxWidth().aspectRatio(1f),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (deck.coverImageUrl.isNotBlank()) {
+                                                    AsyncImage(
+                                                        model = deck.coverImageUrl,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(deck.name,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 2,
+                                                textAlign = TextAlign.Center)
+                                            Spacer(Modifier.height(4.dp))
+                                            Row(
+                                                horizontalArrangement = Arrangement.Center,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                if (deck.metaPercentage.isNotBlank()) {
+                                                    Text(deck.metaPercentage,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = MaterialTheme.colorScheme.primary)
+                                                }
+                                                if (deck.cost.isNotBlank()) {
+                                                    Text(deck.cost,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
                                         }
                                     }
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(deck.name,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1)
-                                    Spacer(Modifier.height(2.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        if (deck.metaPercentage.isNotBlank()) {
-                                            Text(deck.metaPercentage,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary)
-                                        }
-                                        if (deck.cost.isNotBlank()) {
-                                            Text(deck.cost,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
