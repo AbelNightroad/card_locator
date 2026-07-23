@@ -84,4 +84,13 @@ class ManualAddViewModel(
             _saved.value = true
         }
     }
+
+    fun resetForm() {
+        _query.value = ""
+        _selected.value = null
+        quantity.value = "1"
+        foil.value = ""
+        condition.value = "Near Mint"
+        _saved.value = false
+    }
 }

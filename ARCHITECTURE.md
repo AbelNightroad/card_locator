@@ -51,7 +51,8 @@ app/src/main/java/com/gitlab/abelnightroad/
 
 1. Launch -> main list of Tags with per-tag card counts (theme from SettingsStore,
    default `nord` / dark).
-2. Tap a Tag -> that tag's card list.
+2. Tap a Tag -> that tag's card list, with per-card quantity controls
+   (+/- buttons) and delete (✕).
 3. Tap a card -> fullscreen Scryfall image overlay.
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
 5. Drawer -> Import CSV, Add Card, Meta, Settings.
@@ -62,7 +63,8 @@ app/src/main/java/com/gitlab/abelnightroad/
    meta % descending, and displays in a 2-column `LazyVerticalGrid`.
    Other formats selectable via FilterChips.
 7. Main screen has a FAB to quickly add a card manually (autocomplete from
-   scryfall_cards reference table).
+   scryfall_cards reference table). Form resets after each save so the user
+   can add multiple cards without re-navigating.
 8. Settings screen has sections wrapped in Cards: Theme selector, Backup &
    Restore (export/import collection as JSON via SAF), Scryfall Reference Data
    (last update date), and About.

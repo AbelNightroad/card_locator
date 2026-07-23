@@ -135,8 +135,7 @@ fun AppNavigation(
             Screen.AddCard -> ManualAddScreen(
                 repository = repository,
                 scryfall = scryfall,
-                onBack = { screen = Screen.Main },
-                onSaved = { screen = Screen.Main }
+                onBack = { screen = Screen.Main }
             )
             Screen.Settings -> SettingsScreen(
                 viewModel = mainViewModel,
@@ -358,6 +357,7 @@ private fun CardListScreen(
     onCardClick: (CardSearchResult) -> Unit
 ) {
     val cards by repository.cardsByTag(tag).collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -368,8 +368,50 @@ private fun CardListScreen(
             )
         }
     ) { padding ->
-        Column(Modifier.padding(padding)) {
-            CardResultList(cards, onCardClick)
+        LazyColumn(Modifier.padding(padding).padding(horizontal = 8.dp)) {
+            items(cards, key = { it.id }) { card ->
+                Card(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(card.name, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "${card.setName} \u00b7 ${card.rarity}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { scope.launch { repository.decrementQuantity(card.id) } },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text("\u2212", fontWeight = FontWeight.Bold)
+                            }
+                            Text("${card.quantity}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold)
+                            IconButton(
+                                onClick = { scope.launch { repository.incrementQuantity(card.id) } },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text("+", fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            IconButton(
+                                onClick = { scope.launch { repository.deleteCard(card.id) } },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text("\u2715", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -649,8 +691,7 @@ private fun ScryfallCard(scryfallUpdatedAt: String?) {
 private fun ManualAddScreen(
     repository: CardRepository,
     scryfall: ScryfallRepository,
-    onBack: () -> Unit,
-    onSaved: () -> Unit
+    onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val viewModel: ManualAddViewModel = viewModel { ManualAddViewModel(repository, scryfall) }
@@ -666,7 +707,7 @@ private fun ManualAddScreen(
     LaunchedEffect(saved) {
         if (saved) {
             Toast.makeText(context, "Card added", Toast.LENGTH_SHORT).show()
-            onSaved()
+            viewModel.resetForm()
         }
     }
 

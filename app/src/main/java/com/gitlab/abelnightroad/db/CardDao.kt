@@ -40,6 +40,15 @@ interface CardDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(card: CardEntity)
 
+    @Query("UPDATE cards SET quantity = quantity + 1 WHERE id = :id")
+    suspend fun incrementQuantity(id: Long)
+
+    @Query("UPDATE cards SET quantity = CASE WHEN quantity > 1 THEN quantity - 1 ELSE 1 END WHERE id = :id")
+    suspend fun decrementQuantity(id: Long)
+
+    @Query("DELETE FROM cards WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(cards: List<CardEntity>)
 

@@ -33,6 +33,12 @@ class CardRepository(private val dao: CardDao) {
     /** Inserts a single manually-added card. */
     suspend fun addCard(card: CardEntity) = dao.insert(card)
 
+    suspend fun incrementQuantity(id: Long) = dao.incrementQuantity(id)
+
+    suspend fun decrementQuantity(id: Long) = dao.decrementQuantity(id)
+
+    suspend fun deleteCard(id: Long) = dao.deleteById(id)
+
     /**
      * Imports a ManaBox CSV, tagging every row with [tag] (a storage location).
      * Rows are appended; existing rows for the same tag are replaced on re-import.
