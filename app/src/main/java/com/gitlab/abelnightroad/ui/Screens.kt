@@ -715,9 +715,13 @@ private fun MetaScreen(onBack: () -> Unit) {
         "Standard", "Modern", "Pioneer", "Historic", "Explorer", "Timeless",
         "Alchemy", "Pauper", "Legacy", "Vintage", "Premodern", "Commander", "Brawl"
     )
-    var selectedFormat by remember { mutableStateOf("") }
+    var selectedFormat by remember { mutableStateOf("Standard") }
     val metaViewModel: MetaViewModel = viewModel()
     val metaState by metaViewModel.state.collectAsState()
+
+    LaunchedEffect(Unit) {
+        metaViewModel.loadFormat("Standard")
+    }
 
     Scaffold(
         topBar = {

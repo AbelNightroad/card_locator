@@ -28,7 +28,7 @@ app/src/main/java/com/gitlab/abelnightroad/
     └── ui/
     ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings
     ├── MainViewModel.kt
-    ├── MetaViewModel.kt           # fetch + parse MTGGoldfish metagame data via Jsoup
+    ├── MetaViewModel.kt           # fetch + parse MTGGoldfish metagame via Jsoup (#metagame-decks-container)
     ├── ImportViewModel.kt         # CSV import
     ├── ScryfallImportViewModel.kt # bulk JSON import
     ├── ManualAddViewModel.kt      # manual add + autocomplete
@@ -55,10 +55,11 @@ app/src/main/java/com/gitlab/abelnightroad/
 3. Tap a card -> fullscreen Scryfall image overlay.
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
 5. Drawer -> Import CSV, Add Card, Meta, Settings.
-6. Meta screen -> pick a format via FilterChips in a scrollable LazyRow;
-   fetches the MTGGoldfish metagame page via Jsoup, parses the deck table
-   (cover image, name, meta %, cost), sorts by meta % descending, and
-   displays in a scrollable list.
+6. Meta screen -> auto-loads Standard on startup; fetches the MTGGoldfish
+   metagame page via Jsoup, scopes parsing to `#metagame-decks-container`,
+   extracts deck data (cover image, name, meta %, cost), sorts by meta %
+   descending, and displays in a scrollable list. Other formats selectable
+   via FilterChips.
 7. Main screen has a FAB to quickly add a card manually (autocomplete from
    scryfall_cards reference table).
 8. Settings screen has sections wrapped in Cards: Theme selector, Backup &
@@ -91,8 +92,9 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Reference table from Scryfall bulk data enables offline autocomplete; imported
   once and streamed so memory stays flat.
 - Themes in separate files; default **Nord (dark)**.
-- Meta screen uses Jsoup to parse the MTGGoldfish metagame table HTML in-app
-  (no WebView or browser redirect); network request on Dispatchers.IO.
+- Meta screen uses Jsoup to parse the MTGGoldfish metagame HTML in-app
+  (no WebView or browser redirect); data scoped to `#metagame-decks-container`;
+  network request on Dispatchers.IO. Standard format auto-loaded on launch.
 - `fallbackToDestructiveMigration()` is used because the app is pre-release (v2
   added the `scryfall_cards` table).
 

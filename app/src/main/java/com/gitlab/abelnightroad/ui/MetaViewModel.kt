@@ -35,8 +35,9 @@ class MetaViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val doc = Jsoup.connect("https://www.mtggoldfish.com/metagame/${format.lowercase()}#paper").get()
+                val container = doc.selectFirst("#metagame-decks-container") ?: doc
                 val decks = mutableListOf<MetaDeckEntry>()
-                val tables = doc.select("table")
+                val tables = container.select("table")
                 for (table in tables) {
                     val headers = table.select("thead th").map { it.text().trim() }
                     val deckIdx = headers.indexOfFirst { it.contains("Deck", ignoreCase = true) }
