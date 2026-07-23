@@ -15,11 +15,11 @@ val keystoreProps = Properties().apply {
 val storeFilePath = keystoreProps.getProperty("storeFile")
 
 android {
-    namespace = "com.github.abelnightroad"
+    namespace = "com.gitlab.abelnightroad"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.github.abelnightroad"
+        applicationId = "com.gitlab.abelnightroad"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -100,6 +100,8 @@ dependencies {
 
     val serializationVersion = "1.8.1"
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$serializationVersion")
+
+    implementation("org.jsoup:jsoup:1.18.1")
 
     testImplementation("junit:junit:4.13.2")
 

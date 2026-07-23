@@ -1,14 +1,14 @@
 # Architecture
 
-Native Android app (**Card Tracker**) for Magic: The Gathering collectors.
-Package `com.github.abelnightroad`. Kotlin + Jetpack Compose + Room +
+Native Android app (**MtG Card Tracker**) for Magic: The Gathering collectors.
+Package `com.gitlab.abelnightroad`. Kotlin + Jetpack Compose + Room +
 kotlinx.serialization. Min SDK 26, compile/target 35. Build uses the system JDK
 (developed on JDK 26) and Gradle 9.5.1.
 
 ## Directory layout
 
 ```
-app/src/main/java/com/github/abelnightroad/
+app/src/main/java/com/gitlab/abelnightroad/
 ├── MainActivity.kt
 ├── data/
 │   ├── AppDatabaseProvider.kt     # Room singleton (destructive migration on upgrade)
@@ -24,9 +24,10 @@ app/src/main/java/com/github/abelnightroad/
 │   ├── AppDatabase.kt             # v2: cards + scryfall_cards
 │   ├── CardEntity.kt / CardDao.kt
 │   └── ScryfallCardEntity.kt / ScryfallCardDao.kt
-└── ui/
-    ├── Screens.kt                 # nav, main, cards, import, add card, settings
+    └── ui/
+    ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings
     ├── MainViewModel.kt
+    ├── MetaViewModel.kt           # fetch + parse MTGGoldfish metagame data via Jsoup
     ├── ImportViewModel.kt         # CSV import
     ├── ScryfallImportViewModel.kt # bulk JSON import
     ├── ManualAddViewModel.kt      # manual add + autocomplete
@@ -52,7 +53,12 @@ app/src/main/java/com/github/abelnightroad/
 2. Tap a Tag -> that tag's card list.
 3. Tap a card -> fullscreen Scryfall image overlay.
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
-5. Drawer -> Import CSV, Add Card, Settings.
+5. Drawer -> Import CSV, Add Card, Meta, Settings.
+6. Meta screen -> pick a format via FilterChips; fetches the MTGGoldfish
+   metagame page via Jsoup, parses the deck table, and displays deck names
+   with metagame %, win rate, and tournament count in a scrollable list.
+7. Main screen has a FAB to quickly add a card manually (autocomplete from
+   scryfall_cards reference table).
 
 ## Manual add + autocomplete (data flow)
 
@@ -81,6 +87,8 @@ app/src/main/java/com/github/abelnightroad/
 - Reference table from Scryfall bulk data enables offline autocomplete; imported
   once and streamed so memory stays flat.
 - Themes in separate files; default **Nord (dark)**.
+- Meta screen uses Jsoup to parse the MTGGoldfish metagame table HTML in-app
+  (no WebView or browser redirect); network request on Dispatchers.IO.
 - `fallbackToDestructiveMigration()` is used because the app is pre-release (v2
   added the `scryfall_cards` table).
 
@@ -91,6 +99,7 @@ app/src/main/java/com/github/abelnightroad/
 - kotlinx-coroutines-android 1.10.2
 - coil-compose 2.7.0 (images)
 - kotlinx-serialization-json 1.8.1 (bulk parsing)
+- Jsoup 1.18.1 (HTML parsing for MTGGoldfish metagame data)
 - Local Octicons-style drawables
 
 ## Build
