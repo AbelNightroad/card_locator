@@ -22,7 +22,11 @@ fun CardImage(
 ) {
     val url = if (large) ScryfallImage.large(scryfallId) else ScryfallImage.normal(scryfallId)
     val painter = coil.compose.rememberAsyncImagePainter(
-        ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build()
+        ImageRequest.Builder(LocalContext.current)
+            .data(url)
+            .crossfade(true)
+            .setHeader("User-Agent", "MtGCardTracker/1.0")
+            .build()
     )
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         when (painter.state) {

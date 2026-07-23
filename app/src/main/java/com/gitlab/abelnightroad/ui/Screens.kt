@@ -744,6 +744,7 @@ private fun ManualAddScreen(
     val foil by viewModel.foil.collectAsState()
     val condition by viewModel.condition.collectAsState()
     val tag by viewModel.tag.collectAsState()
+    val tagCounts by repository.tagCounts.collectAsState(initial = emptyList())
 
     LaunchedEffect(saved) {
         if (saved) {
@@ -817,6 +818,22 @@ private fun ManualAddScreen(
                 label = { Text("Tag (storage location)") },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true
             )
+            val tagSuggestions = remember(tag, tagCounts) {
+                tagCounts.map { it.tag }.filter { it.contains(tag, ignoreCase = true) }
+                    .filter { it != tag }.take(5)
+            }
+            if (tagSuggestions.isNotEmpty()) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column {
+                        tagSuggestions.forEach { suggestion ->
+                            ListItem(
+                                headlineContent = { Text(suggestion) },
+                                modifier = Modifier.clickable { viewModel.tag.value = suggestion }
+                            )
+                        }
+                    }
+                }
+            }
             Button(
                 onClick = viewModel::save,
                 enabled = selected != null,
