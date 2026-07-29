@@ -35,6 +35,9 @@ class CardRepository(private val dao: CardDao, private val tagDao: TagDao) {
     /** Inserts a single manually-added card. */
     suspend fun addCard(card: CardEntity) = dao.insert(card)
 
+    /** Bulk insert without clearing existing data (for 3rd-party imports). */
+    suspend fun insertAll(cards: List<CardEntity>) = dao.insertAll(cards)
+
     suspend fun incrementQuantity(id: Long) = dao.incrementQuantity(id)
 
     suspend fun decrementQuantity(id: Long) {

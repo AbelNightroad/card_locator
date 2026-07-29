@@ -51,6 +51,11 @@ object BackupStore {
         return data.cards.map { it.toEntity() }
     }
 
+    fun decodeToTag(text: String, tag: String): List<CardEntity> {
+        val data = json.decodeFromString<BackupData>(text)
+        return data.cards.map { it.toEntity().copy(tag = tag) }
+    }
+
     private fun CardEntity.toBackup() = BackupCard(
         name = name, setCode = setCode, setName = setName,
         collectorNumber = collectorNumber, foil = foil, rarity = rarity,

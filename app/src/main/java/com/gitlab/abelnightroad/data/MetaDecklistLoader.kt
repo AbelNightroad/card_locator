@@ -13,7 +13,15 @@ data class MetaDeckCard(
 
 object MetaDecklistLoader {
 
-    private const val USER_AGENT = "MtGCardTracker/1.0"
+    private const val USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+    private fun connect(url: String) = Jsoup.connect(url)
+        .userAgent(USER_AGENT)
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .header("Accept-Language", "en-US,en;q=0.5")
+        .header("Referer", "https://www.mtggoldfish.com/")
+        .header("DNT", "1")
+        .timeout(15000)
 
     suspend fun load(archetypeUrl: String): List<MetaDeckCard> = withContext(Dispatchers.IO) {
         val deckUrl = findFirstDeckUrl(archetypeUrl) ?: throw IOException("No decks found on archetype page")
@@ -23,13 +31,13 @@ object MetaDecklistLoader {
     private fun findFirstDeckUrl(archetypeUrl: String): String? {
         val fullUrl = if (archetypeUrl.startsWith("http")) archetypeUrl
             else "https://www.mtggoldfish.com$archetypeUrl"
-        val doc = Jsoup.connect(fullUrl).userAgent(USER_AGENT).get()
+        val doc = connect(fullUrl).get()
         val link = doc.selectFirst("a[href^=\"/deck/\"]") ?: return null
         return "https://www.mtggoldfish.com${link.attr("href")}"
     }
 
     private fun parseDeckPage(deckUrl: String): List<MetaDeckCard> {
-        val doc = Jsoup.connect(deckUrl).userAgent(USER_AGENT).get()
+        val doc = connect(deckUrl).get()
         val cards = mutableListOf<MetaDeckCard>()
 
         val table = doc.selectFirst(".deck-view-deck-table")

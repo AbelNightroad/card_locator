@@ -19,6 +19,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -85,6 +90,7 @@ import com.gitlab.abelnightroad.ui.theme.FONTS
 import com.gitlab.abelnightroad.ui.theme.fontFamilyFor
 import com.gitlab.abelnightroad.data.BackupStore
 import com.gitlab.abelnightroad.data.CardRepository
+import com.gitlab.abelnightroad.data.CsvImport
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.MetaDeckCard
 import com.gitlab.abelnightroad.data.MetaDecklistLoader
@@ -105,7 +111,7 @@ import kotlinx.coroutines.flow.flowOf
 
 private val NAV_ITEMS = listOf(
     SwayNavItem(Octicons.Home24, "Collection", Screen.Main),
-    SwayNavItem(Octicons.Book24, "Decks", Screen.Decks),
+    SwayNavItem(Octicons.Book24, "Decks", Screen.Decks()),
     SwayNavItem(Octicons.Tag24, "Tags", Screen.ManageTags),
     SwayNavItem(Octicons.Graph24, "Meta", Screen.Meta),
     SwayNavItem(Octicons.Gear24, "Settings", Screen.Settings),
@@ -161,8 +167,7 @@ fun AppNavigation(
                 )
                 Screen.ManageTags -> ManageTagsScreen(
                     repository = repository,
-                    onBack = { screen = Screen.Main },
-                    onAddCard = { tag -> screen = Screen.AddCard(tag) }
+                    onBack = { screen = Screen.Main }
                 )
                 Screen.Settings -> SettingsScreen(
                     viewModel = mainViewModel,
@@ -173,18 +178,19 @@ fun AppNavigation(
                     deckRepository = deckRepository,
                     scryfall = scryfall,
                     onBack = { screen = Screen.Main },
-                    onDeckClick = { deckId -> screen = Screen.DeckView(deckId) }
+                    onDeckClick = { deckId -> screen = Screen.DeckView(deckId, backTo = Screen.Meta) }
                 )
-                Screen.Decks -> DecksScreen(
+                is Screen.Decks -> DecksScreen(
                     deckRepository = deckRepository,
+                    initialFormat = s.format,
                     onBack = { screen = Screen.Main },
-                    onDeckClick = { deckId -> screen = Screen.DeckView(deckId) }
+                    onDeckClick = { deckId, format -> screen = Screen.DeckView(deckId, backTo = Screen.Decks(format)) }
                 )
                 is Screen.DeckView -> DeckViewScreen(
                     deckRepository = deckRepository,
                     scryfall = scryfall,
                     deckId = s.deckId,
-                    onBack = { screen = Screen.Decks },
+                    onBack = { screen = s.backTo },
                     onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
                 )
             }
@@ -217,8 +223,8 @@ sealed interface Screen {
     data object ManageTags : Screen
     data object Settings : Screen
     data object Meta : Screen
-    data object Decks : Screen
-    data class DeckView(val deckId: Long) : Screen
+    data class Decks(val format: String? = null) : Screen
+    data class DeckView(val deckId: Long, val backTo: Screen = Screen.Decks()) : Screen
 }
 
 data class SwayNavItem(
@@ -245,6 +251,7 @@ private fun SwayBottomNavigationBar(
     }
 
     Surface(
+        modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Bottom)),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 4.dp
     ) {
@@ -576,27 +583,14 @@ private fun SettingsScreen(
     var expanded by remember { mutableStateOf(false) }
     var fontExpanded by remember { mutableStateOf(false) }
     var backupStatus by remember { mutableStateOf("") }
-    var csvImportTag by remember { mutableStateOf("MegaBox-01") }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importTag by remember { mutableStateOf("MegaBox-01") }
+    var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
 
-    val csvImportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
+    val importFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val result = repository.importCsv(
-                        context.contentResolver.openInputStream(it)!!, csvImportTag
-                    )
-                    withContext(Dispatchers.Main) {
-                        backupStatus = "Imported ${result.cards.size} cards (${result.skipped} skipped)"
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        backupStatus = "CSV import failed: ${e.message}"
-                    }
-                }
-            }
-        }
+        pendingImportUri = uri
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -728,14 +722,8 @@ private fun SettingsScreen(
                         Text("Restore collection from JSON")
                     }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = csvImportTag, onValueChange = { csvImportTag = it },
-                        label = { Text("Tag for CSV import") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true
-                    )
-                    Spacer(Modifier.height(4.dp))
                     Button(
-                        onClick = { csvImportLauncher.launch("text/csv") },
+                        onClick = { showImportDialog = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Import from 3rd-Party")
@@ -753,6 +741,51 @@ private fun SettingsScreen(
             Spacer(Modifier.height(12.dp))
             AboutCard()
         }
+    }
+
+    if (showImportDialog) {
+        ImportDialog(
+            importTag = importTag,
+            onTagChange = { importTag = it },
+            onChooseFile = {
+                importFileLauncher.launch(arrayOf("text/csv", "application/json", "text/plain"))
+            },
+            selectedFileName = pendingImportUri?.lastPathSegment,
+            onImport = {
+                pendingImportUri?.let { uri ->
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            val path = uri.lastPathSegment?.lowercase() ?: ""
+                            val input = context.contentResolver.openInputStream(uri)
+                                ?: throw Exception("Could not read file")
+                            val text = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                            val importedCount = if (path.endsWith(".json")) {
+                                val cards = BackupStore.decodeToTag(text, importTag)
+                                repository.insertAll(cards)
+                                cards.size
+                            } else {
+                                val result = CsvImport.parse(text, importTag)
+                                repository.insertAll(result.cards)
+                                result.cards.size
+                            }
+                            withContext(Dispatchers.Main) {
+                                backupStatus = "Imported $importedCount cards"
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                backupStatus = "Import failed: ${e.message}"
+                            }
+                        }
+                    }
+                    showImportDialog = false
+                    pendingImportUri = null
+                }
+            },
+            onDismiss = {
+                showImportDialog = false
+                pendingImportUri = null
+            }
+        )
     }
 }
 
@@ -785,6 +818,48 @@ private fun ScryfallCard(scryfallUpdatedAt: String?) {
             )
         }
     }
+}
+
+@Composable
+private fun ImportDialog(
+    importTag: String,
+    onTagChange: (String) -> Unit,
+    onChooseFile: () -> Unit,
+    selectedFileName: String?,
+    onImport: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Import from 3rd-Party") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = importTag,
+                    onValueChange = onTagChange,
+                    label = { Text("Tag for imported cards") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onChooseFile,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (selectedFileName != null) "File: $selectedFileName" else "Choose file (CSV, JSON, TXT)")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onImport,
+                enabled = selectedFileName != null
+            ) { Text("Import") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1186,8 +1261,7 @@ private fun MetaScreen(
 @Composable
 private fun ManageTagsScreen(
     repository: CardRepository,
-    onBack: () -> Unit,
-    onAddCard: (String) -> Unit
+    onBack: () -> Unit
 ) {
     val tags by repository.tagCounts.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
@@ -1316,10 +1390,9 @@ private fun ManageTagsScreen(
                 TextButton(onClick = {
                     if (addTagName.isNotBlank()) {
                         scope.launch { repository.createTag(addTagName) }
-                        onAddCard(addTagName)
                     }
                     showAddDialog = false
-                }) { Text("Add Cards") }
+                }) { Text("Create") }
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) { Text("Cancel") }
@@ -1358,15 +1431,19 @@ private val FORMATS = listOf(
 @Composable
 private fun DecksScreen(
     deckRepository: DeckRepository,
+    initialFormat: String? = null,
     onBack: () -> Unit,
-    onDeckClick: (Long) -> Unit
+    onDeckClick: (Long, String) -> Unit
 ) {
     val decksVm: DecksViewModel = viewModel { DecksViewModel(deckRepository) }
     val formatCounts by decksVm.formatCounts.collectAsState()
     val decks by decksVm.decks.collectAsState()
     val scope = rememberCoroutineScope()
     var showCreateDialog by remember { mutableStateOf(false) }
-    var selectedFormat by remember { mutableStateOf<String?>(null) }
+    var selectedFormat by remember { mutableStateOf(initialFormat) }
+    LaunchedEffect(initialFormat) {
+        if (initialFormat != null) decksVm.selectFormat(initialFormat)
+    }
 
     if (selectedFormat != null) {
         Scaffold(
@@ -1399,7 +1476,7 @@ private fun DecksScreen(
                         DeckGridCard(
                             deck = deck,
                             deckRepository = deckRepository,
-                            onClick = { onDeckClick(deck.id) },
+                            onClick = { onDeckClick(deck.id, selectedFormat ?: deck.format) },
                             onDelete = { scope.launch { deckRepository.deleteDeck(deck) } }
                         )
                     }
@@ -1465,7 +1542,7 @@ private fun DecksScreen(
             onCreate = { name, format ->
                 decksVm.createDeck(name, format) { deckId ->
                     showCreateDialog = false
-                    onDeckClick(deckId)
+                    onDeckClick(deckId, format)
                 }
             }
         )
@@ -1619,11 +1696,13 @@ private fun DeckViewScreen(
                     textAlign = TextAlign.Center)
             }
         } else {
-            val grouped = cards.groupBy { it.slot }.mapValues { (_, slotCards) ->
+            val typeGroupsBySlot = cards.groupBy { it.slot }.mapValues { (_, slotCards) ->
                 slotCards.groupBy { primaryType(it.typeLine) }
             }
+            val slotOrder = listOf("commander", "companion", "mainboard")
             LazyColumn(Modifier.padding(padding).padding(horizontal = 8.dp)) {
-                for ((slot, typeGroups) in grouped) {
+                for (slot in slotOrder) {
+                    val typeGroups = typeGroupsBySlot[slot] ?: continue
                     if (slot != "mainboard") {
                         item {
                             Text(slot.replaceFirstChar { it.uppercase() },

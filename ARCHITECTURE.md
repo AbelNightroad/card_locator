@@ -152,6 +152,9 @@ app/src/main/java/com/gitlab/abelnightroad/
   Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents.
   Both `getDefaultCardsMeta()` and `download()` check `responseCode` and read
   `errorStream` on non-200 for precise diagnostics.
+- MetaDecklistLoader uses a Mozilla User-Agent with `Accept`, `Accept-Language`,
+  `Referer`, and `DNT` headers set via a private `connect()` helper to avoid
+  MTGGoldfish 403 blocks on decklist pages.
 - `addMigrations(MIGRATION_4_5)` with `fallbackToDestructiveMigration(true)` allows
   graceful upgrade. v4 added `tags` table; v5 added `slot` and `color_identity`
   columns to `deck_cards` and `color_identity` to `scryfall_cards`.
@@ -173,6 +176,16 @@ app/src/main/java/com/gitlab/abelnightroad/
   `FormatValidator.registry` map for the target format.
 - `primaryType()` uses priority-ordered rules (Land > Creature > Planeswalker >
   non-Tribal) to handle multi-type MtG cards for Deck View grouping.
+- `Screen.Decks` is a data class carrying an optional `format` string, preserving
+  the selected format across Deck View navigation. The `DeckView.backTo` field
+  routes back to the exact `Screen.Decks(format)` instance.
+- SwayBottomNavigationBar uses `windowInsetsPadding(WindowInsets.systemBars.only(Bottom))`
+  instead of `navigationBarsPadding()` for reliable edge-to-edge rendering above
+  gesture/3-button navigation bars.
+- Import from 3rd-Party uses `OpenDocument` with MIME types `text/csv`,
+  `application/json`, `text/plain`. File type is detected by extension:
+  JSON → `BackupStore.decodeToTag`, CSV/TXT → `CsvImport.parse`. Both append
+  cards with the user-specified tag.
 
 ## Dependencies
 
