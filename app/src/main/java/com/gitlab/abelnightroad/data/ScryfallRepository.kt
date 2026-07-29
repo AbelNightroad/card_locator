@@ -17,6 +17,8 @@ class ScryfallRepository(
 
     fun autocomplete(query: String): Flow<List<ScryfallCardEntity>> = dao.autocomplete(query)
 
+    suspend fun lookupByName(name: String): ScryfallCardEntity? = dao.byName(name)
+
     suspend fun count(): Int = dao.count()
 
     suspend fun clear() = dao.clear()

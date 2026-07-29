@@ -103,6 +103,7 @@ object ScryfallBulkImport {
 
 private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
     if (id.isBlank() || name.isBlank()) return null
+    val ci = colorIdentity.sorted().joinToString(",")
     return ScryfallCardEntity(
         id = id,
         name = name,
@@ -113,6 +114,7 @@ private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
         manaCost = manaCost,
         typeLine = typeLine,
         oracleText = oracleText,
-        priceUsd = prices.usd?.toDoubleOrNull()
+        priceUsd = prices.usd?.toDoubleOrNull(),
+        colorIdentity = ci
     )
 }

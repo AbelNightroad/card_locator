@@ -88,6 +88,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
     implementation("androidx.navigation:navigation-compose:2.9.0")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("br.com.devsrsouza.compose.icons:octicons:1.1.1")
     implementation("androidx.datastore:datastore-preferences:1.1.4")
 
     val roomVersion = "2.7.0"

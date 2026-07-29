@@ -7,6 +7,7 @@ OUTPUT_APK := app/build/outputs/apk/release/CardTracker-$(VERSION_BUILD).apk
 
 build: clean
 	gradle assembleRelease
+	echo -e "\033[0;32mRenaming the APK\033[0m"
 	mv $(RELEASE_APK) $(OUTPUT_APK)
 
 clean:

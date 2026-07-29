@@ -15,8 +15,8 @@ fun AppTheme(
 ) {
     val theme = remember(themeId) { themeById(themeId) }
     val colorScheme = if (dark) theme.dark else theme.light
-    val fontFamily = remember(fontId) { fontFamilyFor(fontId) }
-    val typography = remember(fontFamily) {
+    val typography = remember(fontId) {
+        val fontFamily = fontFamilyFor(fontId)
         val base = Typography()
         Typography(
             displayLarge = base.displayLarge.copy(fontFamily = fontFamily),

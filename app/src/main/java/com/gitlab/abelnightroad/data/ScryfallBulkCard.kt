@@ -26,5 +26,6 @@ data class ScryfallBulkCard(
     @SerialName("mana_cost") val manaCost: String = "",
     @SerialName("type_line") val typeLine: String = "",
     @SerialName("oracle_text") val oracleText: String = "",
+    @SerialName("color_identity") val colorIdentity: List<String> = emptyList(),
     val prices: ScryfallPrices = ScryfallPrices()
 )

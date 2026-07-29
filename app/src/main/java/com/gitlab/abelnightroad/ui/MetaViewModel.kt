@@ -2,6 +2,8 @@ package com.gitlab.abelnightroad.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gitlab.abelnightroad.data.MetaDeckCard
+import com.gitlab.abelnightroad.data.MetaDecklistLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +18,8 @@ data class MetaDeckEntry(
     val metaPercentage: String,
     val winRate: String,
     val cost: String,
-    val tournaments: String
+    val tournaments: String,
+    val url: String = ""
 )
 
 sealed interface MetaState {
@@ -26,13 +29,23 @@ sealed interface MetaState {
     data class Error(val message: String) : MetaState
 }
 
+sealed interface DecklistState {
+    data object Loading : DecklistState
+    data class Success(val cards: List<MetaDeckCard>) : DecklistState
+    data class Error(val message: String) : DecklistState
+}
+
 class MetaViewModel : ViewModel() {
 
     private val _state = MutableStateFlow<MetaState>(MetaState.Idle)
     val state: StateFlow<MetaState> = _state
 
+    private val _decklistState = MutableStateFlow<DecklistState?>(null)
+    val decklistState: StateFlow<DecklistState?> = _decklistState
+
     fun loadFormat(format: String) {
         _state.value = MetaState.Loading
+        _decklistState.value = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val doc = Jsoup.connect("https://www.mtggoldfish.com/metagame/${format.lowercase()}#paper")
@@ -45,6 +58,7 @@ class MetaViewModel : ViewModel() {
                     val titleEl = tile.selectFirst(".archetype-tile-title a")
                     val deckName = titleEl?.text()?.trim() ?: continue
                     if (deckName.isBlank()) continue
+                    val deckUrl = titleEl?.attr("href") ?: ""
                     val imgEl = tile.selectFirst(".card-image-tile")
                     val imgSrc = imgEl?.attr("style")?.let { style ->
                         val regex = Regex("""url\s*\(\s*['"]?\s*(.*?)\s*['"]?\s*\)""", RegexOption.IGNORE_CASE)
@@ -54,7 +68,7 @@ class MetaViewModel : ViewModel() {
                     val metaPct = metaEl?.ownText()?.trim() ?: ""
                     val priceEl = tile.selectFirst(".deck-price-paper .archetype-tile-statistic-value")
                     val cost = priceEl?.wholeText()?.trim() ?: ""
-                    decks.add(MetaDeckEntry(i + 1, deckName, imgSrc, metaPct, "", cost, ""))
+                    decks.add(MetaDeckEntry(i + 1, deckName, imgSrc, metaPct, "", cost, "", deckUrl))
                 }
                 if (decks.isEmpty()) {
                     _state.value = MetaState.Error("No metagame data found for $format")
@@ -66,6 +80,18 @@ class MetaViewModel : ViewModel() {
                 }
             } catch (e: Exception) {
                 _state.value = MetaState.Error(e.message ?: "Failed to load metagame data")
+            }
+        }
+    }
+
+    fun loadDecklist(archetypeUrl: String) {
+        _decklistState.value = DecklistState.Loading
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val cards = MetaDecklistLoader.load(archetypeUrl)
+                _decklistState.value = DecklistState.Success(cards)
+            } catch (e: Exception) {
+                _decklistState.value = DecklistState.Error(e.message ?: "Failed to load decklist")
             }
         }
     }

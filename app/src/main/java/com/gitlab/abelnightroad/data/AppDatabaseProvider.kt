@@ -14,7 +14,8 @@ object AppDatabaseProvider {
                 context.applicationContext,
                 AppDatabase::class.java,
                 AppDatabase.DATABASE_NAME
-            ).fallbackToDestructiveMigration(true).build().also { instance = it }
+            )            .addMigrations(AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5)
+                .fallbackToDestructiveMigration(true).build().also { instance = it }
         }
     }
 }

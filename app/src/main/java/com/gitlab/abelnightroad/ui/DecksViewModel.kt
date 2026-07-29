@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gitlab.abelnightroad.db.DeckEntity
 import com.gitlab.abelnightroad.data.DeckRepository
+import com.gitlab.abelnightroad.db.FormatCount
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,9 @@ class DecksViewModel(private val repository: DeckRepository) : ViewModel() {
 
     private val _selectedFormat = MutableStateFlow("All")
     val selectedFormat: StateFlow<String> = _selectedFormat
+
+    val formatCounts: StateFlow<List<FormatCount>> = repository.formatCounts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val decks: StateFlow<List<DeckEntity>> = _selectedFormat
         .flatMapLatest { format ->

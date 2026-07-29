@@ -44,7 +44,10 @@ interface CardDao {
     @Query("UPDATE cards SET quantity = quantity + 1 WHERE id = :id")
     suspend fun incrementQuantity(id: Long)
 
-    @Query("UPDATE cards SET quantity = CASE WHEN quantity > 1 THEN quantity - 1 ELSE 1 END WHERE id = :id")
+    @Query("DELETE FROM cards WHERE id = :id AND quantity = 1")
+    suspend fun deleteIfQuantityOne(id: Long)
+
+    @Query("UPDATE cards SET quantity = quantity - 1 WHERE id = :id AND quantity > 1")
     suspend fun decrementQuantity(id: Long)
 
     @Query("DELETE FROM cards WHERE id = :id")
@@ -69,8 +72,11 @@ interface CardDao {
     suspend fun count(): Int
 
     @Query(
-        "SELECT tag, COALESCE(SUM(quantity), 0) AS cardCount, COALESCE(SUM(quantity * purchase_price), 0) AS totalValue FROM cards " +
-            "GROUP BY tag ORDER BY tag COLLATE NOCASE ASC"
+        "SELECT tag, SUM(cardCount) AS cardCount, SUM(totalValue) AS totalValue FROM (" +
+            "SELECT tag, 0 AS cardCount, 0.0 AS totalValue FROM tags " +
+            "UNION ALL " +
+            "SELECT tag, CAST(SUM(quantity) AS INTEGER) AS cardCount, SUM(quantity * purchase_price) AS totalValue FROM cards GROUP BY tag" +
+        ") GROUP BY tag ORDER BY tag COLLATE NOCASE ASC"
     )
     fun tagCounts(): Flow<List<TagCount>>
 

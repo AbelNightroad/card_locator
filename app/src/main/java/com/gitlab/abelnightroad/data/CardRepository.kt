@@ -7,12 +7,14 @@ import com.gitlab.abelnightroad.db.CardEntity
 import com.gitlab.abelnightroad.db.CardSearchResult
 import com.gitlab.abelnightroad.db.MultiCopyCard
 import com.gitlab.abelnightroad.db.TagCount
+import com.gitlab.abelnightroad.db.TagDao
+import com.gitlab.abelnightroad.db.TagEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 
-class CardRepository(private val dao: CardDao) {
+class CardRepository(private val dao: CardDao, private val tagDao: TagDao) {
 
     val tagCounts: Flow<List<TagCount>> = dao.tagCounts()
     val multiCopyCards: Flow<List<MultiCopyCard>> = dao.multiCopyCards()
@@ -35,13 +37,24 @@ class CardRepository(private val dao: CardDao) {
 
     suspend fun incrementQuantity(id: Long) = dao.incrementQuantity(id)
 
-    suspend fun decrementQuantity(id: Long) = dao.decrementQuantity(id)
+    suspend fun decrementQuantity(id: Long) {
+        dao.deleteIfQuantityOne(id)
+        dao.decrementQuantity(id)
+    }
 
     suspend fun deleteCard(id: Long) = dao.deleteById(id)
 
-    suspend fun deleteByTag(tag: String) = dao.deleteByTag(tag)
+    suspend fun deleteByTag(tag: String) {
+        tagDao.deleteCardsByTag(tag)
+        tagDao.delete(tag)
+    }
 
-    suspend fun renameTag(oldTag: String, newTag: String) = dao.renameTag(oldTag, newTag)
+    suspend fun renameTag(oldTag: String, newTag: String) {
+        dao.renameTag(oldTag, newTag)
+        tagDao.rename(oldTag, newTag)
+    }
+
+    suspend fun createTag(tag: String) = tagDao.insert(TagEntity(tag))
 
     /**
      * Imports a ManaBox CSV, tagging every row with [tag] (a storage location).
@@ -57,7 +70,7 @@ class CardRepository(private val dao: CardDao) {
     companion object {
         fun create(context: Context): CardRepository {
             val db = AppDatabaseProvider.get(context)
-            return CardRepository(db.cardDao())
+            return CardRepository(db.cardDao(), db.tagDao())
         }
     }
 }

@@ -24,5 +24,6 @@ data class ScryfallCardEntity(
     @ColumnInfo(name = "mana_cost") val manaCost: String,
     @ColumnInfo(name = "type_line") val typeLine: String,
     @ColumnInfo(name = "oracle_text") val oracleText: String,
-    @ColumnInfo(name = "price_usd") val priceUsd: Double? = null
+    @ColumnInfo(name = "price_usd") val priceUsd: Double? = null,
+    @ColumnInfo(name = "color_identity") val colorIdentity: String = ""
 )

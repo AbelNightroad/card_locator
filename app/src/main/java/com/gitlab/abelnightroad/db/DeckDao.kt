@@ -8,6 +8,16 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 
+data class FormatCount(
+    val format: String,
+    val deckCount: Int
+)
+
+data class SlotCount(
+    val slot: String,
+    val cnt: Int
+)
+
 @Dao
 interface DeckDao {
 
@@ -39,11 +49,26 @@ interface DeckDao {
     @Query("UPDATE deck_cards SET quantity = :quantity WHERE id = :cardId")
     suspend fun updateCardQuantity(cardId: Long, quantity: Int)
 
+    @Query("UPDATE decks SET cover_scryfall_id = :scryfallId WHERE id = :deckId")
+    suspend fun updateDeckCover(deckId: Long, scryfallId: String?)
+
     @Query("SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = :deckId")
     suspend fun cardCount(deckId: Long): Int
 
     @Query("SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = :deckId")
     fun cardCountFlow(deckId: Long): kotlinx.coroutines.flow.Flow<Int>
+
+    @Query("SELECT slot, COUNT(*) AS cnt FROM deck_cards WHERE deck_id = :deckId GROUP BY slot")
+    fun slotCounts(deckId: Long): kotlinx.coroutines.flow.Flow<List<SlotCount>>
+
+    @Query("SELECT format, CAST(COUNT(*) AS INTEGER) AS deckCount FROM decks GROUP BY format HAVING COUNT(*) > 0 ORDER BY format COLLATE NOCASE ASC")
+    fun formatCounts(): kotlinx.coroutines.flow.Flow<List<FormatCount>>
+
+    @Query("DELETE FROM deck_cards WHERE deck_id = :deckId AND slot = :slot")
+    suspend fun deleteCardsBySlot(deckId: Long, slot: String)
+
+    @Query("SELECT * FROM deck_cards WHERE deck_id = :deckId AND slot = :slot LIMIT 1")
+    suspend fun findCardBySlot(deckId: Long, slot: String): DeckCardEntity?
 }
 
 data class DeckWithCards(
