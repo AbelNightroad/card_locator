@@ -8,6 +8,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,12 +20,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -208,11 +206,11 @@ fun AppNavigation(
     }
 
     selectedCard?.let { card ->
-        FullscreenOverlay(scryfallId = card.scryfallId, onDismiss = { selectedCard = null })
+        FullscreenOverlay(scryfall = scryfall, scryfallId = card.scryfallId, onDismiss = { selectedCard = null })
     }
 
     selectedDeckCardScryfallId?.let { scryfallId ->
-        FullscreenOverlay(scryfallId = scryfallId, onDismiss = { selectedDeckCardScryfallId = null })
+        FullscreenOverlay(scryfall = scryfall, scryfallId = scryfallId, onDismiss = { selectedDeckCardScryfallId = null })
     }
 }
 
@@ -251,12 +249,13 @@ private fun SwayBottomNavigationBar(
     }
 
     Surface(
-        modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Bottom)),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 4.dp
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 6.dp)
+                .navigationBarsPadding(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -549,7 +548,7 @@ private fun CardListScreen(
 }
 
 @Composable
-private fun FullscreenOverlay(scryfallId: String, onDismiss: () -> Unit) {
+private fun FullscreenOverlay(scryfall: ScryfallRepository, scryfallId: String, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Box(
             Modifier.fillMaxSize().clickable(onClick = onDismiss),
@@ -561,7 +560,7 @@ private fun FullscreenOverlay(scryfallId: String, onDismiss: () -> Unit) {
                     .clickable(onClick = onDismiss)
             ) {
                 Box(Modifier.aspectRatio(5f / 7f)) {
-                    CardImage(scryfallId = scryfallId, modifier = Modifier.fillMaxSize(), large = true)
+                    CardImage(scryfall = scryfall, scryfallId = scryfallId, modifier = Modifier.fillMaxSize(), large = true)
                 }
             }
         }
@@ -1240,8 +1239,14 @@ private fun MetaScreen(
                         }
                     }
                     is DecklistState.Error -> {
-                        Text("Failed to load decklist: ${dlState.message}",
-                            color = MaterialTheme.colorScheme.error)
+                        Column {
+                            Text("Could not load decklist from MTGGoldfish.",
+                                color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(4.dp))
+                            Text("${dlState.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                     null -> {
                         Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
@@ -1427,7 +1432,7 @@ private val FORMATS = listOf(
     "Premodern", "Commander", "Brawl"
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun DecksScreen(
     deckRepository: DeckRepository,
@@ -1441,6 +1446,9 @@ private fun DecksScreen(
     val scope = rememberCoroutineScope()
     var showCreateDialog by remember { mutableStateOf(false) }
     var selectedFormat by remember { mutableStateOf(initialFormat) }
+    var deleteTargetDeck by remember { mutableStateOf<DeckEntity?>(null) }
+    var cloneTargetDeck by remember { mutableStateOf<DeckEntity?>(null) }
+    var deleteTargetFormat by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(initialFormat) {
         if (initialFormat != null) decksVm.selectFormat(initialFormat)
     }
@@ -1477,7 +1485,8 @@ private fun DecksScreen(
                             deck = deck,
                             deckRepository = deckRepository,
                             onClick = { onDeckClick(deck.id, selectedFormat ?: deck.format) },
-                            onDelete = { scope.launch { deckRepository.deleteDeck(deck) } }
+                            onDelete = { deleteTargetDeck = deck },
+                            onClone = { cloneTargetDeck = deck }
                         )
                     }
                 }
@@ -1511,11 +1520,15 @@ private fun DecksScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(formatCounts, key = { it.format }) { fc ->
+                        var showFormatMenu by remember { mutableStateOf(false) }
                         Card(
-                            Modifier.fillMaxWidth().clickable {
-                                decksVm.selectFormat(fc.format)
-                                selectedFormat = fc.format
-                            },
+                            Modifier.fillMaxWidth().combinedClickable(
+                                onClick = {
+                                    decksVm.selectFormat(fc.format)
+                                    selectedFormat = fc.format
+                                },
+                                onLongClick = { showFormatMenu = true }
+                            ),
                             elevation = CardDefaults.cardElevation(2.dp)
                         ) {
                             Column(
@@ -1528,6 +1541,13 @@ private fun DecksScreen(
                                 Text("${fc.deckCount} decks",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            DropdownMenu(expanded = showFormatMenu, onDismissRequest = { showFormatMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Delete format", color = MaterialTheme.colorScheme.error) },
+                                    onClick = { showFormatMenu = false; deleteTargetFormat = fc.format },
+                                    leadingIcon = { Icon(Octicons.Trash24, null, tint = MaterialTheme.colorScheme.error) }
+                                )
                             }
                         }
                     }
@@ -1547,18 +1567,79 @@ private fun DecksScreen(
             }
         )
     }
+
+    deleteTargetDeck?.let { deck ->
+        AlertDialog(
+            onDismissRequest = { deleteTargetDeck = null },
+            title = { Text("Delete deck \"${deck.name}\"?") },
+            text = { Text("This will permanently delete the deck and all its cards.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch { deckRepository.deleteDeck(deck) }
+                    deleteTargetDeck = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTargetDeck = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    cloneTargetDeck?.let { deck ->
+        AlertDialog(
+            onDismissRequest = { cloneTargetDeck = null },
+            title = { Text("Clone deck \"${deck.name}\"?") },
+            text = { Text("Creates a copy of this deck with all its cards.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val newId = deckRepository.cloneDeck(deck.id)
+                        cloneTargetDeck = null
+                        onDeckClick(newId, deck.format)
+                    }
+                }) { Text("Clone") }
+            },
+            dismissButton = {
+                TextButton(onClick = { cloneTargetDeck = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    deleteTargetFormat?.let { format ->
+        AlertDialog(
+            onDismissRequest = { deleteTargetFormat = null },
+            title = { Text("Delete format \"$format\"?") },
+            text = { Text("All decks in this format will be permanently deleted.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch { deckRepository.deleteDecksByFormat(format) }
+                    deleteTargetFormat = null
+                    selectedFormat = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTargetFormat = null }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DeckGridCard(
     deck: DeckEntity,
     deckRepository: DeckRepository,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onClone: () -> Unit
 ) {
     val cardCount by deckRepository.cardCountFlow(deck.id).collectAsState(initial = 0)
+    var showMenu by remember { mutableStateOf(false) }
     Card(
-        Modifier.fillMaxWidth().clickable(onClick = onClick),
+        Modifier.fillMaxWidth().combinedClickable(
+            onClick = onClick,
+            onLongClick = { showMenu = true }
+        ),
         elevation = CardDefaults.cardElevation(1.dp)
     ) {
         Column(Modifier.padding(8.dp)) {
@@ -1586,6 +1667,18 @@ private fun DeckGridCard(
                 Text("$cardCount cards", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+            DropdownMenuItem(
+                text = { Text("Clone") },
+                onClick = { showMenu = false; onClone() },
+                leadingIcon = { Icon(Octicons.Copy24, null) }
+            )
+            DropdownMenuItem(
+                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                onClick = { showMenu = false; onDelete() },
+                leadingIcon = { Icon(Octicons.Trash24, null, tint = MaterialTheme.colorScheme.error) }
+            )
         }
     }
 }

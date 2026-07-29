@@ -104,6 +104,9 @@ object ScryfallBulkImport {
 private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
     if (id.isBlank() || name.isBlank()) return null
     val ci = colorIdentity.sorted().joinToString(",")
+    val imgUrl = imageUris?.normal?.let {
+        it.substringBefore("?").ifBlank { null }
+    }
     return ScryfallCardEntity(
         id = id,
         name = name,
@@ -115,6 +118,7 @@ private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
         typeLine = typeLine,
         oracleText = oracleText,
         priceUsd = prices.usd?.toDoubleOrNull(),
-        colorIdentity = ci
+        colorIdentity = ci,
+        imageUrl = imgUrl
     )
 }

@@ -62,6 +62,20 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
 
     suspend fun removeCardsBySlot(deckId: Long, slot: String) = dao.deleteCardsBySlot(deckId, slot)
 
+    suspend fun deleteDecksByFormat(format: String) = dao.deleteDecksByFormat(format)
+
+    suspend fun cloneDeck(deckId: Long): Long {
+        val dwc = dao.getDeckWithCards(deckId).first()
+            ?: throw Exception("Deck not found")
+        val newId = dao.insertDeck(
+            dwc.deck.copy(id = 0, name = "${dwc.deck.name} (copy)", createdAt = System.currentTimeMillis())
+        )
+        for (card in dwc.cards) {
+            dao.insertCard(card.copy(id = 0, deckId = newId))
+        }
+        return newId
+    }
+
     suspend fun validateDeck(deckId: Long): ValidationResult {
         val dwc = dao.getDeckWithCards(deckId).first() ?: return ValidationResult.Invalid(listOf("Deck not found"))
         val validator = FormatValidator.forFormat(dwc.deck.format)

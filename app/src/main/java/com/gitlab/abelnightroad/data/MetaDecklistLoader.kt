@@ -17,14 +17,22 @@ object MetaDecklistLoader {
 
     private fun connect(url: String) = Jsoup.connect(url)
         .userAgent(USER_AGENT)
-        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        .header("Accept-Language", "en-US,en;q=0.5")
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Accept-Encoding", "gzip, deflate, br")
         .header("Referer", "https://www.mtggoldfish.com/")
         .header("DNT", "1")
-        .timeout(15000)
+        .header("Connection", "keep-alive")
+        .header("Sec-Fetch-Dest", "document")
+        .header("Sec-Fetch-Mode", "navigate")
+        .header("Sec-Fetch-Site", "same-origin")
+        .header("Sec-Fetch-User", "?1")
+        .header("Upgrade-Insecure-Requests", "1")
+        .timeout(20000)
 
     suspend fun load(archetypeUrl: String): List<MetaDeckCard> = withContext(Dispatchers.IO) {
-        val deckUrl = findFirstDeckUrl(archetypeUrl) ?: throw IOException("No decks found on archetype page")
+        val deckUrl = findFirstDeckUrl(archetypeUrl)
+            ?: throw IOException("No decks found on archetype page")
         parseDeckPage(deckUrl)
     }
 

@@ -16,6 +16,11 @@ data class ScryfallPrices(
 )
 
 @Serializable
+data class ScryfallImageUris(
+    val normal: String = ""
+)
+
+@Serializable
 data class ScryfallBulkCard(
     val id: String = "",
     val name: String = "",
@@ -27,5 +32,6 @@ data class ScryfallBulkCard(
     @SerialName("type_line") val typeLine: String = "",
     @SerialName("oracle_text") val oracleText: String = "",
     @SerialName("color_identity") val colorIdentity: List<String> = emptyList(),
+    @SerialName("image_uris") val imageUris: ScryfallImageUris? = null,
     val prices: ScryfallPrices = ScryfallPrices()
 )

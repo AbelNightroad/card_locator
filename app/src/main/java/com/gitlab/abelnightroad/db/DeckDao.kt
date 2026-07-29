@@ -69,6 +69,12 @@ interface DeckDao {
 
     @Query("SELECT * FROM deck_cards WHERE deck_id = :deckId AND slot = :slot LIMIT 1")
     suspend fun findCardBySlot(deckId: Long, slot: String): DeckCardEntity?
+
+    @Query("SELECT * FROM deck_cards WHERE deck_id = :deckId")
+    suspend fun getCardsForDeck(deckId: Long): List<DeckCardEntity>
+
+    @Query("DELETE FROM decks WHERE format = :format")
+    suspend fun deleteDecksByFormat(format: String)
 }
 
 data class DeckWithCards(

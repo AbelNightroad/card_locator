@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [CardEntity::class, ScryfallCardEntity::class, DeckEntity::class, DeckCardEntity::class, TagEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,6 +28,10 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("ALTER TABLE `deck_cards` ADD COLUMN `slot` TEXT NOT NULL DEFAULT 'mainboard'")
             db.execSQL("ALTER TABLE `deck_cards` ADD COLUMN `color_identity` TEXT NOT NULL DEFAULT ''")
             db.execSQL("ALTER TABLE `scryfall_cards` ADD COLUMN `color_identity` TEXT NOT NULL DEFAULT ''")
+        }
+
+        val MIGRATION_5_6 = Migration(5, 6) { db ->
+            db.execSQL("ALTER TABLE `scryfall_cards` ADD COLUMN `image_url` TEXT DEFAULT NULL")
         }
     }
 }

@@ -153,11 +153,12 @@ app/src/main/java/com/gitlab/abelnightroad/
   Both `getDefaultCardsMeta()` and `download()` check `responseCode` and read
   `errorStream` on non-200 for precise diagnostics.
 - MetaDecklistLoader uses a Mozilla User-Agent with `Accept`, `Accept-Language`,
-  `Referer`, and `DNT` headers set via a private `connect()` helper to avoid
-  MTGGoldfish 403 blocks on decklist pages.
-- `addMigrations(MIGRATION_4_5)` with `fallbackToDestructiveMigration(true)` allows
-  graceful upgrade. v4 added `tags` table; v5 added `slot` and `color_identity`
-  columns to `deck_cards` and `color_identity` to `scryfall_cards`.
+  `Referer`, `Sec-Fetch-*`, and `Upgrade-Insecure-Requests` headers via a private
+  `connect()` helper to avoid MTGGoldfish 403 blocks on decklist pages.
+- `addMigrations(MIGRATION_4_5, MIGRATION_5_6)` with
+  `fallbackToDestructiveMigration(true)` allows graceful upgrade. v4 added `tags`
+  table; v5 added `slot`/`color_identity` to `deck_cards` and `color_identity` to
+  `scryfall_cards`; v6 added `image_url` to `scryfall_cards`.
   `fallbackToDestructiveMigration(true)` handles any future version gaps.
 - Decks use a separate table (`decks`) rather than reusing tags, because a deck
   is a curated list of cards (not a physical storage location). The
@@ -179,13 +180,21 @@ app/src/main/java/com/gitlab/abelnightroad/
 - `Screen.Decks` is a data class carrying an optional `format` string, preserving
   the selected format across Deck View navigation. The `DeckView.backTo` field
   routes back to the exact `Screen.Decks(format)` instance.
-- SwayBottomNavigationBar uses `windowInsetsPadding(WindowInsets.systemBars.only(Bottom))`
-  instead of `navigationBarsPadding()` for reliable edge-to-edge rendering above
-  gesture/3-button navigation bars.
+- SwayBottomNavigationBar applies `navigationBarsPadding()` on the Row (inside
+  the Surface) rather than on the outer Surface, to avoid elevation-shadow
+  bleeding into the nav bar padding area.
 - Import from 3rd-Party uses `OpenDocument` with MIME types `text/csv`,
   `application/json`, `text/plain`. File type is detected by extension:
   JSON → `BackupStore.decodeToTag`, CSV/TXT → `CsvImport.parse`. Both append
   cards with the user-specified tag.
+- Image URL is parsed from Scryfall bulk data's `image_uris.normal` field and
+  stored in `scryfall_cards.image_url`. `CardImage` looks it up from the
+  database (via `ScryfallRepository.lookupById`) and falls back to computed
+  URL when unavailable.
+- Deck cards support long-press context menus: clone (duplicate deck with cards)
+  and delete (with confirmation). Format cards support long-press delete
+  (removes all decks in that format with CASCADE). All destructive operations
+  require user confirmation via AlertDialog.
 
 ## Dependencies
 
