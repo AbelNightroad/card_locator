@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.gitlab.abelnightroad.data.CardRepository
+import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.data.SettingsStore
 import com.gitlab.abelnightroad.ui.AppNavigation
@@ -24,6 +25,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val repository = CardRepository.create(this)
+        val deckRepository = DeckRepository.create(this)
         val scryfall = ScryfallRepository.create(this)
         val settings = SettingsStore(this)
         val mainViewModel = MainViewModel(repository, settings)
@@ -53,6 +55,7 @@ class MainActivity : ComponentActivity() {
                     AppNavigation(
                         mainViewModel = mainViewModel,
                         repository = repository,
+                        deckRepository = deckRepository,
                         scryfall = scryfall,
                         settings = settings
                     )

@@ -81,9 +81,12 @@ import com.gitlab.abelnightroad.ui.theme.FONTS
 import com.gitlab.abelnightroad.ui.theme.fontFamilyFor
 import com.gitlab.abelnightroad.data.BackupStore
 import com.gitlab.abelnightroad.data.CardRepository
+import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.data.SettingsStore
 import com.gitlab.abelnightroad.db.CardSearchResult
+import com.gitlab.abelnightroad.db.DeckEntity
+import com.gitlab.abelnightroad.db.DeckWithCards
 import com.gitlab.abelnightroad.db.MultiCopyCard
 import com.gitlab.abelnightroad.db.TagCount
 import com.gitlab.abelnightroad.ui.theme.THEMES
@@ -97,11 +100,13 @@ import kotlinx.coroutines.flow.flowOf
 fun AppNavigation(
     mainViewModel: MainViewModel,
     repository: CardRepository,
+    deckRepository: DeckRepository,
     scryfall: ScryfallRepository,
     settings: SettingsStore
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.Main) }
     var selectedCard by remember { mutableStateOf<CardSearchResult?>(null) }
+    var selectedDeckCardScryfallId by remember { mutableStateOf<String?>(null) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -117,11 +122,12 @@ fun AppNavigation(
         drawerContent = {
             ModalDrawerSheet(Modifier.width(280.dp)) {
                 DrawerContent(
+                    onMain = { navigateTo(Screen.Main) },
                     onImport = { navigateTo(Screen.Import) },
+                    onDecks = { navigateTo(Screen.Decks) },
                     onManageTags = { navigateTo(Screen.ManageTags) },
                     onMeta = { navigateTo(Screen.Meta) },
-                    onSettings = { navigateTo(Screen.Settings) },
-                    onMain = { navigateTo(Screen.Main) }
+                    onSettings = { navigateTo(Screen.Settings) }
                 )
             }
         }
@@ -164,11 +170,25 @@ fun AppNavigation(
             Screen.Meta -> MetaScreen(
                 onBack = { screen = Screen.Main }
             )
+            Screen.Decks -> DecksScreen(
+                deckRepository = deckRepository,
+                onBack = { screen = Screen.Main },
+                onDeckClick = { deckId -> screen = Screen.DeckView(deckId) }
+            )
+            is Screen.DeckView -> DeckViewScreen(
+                deckRepository = deckRepository,
+                scryfall = scryfall,
+                deckId = s.deckId,
+                onBack = { screen = Screen.Decks },
+                onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
+            )
         }
     }
 
-    BackHandler(enabled = screen != Screen.Main || selectedCard != null) {
-        if (selectedCard != null) {
+    BackHandler(enabled = screen !is Screen.Main || selectedCard != null || selectedDeckCardScryfallId != null) {
+        if (selectedDeckCardScryfallId != null) {
+            selectedDeckCardScryfallId = null
+        } else if (selectedCard != null) {
             selectedCard = null
         } else if (drawerState.isOpen) {
             scope.launch { drawerState.close() }
@@ -180,6 +200,10 @@ fun AppNavigation(
     selectedCard?.let { card ->
         FullscreenOverlay(scryfallId = card.scryfallId, onDismiss = { selectedCard = null })
     }
+
+    selectedDeckCardScryfallId?.let { scryfallId ->
+        FullscreenOverlay(scryfallId = scryfallId, onDismiss = { selectedDeckCardScryfallId = null })
+    }
 }
 
 sealed interface Screen {
@@ -190,15 +214,18 @@ sealed interface Screen {
     data object ManageTags : Screen
     data object Settings : Screen
     data object Meta : Screen
+    data object Decks : Screen
+    data class DeckView(val deckId: Long) : Screen
 }
 
 @Composable
 private fun DrawerContent(
+    onMain: () -> Unit,
     onImport: () -> Unit,
+    onDecks: () -> Unit,
     onManageTags: () -> Unit,
     onMeta: () -> Unit,
-    onSettings: () -> Unit,
-    onMain: () -> Unit
+    onSettings: () -> Unit
 ) {
     Column(Modifier.padding(vertical = 16.dp)) {
         Text("MtG Card Tracker", Modifier.padding(16.dp),
@@ -208,6 +235,11 @@ private fun DrawerContent(
             headlineContent = { Text("Collection") },
             leadingContent = { Icon(painterResource(R.drawable.ic_three_bars), null) },
             modifier = Modifier.clickable(onClick = onMain)
+        )
+        ListItem(
+            headlineContent = { Text("Decks") },
+            leadingContent = { Text("\u2660", fontWeight = FontWeight.Bold) },
+            modifier = Modifier.clickable(onClick = onDecks)
         )
         ListItem(
             headlineContent = { Text("Import CSV") },
@@ -1170,4 +1202,367 @@ private fun AboutCard() {
             )
         }
     }
+}
+
+private val FORMATS = listOf(
+    "All", "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
+    "Premodern", "Commander", "Brawl"
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DecksScreen(
+    deckRepository: DeckRepository,
+    onBack: () -> Unit,
+    onDeckClick: (Long) -> Unit
+) {
+    val decksVm: DecksViewModel = viewModel { DecksViewModel(deckRepository) }
+    val decks by decksVm.decks.collectAsState()
+    val selectedFormat by decksVm.selectedFormat.collectAsState()
+    val scope = rememberCoroutineScope()
+    var showCreateDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Decks") },
+                navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } }
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showCreateDialog = true }) {
+                Icon(painterResource(R.drawable.ic_add), "New Deck")
+            }
+        }
+    ) { padding ->
+        Column(Modifier.padding(padding)) {
+            LazyRow(
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(FORMATS) { format ->
+                    FilterChip(
+                        selected = selectedFormat == format,
+                        onClick = { decksVm.selectFormat(format) },
+                        label = { Text(format) }
+                    )
+                }
+            }
+
+            if (decks.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No decks yet. Tap + to create one.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center)
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    Modifier.padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(decks, key = { it.id }) { deck ->
+                        DeckGridCard(
+                            deck = deck,
+                            deckRepository = deckRepository,
+                            onClick = { onDeckClick(deck.id) },
+                            onDelete = { scope.launch { deckRepository.deleteDeck(deck) } }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCreateDialog) {
+        CreateDeckDialog(
+            onDismiss = { showCreateDialog = false },
+            onCreate = { name, format ->
+                decksVm.createDeck(name, format) { deckId ->
+                    showCreateDialog = false
+                    onDeckClick(deckId)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun DeckGridCard(
+    deck: DeckEntity,
+    deckRepository: DeckRepository,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val cardCount by deckRepository.cardCountFlow(deck.id).collectAsState(initial = 0)
+    Card(
+        Modifier.fillMaxWidth().clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(1.dp)
+    ) {
+        Column(Modifier.padding(8.dp)) {
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(5f / 7f),
+                contentAlignment = Alignment.Center
+            ) {
+                if (deck.coverScryfallId != null) {
+                    CardImage(scryfallId = deck.coverScryfallId, modifier = Modifier.fillMaxSize())
+                } else {
+                    Text("\u2660", style = MaterialTheme.typography.headlineLarge,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(deck.name, style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold, maxLines = 2)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(deck.format, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary)
+                Text("$cardCount cards", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateDeckDialog(
+    onDismiss: () -> Unit,
+    onCreate: (name: String, format: String) -> Unit
+) {
+    var deckName by remember { mutableStateOf("") }
+    var selectedFormat by remember { mutableStateOf("Standard") }
+    var formatExpanded by remember { mutableStateOf(false) }
+    val scopeFormats = FORMATS.filter { it != "All" }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New Deck") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = deckName,
+                    onValueChange = { deckName = it },
+                    label = { Text("Deck name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                Box {
+                    OutlinedButton(onClick = { formatExpanded = true }) {
+                        Text("Format: $selectedFormat")
+                    }
+                    DropdownMenu(expanded = formatExpanded, onDismissRequest = { formatExpanded = false }) {
+                        scopeFormats.forEach { format ->
+                            DropdownMenuItem(
+                                text = { Text(format) },
+                                onClick = {
+                                    selectedFormat = format
+                                    formatExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (deckName.isNotBlank()) onCreate(deckName, selectedFormat) },
+                enabled = deckName.isNotBlank()
+            ) {
+                Text("Create")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DeckViewScreen(
+    deckRepository: DeckRepository,
+    scryfall: ScryfallRepository,
+    deckId: Long,
+    onBack: () -> Unit,
+    onCardClick: (String) -> Unit
+) {
+    val deckWithCards by deckRepository.getDeckWithCards(deckId).collectAsState(initial = null)
+    val scope = rememberCoroutineScope()
+    var showAddCardDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(deckWithCards?.deck?.name ?: "Deck") },
+                navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } }
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddCardDialog = true }) {
+                Icon(painterResource(R.drawable.ic_add), "Add Card to Deck")
+            }
+        }
+    ) { padding ->
+        val cards = deckWithCards?.cards ?: emptyList()
+        if (cards.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Text("No cards in this deck yet. Tap + to add cards.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center)
+            }
+        } else {
+            LazyColumn(Modifier.padding(padding).padding(horizontal = 8.dp)) {
+                items(cards, key = { it.id }) { card ->
+                    Card(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            .clickable { onCardClick(card.scryfallId) },
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(card.cardName, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "${card.setName} \u00b7 ${card.rarity} \u00b7 ${card.typeLine}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            if (card.quantity > 1) {
+                                                deckRepository.updateCardQuantity(card.id, card.quantity - 1)
+                                            } else {
+                                                deckRepository.removeCard(card.id)
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Text("\u2212", fontWeight = FontWeight.Bold)
+                                }
+                                Text("${card.quantity}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold)
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            deckRepository.updateCardQuantity(card.id, card.quantity + 1)
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Text("+", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddCardDialog) {
+        AddCardToDeckDialog(
+            scryfall = scryfall,
+            deckId = deckId,
+            deckRepository = deckRepository,
+            onDismiss = { showAddCardDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun AddCardToDeckDialog(
+    scryfall: ScryfallRepository,
+    deckId: Long,
+    deckRepository: DeckRepository,
+    onDismiss: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    val suggestions by if (query.length >= 2) {
+        scryfall.autocomplete(query)
+    } else {
+        remember { flowOf(emptyList()) }
+    }.collectAsState(initial = emptyList())
+    var selectedCard by remember { mutableStateOf<com.gitlab.abelnightroad.db.ScryfallCardEntity?>(null) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Card to Deck") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it; selectedCard = null },
+                    label = { Text("Search card name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) }
+                )
+                if (selectedCard == null && query.length >= 2) {
+                    LazyColumn(Modifier.fillMaxWidth().height(200.dp)) {
+                        items(suggestions) { card ->
+                            ListItem(
+                                headlineContent = { Text(card.name) },
+                                supportingContent = { Text("${card.setName} \u00b7 ${card.rarity}") },
+                                modifier = Modifier.clickable { selectedCard = card }
+                            )
+                        }
+                    }
+                }
+                selectedCard?.let { card ->
+                    Spacer(Modifier.height(8.dp))
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(card.name, style = MaterialTheme.typography.titleSmall)
+                            Text("${card.setName} (${card.setCode}) \u00b7 #${card.collectorNumber}",
+                                style = MaterialTheme.typography.bodySmall)
+                            if (card.typeLine.isNotBlank())
+                                Text(card.typeLine, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    selectedCard?.let { card ->
+                        scope.launch {
+                            deckRepository.addCardToDeck(
+                                deckId = deckId,
+                                scryfallId = card.id,
+                                cardName = card.name,
+                                setCode = card.setCode,
+                                setName = card.setName,
+                                collectorNumber = card.collectorNumber,
+                                rarity = card.rarity,
+                                manaCost = card.manaCost,
+                                typeLine = card.typeLine
+                            )
+                        }
+                    }
+                    onDismiss()
+                },
+                enabled = selectedCard != null
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

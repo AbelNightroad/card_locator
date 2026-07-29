@@ -20,18 +20,23 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── ScryfallRepository.kt      # reference table queries + bulk import
 │   ├── ScryfallImage.kt           # Scryfall image URL builder
 │   ├── BackupStore.kt             # kotlinx.serialization DTOs for JSON backup/restore
+│   ├── DeckRepository.kt          # decks + deck_cards queries
 │   └── SettingsStore.kt           # DataStore: theme id + dark mode
 ├── db/
-│   ├── AppDatabase.kt             # v2: cards + scryfall_cards
+│   ├── AppDatabase.kt             # v3: cards + scryfall_cards + decks + deck_cards
 │   ├── CardEntity.kt / CardDao.kt
-│   └── ScryfallCardEntity.kt / ScryfallCardDao.kt
-    └── ui/
-    ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings
+│   ├── ScryfallCardEntity.kt / ScryfallCardDao.kt
+│   ├── DeckEntity.kt              # deck row (name, format, source, coverScryfallId)
+│   ├── DeckCardEntity.kt          # deck membership with FK CASCADE to decks
+│   └── DeckDao.kt / DeckWithCards # queries + relations
+└── ui/
+    ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings, decks, deck view
     ├── MainViewModel.kt
     ├── MetaViewModel.kt           # parse MTGGoldfish archetype-tiles from #metagame-decks-container
     ├── ImportViewModel.kt         # CSV import
     ├── ScryfallImportViewModel.kt # bulk JSON import
     ├── ManualAddViewModel.kt      # manual add + autocomplete
+    ├── DecksViewModel.kt          # decks list + format filtering
     ├── CardImage.kt
     └── theme/                     # Catppuccin, Nord, Shades of Purple, Theme, ThemeModel
 ```
@@ -45,6 +50,12 @@ app/src/main/java/com/gitlab/abelnightroad/
   setName, collectorNumber, rarity, manaCost, typeLine, oracleText. Indexed on
   `name` for prefix autocomplete.
 - **Tag**: a storage location; surfaced in the main list with a card count.
+- **DeckEntity** (`decks`): a named deck with a format and optional
+  `coverScryfallId`. Stored with `source` (manual/meta) and `createdAt`.
+- **DeckCardEntity** (`deck_cards`): a card in a deck, linked by FK with
+  CASCADE delete to `decks`. Stores full card metadata at the time of addition.
+- **DeckWithCards**: a `@Relation` data class embedding a `DeckEntity` with
+  its `List<DeckCardEntity>`.
 - **Theme**: orthogonal UI config (light/dark + palette). Default = **Nord (dark)**.
 
 ## Control flow
@@ -55,7 +66,7 @@ app/src/main/java/com/gitlab/abelnightroad/
    (+/- buttons) and delete (✕).
 3. Tap a card -> fullscreen Scryfall image overlay.
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
-5. Drawer -> Import CSV, Manage Tags, Meta, Settings.
+5. Drawer -> Decks, Import CSV, Manage Tags, Meta, Settings.
 6. Meta screen -> auto-loads Standard on startup; fetches the MTGGoldfish
    metagame page via Jsoup, scopes parsing to `#metagame-decks-container`,
    extracts deck data from `.archetype-tile` elements (cover image from
@@ -68,6 +79,14 @@ app/src/main/java/com/gitlab/abelnightroad/
 8. Settings screen has sections wrapped in Cards: Theme selector, Backup &
    Restore (export/import collection as JSON via SAF), Scryfall Reference Data
    (last update date), and About.
+9. Decks screen shows format FilterChips (All, Standard, Modern, etc.) and a
+   2-column grid of deck cards. Each deck card shows the cover image (or
+   placeholder), name, format, and card count. FAB opens a create dialog
+   (name + format picker); after creation, navigates to Deck View.
+10. Deck View screen uses the deck name as the TopAppBar title. Lists all
+    cards with quantity +/- controls, typeLine, rarity. Tapping a card shows
+    fullscreen image overlay. FAB opens an Add Card dialog with Scryfall
+    autocomplete search against the reference table.
 
 ## Manual add + autocomplete (data flow)
 
@@ -105,7 +124,13 @@ app/src/main/java/com/gitlab/abelnightroad/
   Both `getDefaultCardsMeta()` and `download()` check `responseCode` and read
   `errorStream` on non-200 for precise diagnostics.
 - `fallbackToDestructiveMigration()` is used because the app is pre-release (v2
-  added the `scryfall_cards` table).
+  added the `scryfall_cards` table, v3 added `decks` + `deck_cards`).
+- Decks use a separate table (`decks`) rather than reusing tags, because a deck
+  is a curated list of cards (not a physical storage location). The
+  `deck_cards` junction table with FK CASCADE enables clean deck deletion.
+- The database layer (entities, DAO, repository, ViewModel) was pre-scaffolded
+  before the UI. See `DeckEntity.kt`, `DeckDao.kt`, `DeckRepository.kt`,
+  `DecksViewModel.kt`.
 
 ## Dependencies
 
