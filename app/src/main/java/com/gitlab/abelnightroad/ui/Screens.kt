@@ -1177,7 +1177,7 @@ private fun MetaScreen(
                                 var warningCount = 0
                                 for ((i, c) in cards.withIndex()) {
                                     val actualSlot = if (isCommanderFormat && i == 0) "commander" else c.slot
-                                    val scryfallCard = scryfall.lookupByName(c.cardName)
+                                    val scryfallCard = scryfall.lookupByNameResilient(c.cardName)
                                     if (scryfallCard != null) {
                                         if (isCommanderFormat && i == 0) {
                                             commanderColors = scryfallCard.colorIdentity

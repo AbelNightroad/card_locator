@@ -212,6 +212,8 @@ app/src/main/java/com/gitlab/abelnightroad/
   require user confirmation via AlertDialog.
 - CardListScreen top bar includes an export-to-TXT button (downloads icon) that
   writes the current tag's cards to the Downloads directory.
+- Meta import uses `lookupByNameResilient` which handles " // " in card names
+  (MDFC, Adventure, Room) by splitting and trying each face name separately.
 
 ## Dependencies
 

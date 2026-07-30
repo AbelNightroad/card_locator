@@ -34,6 +34,9 @@ interface ScryfallCardDao {
     @Query("SELECT * FROM scryfall_cards WHERE name = :name COLLATE NOCASE LIMIT 1")
     suspend fun byName(name: String): ScryfallCardEntity?
 
+    @Query("SELECT * FROM scryfall_cards WHERE name LIKE :name || '%' COLLATE NOCASE LIMIT 1")
+    suspend fun byNamePrefix(name: String): ScryfallCardEntity?
+
     @Query("SELECT id, legalities FROM scryfall_cards WHERE id IN (:ids)")
     suspend fun getLegalities(ids: List<String>): List<ScryfallCardLegality>
 }

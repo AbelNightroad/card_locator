@@ -19,6 +19,17 @@ class ScryfallRepository(
 
     suspend fun lookupByName(name: String): ScryfallCardEntity? = dao.byName(name)
 
+    suspend fun lookupByNameResilient(name: String): ScryfallCardEntity? {
+        val trimmed = name.trim()
+        dao.byName(trimmed)?.let { return it }
+        if (trimmed.contains(" // ")) {
+            for (part in trimmed.split(" // ").map { it.trim() }.filter { it.isNotBlank() }) {
+                dao.byName(part)?.let { return it }
+            }
+        }
+        return null
+    }
+
     suspend fun lookupById(id: String): ScryfallCardEntity? = dao.byId(id)
 
     suspend fun count(): Int = dao.count()
