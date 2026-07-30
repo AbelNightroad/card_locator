@@ -17,11 +17,15 @@ import com.gitlab.abelnightroad.data.ScryfallImage
 fun CardImage(
     scryfallId: String,
     modifier: Modifier = Modifier,
-    large: Boolean = false
+    large: Boolean = false,
+    artCrop: Boolean = true
 ) {
-    val url = if (scryfallId.isNotBlank())
-        if (large) ScryfallImage.large(scryfallId) else ScryfallImage.normal(scryfallId)
-        else ""
+    val url = when {
+        scryfallId.isBlank() -> ""
+        large -> ScryfallImage.large(scryfallId)
+        artCrop -> ScryfallImage.artCrop(scryfallId)
+        else -> ScryfallImage.normal(scryfallId)
+    }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         if (url.isNotBlank()) {

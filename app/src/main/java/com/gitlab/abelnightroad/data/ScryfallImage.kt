@@ -14,4 +14,9 @@ object ScryfallImage {
         if (scryfallId.length < 2) return "https://cards.scryfall.io/large/front/missing.jpg"
         return "https://cards.scryfall.io/large/front/${scryfallId[0]}/${scryfallId[1]}/$scryfallId.jpg"
     }
+
+    fun artCrop(scryfallId: String): String {
+        if (scryfallId.length < 2) return "https://cards.scryfall.io/art_crop/front/missing.jpg"
+        return "https://cards.scryfall.io/art_crop/front/${scryfallId[0]}/${scryfallId[1]}/$scryfallId.jpg"
+    }
 }

@@ -14,9 +14,6 @@ data class MetaDeckEntry(
     val name: String,
     val coverImageUrl: String,
     val metaPercentage: String,
-    val winRate: String,
-    val cost: String,
-    val tournaments: String,
     val url: String = ""
 )
 
@@ -53,9 +50,6 @@ class MetaViewModel : ViewModel() {
                         name = arch.name,
                         coverImageUrl = arch.coverUrl,
                         metaPercentage = arch.metaPercent,
-                        winRate = "",
-                        cost = "",
-                        tournaments = "",
                         url = arch.url
                     )
                 }

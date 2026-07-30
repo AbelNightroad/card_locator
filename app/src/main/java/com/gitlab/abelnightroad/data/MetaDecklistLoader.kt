@@ -45,10 +45,7 @@ object MetaDecklistLoader {
         val code = formatCodes[format.lowercase()] ?: throw IOException("Unsupported format: $format")
         val doc = connect("https://mtgtop8.com/format?f=$code").get()
 
-        val leftPanel = doc.selectFirst("td[width=40%]")
-            ?: throw IOException("Could not find metagame data on page")
-
-        val entries = leftPanel.select("div.hover_tr, div.chosen_tr")
+        val entries = doc.select("div.hover_tr:has(div.S14 a[href*=archetype]), div.chosen_tr:has(div.S14 a[href*=archetype])")
         if (entries.isEmpty()) throw IOException("No archetypes found for $format")
 
         entries.mapNotNull { entry ->

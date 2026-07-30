@@ -1127,29 +1127,22 @@ private fun MetaScreen(
                                         }
                                     }
                                     Spacer(Modifier.height(6.dp))
-                                    Text(deck.name,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 2,
-                                        textAlign = TextAlign.Center)
-                                    Spacer(Modifier.height(4.dp))
                                     Row(
-                                        horizontalArrangement = Arrangement.Center,
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Text(deck.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            modifier = Modifier.weight(1f, fill = false))
                                         if (deck.metaPercentage.isNotBlank()) {
+                                            Spacer(Modifier.width(6.dp))
                                             Text(deck.metaPercentage,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = MaterialTheme.colorScheme.primary)
-                                        }
-                                        if (deck.metaPercentage.isNotBlank() && deck.cost.isNotBlank()) {
-                                            Spacer(Modifier.width(12.dp))
-                                        }
-                                        if (deck.cost.isNotBlank()) {
-                                            Text(deck.cost,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -1675,7 +1668,7 @@ private fun DeckGridCard(
     ) {
         Column(Modifier.padding(8.dp)) {
             Box(
-                Modifier.fillMaxWidth().aspectRatio(1f),
+                Modifier.fillMaxWidth().aspectRatio(5f / 3f),
                 contentAlignment = Alignment.Center
             ) {
                 if (deck.coverScryfallId != null) {
@@ -1769,15 +1762,19 @@ private fun CreateDeckDialog(
     )
 }
 
+private val SUPERTYPES = setOf("Legendary", "Snow", "World", "Basic")
+
 private fun primaryType(typeLine: String): String {
     val t = typeLine.trim()
     val emdash = t.indexOf("—")
     val typePart = if (emdash > 0) t.substring(0, emdash).trim() else t
-    val types = typePart.split(" ").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+    val types = typePart.split(" ").map { it.trim() }.filter { it.isNotBlank() && it !in SUPERTYPES }.toSet()
     return when {
         "Land" in types -> "Land"
         "Creature" in types -> "Creature"
         "Planeswalker" in types -> "Planeswalker"
+        "Artifact" in types -> "Artifact"
+        "Battle" in types -> "Battle"
         "Kindred" in types || "Tribal" in types ->
             types.firstOrNull { it != "Kindred" && it != "Tribal" } ?: "Other"
         types.firstOrNull() != null -> types.first()

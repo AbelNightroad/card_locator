@@ -149,7 +149,7 @@ app/src/main/java/com/gitlab/abelnightroad/
   once and streamed so memory stays flat.
 - Themes in separate files; default **Nord (dark)**. Fonts: Roboto (default), Inter, Plus Jakarta Sans, Comic Neue.
 - Meta screen uses Jsoup to parse mtgtop8.com format pages for archetype data
-  (left `td[width=40%]`, `div.hover_tr`/`div.chosen_tr`), and event pages for
+  (`div.hover_tr:has(div.S14 a[href*=archetype])`), and event pages for
   decklists (`div[id^=md].deck_line` / `div[id^=sb].deck_line`). Standard auto-loaded.
   mtgtop8 format codes: ST/PI/MO/LE/VI/PAU/PREM/cEDH.
 - Custom `User-Agent: MtGCardTracker/1.0` set on Scryfall HTTP connections (Jsoup
@@ -184,7 +184,8 @@ app/src/main/java/com/gitlab/abelnightroad/
   `LegalityRule` (each card's legalities JSON must contain `"legal"` or
   `"restricted"` for the deck's format). All format validators include
   `LegalityRule`; Commander additionally get count + color rules.
-- `primaryType()` uses priority-ordered rules (Land > Creature > Planeswalker >
+- `primaryType()` filters out supertypes (Legendary, Snow, World, Basic), uses
+  priority-ordered rules (Land > Creature > Planeswalker > Artifact > Battle >
   non-Tribal) to handle multi-type MtG cards for Deck View grouping.
 - `Screen.Decks` is a data class carrying an optional `format` string, preserving
   the selected format across Deck View navigation. The `DeckView.backTo` field
@@ -199,7 +200,8 @@ app/src/main/java/com/gitlab/abelnightroad/
   cards with the user-specified tag.
 - Image URL is parsed from Scryfall bulk data's `image_uris.normal` field and
   stored in `scryfall_cards.image_url`. `CardImage` builds the CDN URL directly
-  via `ScryfallImage.normal()`/`large()` from the card UUID (deterministic).
+  via `ScryfallImage.normal()`/`large()`/`artCrop()` from the card UUID (deterministic).
+  Deck grid covers use `artCrop()` (landscape art crop 5:3); fullscreen overlay uses `large()`.
   Inline card thumbnails (44dp) shown in CardListScreen and DeckViewScreen.
 - `FullscreenOverlay` and `CardImage` use Coil's `SubcomposeAsyncImage` (not
   `rememberAsyncImagePainter`) because `SubcomposeAsyncImage` has composable
