@@ -4,9 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -70,7 +68,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -82,7 +79,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import compose.icons.Octicons
 import compose.icons.octicons.*
-import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.gitlab.abelnightroad.ui.theme.FONTS
@@ -94,6 +91,7 @@ import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.MetaDeckCard
 import com.gitlab.abelnightroad.data.MetaDecklistLoader
 import com.gitlab.abelnightroad.data.ValidationResult
+import com.gitlab.abelnightroad.data.ScryfallImage
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.data.SettingsStore
 import com.gitlab.abelnightroad.db.CardSearchResult
@@ -133,18 +131,8 @@ fun AppNavigation(
     val isTopLevel = screen in topLevelScreens
     val selectedNavIndex = NAV_ITEMS.indexOfFirst { it.screen == screen }
 
-    Scaffold(
-        bottomBar = {
-            if (isTopLevel) {
-                SwayBottomNavigationBar(
-                    items = NAV_ITEMS,
-                    selectedIndex = selectedNavIndex.coerceAtLeast(0),
-                    onItemSelected = { index -> screen = NAV_ITEMS[index].screen }
-                )
-            }
-        }
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
             when (val s = screen) {
                 Screen.Main -> MainScreen(
                     viewModel = mainViewModel,
@@ -195,6 +183,13 @@ fun AppNavigation(
                 )
             }
         }
+        if (isTopLevel) {
+            SwayBottomNavigationBar(
+                items = NAV_ITEMS,
+                selectedIndex = selectedNavIndex.coerceAtLeast(0),
+                onItemSelected = { index -> screen = NAV_ITEMS[index].screen }
+            )
+        }
     }
 
     BackHandler(enabled = screen !is Screen.Main || selectedCard != null || selectedDeckCardScryfallId != null) {
@@ -208,11 +203,11 @@ fun AppNavigation(
     }
 
     selectedCard?.let { card ->
-        FullscreenOverlay(scryfallId = card.scryfallId, onDismiss = { selectedCard = null })
+        FullscreenOverlay(scryfallId = card.scryfallId, scryfall = scryfall, onDismiss = { selectedCard = null })
     }
 
     selectedDeckCardScryfallId?.let { scryfallId ->
-        FullscreenOverlay(scryfallId = scryfallId, onDismiss = { selectedDeckCardScryfallId = null })
+        FullscreenOverlay(scryfallId = scryfallId, scryfall = scryfall, onDismiss = { selectedDeckCardScryfallId = null })
     }
 }
 
@@ -240,20 +235,11 @@ private fun SwayBottomNavigationBar(
     onItemSelected: (Int) -> Unit,
     iconSize: androidx.compose.ui.unit.Dp = 22.dp,
 ) {
-    val animatedProgress = items.indices.map { index ->
-        animateFloatAsState(
-            targetValue = if (index == selectedIndex) 1f else 0f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessLow
-            )
-        )
-    }
-
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 8.dp,
-        shadowElevation = 4.dp
+        shadowElevation = 4.dp,
+        modifier = Modifier.navigationBarsPadding()
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
@@ -262,27 +248,21 @@ private fun SwayBottomNavigationBar(
         ) {
             items.forEachIndexed { index, item ->
                 val isSelected = index == selectedIndex
-                Column(
+                Box(
                     Modifier.weight(1f).clickable { onItemSelected(index) }
                         .background(
                             if (isSelected) MaterialTheme.colorScheme.secondaryContainer
                             else Color.Transparent,
                             RoundedCornerShape(16.dp)
                         )
-                        .padding(vertical = 6.dp, horizontal = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = item.icon,
                         contentDescription = item.label,
                         modifier = Modifier.size(iconSize),
                         tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        item.label,
-                        fontSize = 10.sp,
-                        color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -526,11 +506,6 @@ private fun CardListScreen(
                             Modifier.fillMaxWidth().padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CardImage(
-                                scryfallId = card.scryfallId,
-                                modifier = Modifier.size(44.dp).aspectRatio(5f / 7f)
-                                    .padding(end = 8.dp)
-                            )
                             Column(Modifier.weight(1f)) {
                                 Text(card.name, style = MaterialTheme.typography.titleSmall)
                                 Text(
@@ -564,7 +539,25 @@ private fun CardListScreen(
 }
 
 @Composable
-private fun FullscreenOverlay(scryfallId: String, onDismiss: () -> Unit) {
+private fun FullscreenOverlay(
+    scryfallId: String,
+    scryfall: ScryfallRepository,
+    onDismiss: () -> Unit
+) {
+    var imageUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(scryfallId) {
+        imageUrl = scryfall.lookupById(scryfallId)?.imageUrl
+    }
+
+    val url = imageUrl ?: ScryfallImage.large(scryfallId)
+    val painter = rememberAsyncImagePainter(
+        ImageRequest.Builder(LocalContext.current)
+            .data(url)
+            .crossfade(true)
+            .setHeader("User-Agent", "MtGCardTracker/1.0")
+            .build()
+    )
+
     Dialog(onDismissRequest = onDismiss) {
         Box(
             Modifier.fillMaxSize().clickable(onClick = onDismiss),
@@ -576,7 +569,18 @@ private fun FullscreenOverlay(scryfallId: String, onDismiss: () -> Unit) {
                     .clickable(onClick = onDismiss)
             ) {
                 Box(Modifier.aspectRatio(5f / 7f)) {
-                    CardImage(scryfallId = scryfallId, modifier = Modifier.fillMaxSize(), large = true)
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        when (val state = painter.state) {
+                            is AsyncImagePainter.State.Loading -> CircularProgressIndicator()
+                            is AsyncImagePainter.State.Error -> Text("Failed to load image")
+                            else -> Image(
+                                painter = painter,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1838,11 +1842,6 @@ private fun DeckViewScreen(
                                     Modifier.fillMaxWidth().padding(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    CardImage(
-                                        scryfallId = card.scryfallId,
-                                        modifier = Modifier.size(44.dp).aspectRatio(5f / 7f)
-                                            .padding(end = 8.dp)
-                                    )
                                     Column(Modifier.weight(1f)) {
                                         Text(card.cardName, style = MaterialTheme.typography.titleSmall)
                                         if (card.manaCost.isNotBlank()) {
