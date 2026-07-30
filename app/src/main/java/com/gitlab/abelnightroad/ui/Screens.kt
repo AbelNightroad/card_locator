@@ -188,7 +188,8 @@ fun AppNavigation(
             SwayBottomNavigationBar(
                 items = NAV_ITEMS,
                 selectedIndex = selectedNavIndex.coerceAtLeast(0),
-                onItemSelected = { index -> screen = NAV_ITEMS[index].screen }
+                onItemSelected = { index -> screen = NAV_ITEMS[index].screen },
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
@@ -234,13 +235,14 @@ private fun SwayBottomNavigationBar(
     items: List<SwayNavItem>,
     selectedIndex: Int,
     onItemSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
     iconSize: androidx.compose.ui.unit.Dp = 22.dp,
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 8.dp,
         shadowElevation = 4.dp,
-        modifier = Modifier.navigationBarsPadding()
+        modifier = modifier.navigationBarsPadding()
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
