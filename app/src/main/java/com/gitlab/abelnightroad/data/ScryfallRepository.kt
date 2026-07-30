@@ -27,6 +27,7 @@ class ScryfallRepository(
                 dao.byName(part)?.let { return it }
             }
         }
+        dao.byNamePrefix(trimmed)?.let { return it }
         return null
     }
 

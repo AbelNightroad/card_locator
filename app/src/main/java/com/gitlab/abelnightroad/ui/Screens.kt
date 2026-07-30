@@ -1561,15 +1561,11 @@ private fun DecksScreen(
                         val pc = MaterialTheme.colorScheme.primaryContainer
                         val sc = MaterialTheme.colorScheme.secondaryContainer
                         val tc = MaterialTheme.colorScheme.tertiaryContainer
+                        val ec = MaterialTheme.colorScheme.errorContainer
+                        val sv = MaterialTheme.colorScheme.surfaceVariant
+                        val bg = MaterialTheme.colorScheme.background
                         val formatColors = remember {
-                            listOfNotNull(
-                                pc, sc, tc,
-                                Color(0xFFFFF8E1),
-                                Color(0xFFE8F5E9),
-                                Color(0xFFFCE4EC),
-                                Color(0xFFE3F2FD),
-                                Color(0xFFF3E5F5),
-                            )
+                            listOfNotNull(pc, sc, tc, ec, sv, bg)
                         }
                         val cardColor = remember(fc.format) {
                             formatColors[abs(fc.format.hashCode()) % formatColors.size]
@@ -1830,13 +1826,13 @@ private fun DeckViewScreen(
         topBar = {
             TopAppBar(
                 title = { Text(deckWithCards?.deck?.name ?: "Deck") },
-                navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } }
+                navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } },
+                actions = {
+                    IconButton(onClick = { showAddCardDialog = true }) {
+                        Icon(Octicons.Plus24, "Add Card to Deck")
+                    }
+                }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddCardDialog = true }) {
-                Icon(Octicons.Plus24, "Add Card to Deck")
-            }
         }
     ) { padding ->
         val cards = deckWithCards?.cards ?: emptyList()
@@ -1862,75 +1858,22 @@ private fun DeckViewScreen(
                                 modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
                         }
                     }
-                    for ((type, typeCards) in typeGroups) {
-                        item {
-                            Text(type,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                    if (slot == "sideboard") {
+                        val flatCards = typeGroups.values.flatten()
+                        items(flatCards, key = { it.id }) { card ->
+                            SideboardCardRow(card, scope, deckRepository, deckId, onCardClick)
                         }
-                        items(typeCards, key = { it.id }) { card ->
-                            Card(
-                                Modifier.fillMaxWidth().padding(vertical = 3.dp)
-                                    .clickable { onCardClick(card.scryfallId) },
-                                elevation = CardDefaults.cardElevation(2.dp)
-                            ) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(card.cardName, style = MaterialTheme.typography.titleSmall)
-                                        if (card.manaCost.isNotBlank()) {
-                                            Text(card.manaCost,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        IconButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    if (card.quantity > 1) {
-                                                        deckRepository.updateCardQuantity(card.id, card.quantity - 1)
-                                                    } else {
-                                                        deckRepository.removeCard(card.id)
-                                                    }
-                                                }
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) { Text("\u2212", fontWeight = FontWeight.Bold) }
-                                        Text("${card.quantity}",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold)
-                                        IconButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    deckRepository.updateCardQuantity(card.id, card.quantity + 1)
-                                                }
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) { Text("+", fontWeight = FontWeight.Bold) }
-                                    }
-                                }
-                                Row(
-                                    Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("${card.rarity} \u00b7 ${card.setName}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    TextButton(
-                                        onClick = {
-                                            scope.launch {
-                                                deckRepository.updateDeckCover(deckId, card.scryfallId)
-                                                Toast.makeText(context, "Cover set", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        modifier = Modifier.height(28.dp)
-                                    ) { Text("Cover", fontSize = 11.sp) }
-                                }
+                    } else {
+                        for ((type, typeCards) in typeGroups) {
+                            item {
+                                Text(type,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                            }
+                            items(typeCards, key = { it.id }) { card ->
+                                DeckCardRow(card, scope, deckRepository, deckId, onCardClick, context)
                             }
                         }
                     }
@@ -1947,6 +1890,132 @@ private fun DeckViewScreen(
             format = deckWithCards?.deck?.format ?: "Standard",
             onDismiss = { showAddCardDialog = false }
         )
+    }
+}
+
+@Composable
+private fun DeckCardRow(
+    card: com.gitlab.abelnightroad.db.DeckCardEntity,
+    scope: kotlinx.coroutines.CoroutineScope,
+    deckRepository: DeckRepository,
+    deckId: Long,
+    onCardClick: (String) -> Unit,
+    context: android.content.Context
+) {
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = 3.dp)
+            .clickable { onCardClick(card.scryfallId) },
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(card.cardName, style = MaterialTheme.typography.titleSmall)
+                if (card.manaCost.isNotBlank()) {
+                    Text(card.manaCost,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            if (card.quantity > 1) {
+                                deckRepository.updateCardQuantity(card.id, card.quantity - 1)
+                            } else {
+                                deckRepository.removeCard(card.id)
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) { Text("\u2212", fontWeight = FontWeight.Bold) }
+                Text("${card.quantity}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold)
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            deckRepository.updateCardQuantity(card.id, card.quantity + 1)
+                        }
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) { Text("+", fontWeight = FontWeight.Bold) }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("${card.rarity} \u00b7 ${card.setName}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        deckRepository.updateDeckCover(deckId, card.scryfallId)
+                        Toast.makeText(context, "Cover set", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier.height(28.dp)
+            ) { Text("Cover", fontSize = 11.sp) }
+        }
+    }
+}
+
+@Composable
+private fun SideboardCardRow(
+    card: com.gitlab.abelnightroad.db.DeckCardEntity,
+    scope: kotlinx.coroutines.CoroutineScope,
+    deckRepository: DeckRepository,
+    deckId: Long,
+    onCardClick: (String) -> Unit
+) {
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = 3.dp)
+            .clickable { onCardClick(card.scryfallId) },
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(card.cardName, style = MaterialTheme.typography.titleSmall)
+                if (card.manaCost.isNotBlank()) {
+                    Text(card.manaCost,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            if (card.quantity > 1) {
+                                deckRepository.updateCardQuantity(card.id, card.quantity - 1)
+                            } else {
+                                deckRepository.removeCard(card.id)
+                            }
+                        }
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) { Text("\u2212", fontWeight = FontWeight.Bold) }
+                Text("${card.quantity}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold)
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            deckRepository.updateCardQuantity(card.id, card.quantity + 1)
+                        }
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) { Text("+", fontWeight = FontWeight.Bold) }
+            }
+        }
     }
 }
 

@@ -88,7 +88,7 @@ app/src/main/java/com/gitlab/abelnightroad/
    archetypes (`div.hover_tr`/`div.chosen_tr`), extracting name, thumbnail
    (`/metas_thumbs/`), meta %, and archetype ID, displayed in a 2-column
    `LazyVerticalGrid`. Other formats selectable via FilterChips
-   (Standard/MO/PI/PAU/LE/VI/PREM/cEDH). Tapping a deck opens a dialog
+    (Standard/MO/PI/PAU/LE/VI/PREM/EDH). Tapping a deck opens a dialog
    showing its decklist (fetched via MetaDecklistLoader: archetype page ->
    first deck link -> event page -> parse `div[id^=md].deck_line` /
    `div[id^=sb].deck_line`). An "Import to Decks" button creates a deck
@@ -103,13 +103,12 @@ app/src/main/java/com/gitlab/abelnightroad/
    (formatCounts from DAO). Tapping a format shows that format's decks.
    Each deck card has a square cover image (1:1 aspect ratio), name, format,
    card count. FAB opens create dialog.
-10. Deck View screen: cards grouped by slot (mainboard/commander/companion/sideboard)
-    then by card type (determined by primaryType — handles multi-type cards:
-    Artifact Creature → Creature, Artifact Land → Land, Artifact Vehicle →
-    Artifact, Tribal/Kindred → follow subtype). Each card shows mana cost,
-    quantity +/- controls, rarity/set info, and a "Cover" button to set it
-    as the deck's cover image. Tapping a card shows fullscreen image overlay.
-    FAB opens AddCardToDeckDialog with Scryfall autocomplete.
+10. Deck View screen: cards grouped by slot
+    (commander/companion/mainboard → by type, sideboard → flat list without
+    type grouping). Each card shows mana cost, quantity +/- controls,
+    rarity/set info, and a "Cover" button to set it as the deck's cover image.
+    Tapping a card shows fullscreen image overlay. Plus button in the top
+    app bar opens AddCardToDeckDialog with Scryfall autocomplete.
 11. AddCardToDeckDialog: for Commander format, shows slot selection
     chips (mainboard/commander/companion) and displays the selected card's
     color identity. Validates color identity against the existing commander
@@ -151,7 +150,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Meta screen uses Jsoup to parse mtgtop8.com format pages for archetype data
   (`div.hover_tr:has(div.S14 a[href*=archetype])`), and event pages for
   decklists (`div[id^=md].deck_line` / `div[id^=sb].deck_line`). Standard auto-loaded.
-  mtgtop8 format codes: ST/PI/MO/LE/VI/PAU/PREM/cEDH.
+   mtgtop8 format codes: ST/PI/MO/LE/VI/PAU/PREM/EDH.
 - Custom `User-Agent: MtGCardTracker/1.0` set on Scryfall HTTP connections (Jsoup
   `.userAgent()` + `HttpURLConnection.setRequestProperty`).
   Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents.
@@ -213,7 +212,8 @@ app/src/main/java/com/gitlab/abelnightroad/
 - CardListScreen top bar includes an export-to-TXT button (downloads icon) that
   writes the current tag's cards to the Downloads directory.
 - Meta import uses `lookupByNameResilient` which handles " // " in card names
-  (MDFC, Adventure, Room) by splitting and trying each face name separately.
+   (MDFC, Adventure, Room) by splitting and trying each face name separately,
+   with a `byNamePrefix` fallback for cases where mtgtop8 omits the " // " suffix.
 - Back navigation uses a `backStack: MutableList<Screen>` (not the `backTo`
   field which was removed). `navigate()` pushes to the stack; `goBack()` pops.
   The bottom nav bar clears the stack. Hardware back presses dismiss overlays

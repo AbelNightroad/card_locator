@@ -31,7 +31,7 @@ object MetaDecklistLoader {
         "vintage" to "VI",
         "pauper" to "PAU",
         "premodern" to "PREM",
-        "commander" to "cEDH"
+        "commander" to "EDH"
     )
 
     private fun connect(url: String) = Jsoup.connect(url)
