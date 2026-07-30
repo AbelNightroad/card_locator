@@ -11,80 +11,101 @@ data class MetaDeckCard(
     val slot: String
 )
 
+data class MTGTop8Archetype(
+    val name: String,
+    val coverUrl: String,
+    val metaPercent: String,
+    val archetypeId: Int,
+    val url: String
+)
+
 object MetaDecklistLoader {
 
     private const val USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+    val formatCodes = mapOf(
+        "standard" to "ST",
+        "pioneer" to "PI",
+        "modern" to "MO",
+        "legacy" to "LE",
+        "vintage" to "VI",
+        "pauper" to "PAU",
+        "premodern" to "PREM",
+        "commander" to "cEDH",
+        "brawl" to "EDH"
+    )
 
     private fun connect(url: String) = Jsoup.connect(url)
         .userAgent(USER_AGENT)
         .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
         .header("Accept-Language", "en-US,en;q=0.9")
-        .header("Accept-Encoding", "gzip, deflate, br")
-        .header("Referer", "https://www.mtggoldfish.com/")
-        .header("DNT", "1")
-        .header("Connection", "keep-alive")
-        .header("Sec-Fetch-Dest", "document")
-        .header("Sec-Fetch-Mode", "navigate")
-        .header("Sec-Fetch-Site", "same-origin")
-        .header("Sec-Fetch-User", "?1")
-        .header("Upgrade-Insecure-Requests", "1")
+        .header("Referer", "https://mtgtop8.com/")
         .timeout(20000)
 
+    suspend fun loadFormat(format: String): List<MTGTop8Archetype> = withContext(Dispatchers.IO) {
+        val code = formatCodes[format.lowercase()] ?: throw IOException("Unsupported format: $format")
+        val doc = connect("https://mtgtop8.com/format?f=$code").get()
+
+        val leftPanel = doc.selectFirst("td[width=40%]")
+            ?: throw IOException("Could not find metagame data on page")
+
+        val entries = leftPanel.select("div.hover_tr, div.chosen_tr")
+        if (entries.isEmpty()) throw IOException("No archetypes found for $format")
+
+        entries.mapNotNull { entry ->
+            val link = entry.selectFirst("div.S14 a")
+            val name = link?.text()?.trim() ?: return@mapNotNull null
+            if (name.isBlank()) return@mapNotNull null
+
+            val href = link.attr("href")
+            val archetypeId = Regex("""a=(\d+)""").find(href)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+
+            val thumb = entry.selectFirst("img[src*=/metas_thumbs/]")
+            val coverUrl = thumb?.attr("src")?.let { "https://mtgtop8.com$it" } ?: ""
+
+            val pctEl = entry.selectFirst("div.S14")
+            val metaPct = pctEl?.text()?.trim() ?: ""
+
+            MTGTop8Archetype(name, coverUrl, metaPct, archetypeId, href)
+        }
+    }
+
     suspend fun load(archetypeUrl: String): List<MetaDeckCard> = withContext(Dispatchers.IO) {
-        val deckUrl = findFirstDeckUrl(archetypeUrl)
-            ?: throw IOException("No decks found on archetype page")
-        parseDeckPage(deckUrl)
-    }
-
-    private fun findFirstDeckUrl(archetypeUrl: String): String? {
         val fullUrl = if (archetypeUrl.startsWith("http")) archetypeUrl
-            else "https://www.mtggoldfish.com$archetypeUrl"
-        val doc = connect(fullUrl).get()
-        val link = doc.selectFirst("a[href^=\"/deck/\"]")
-            ?: doc.selectFirst("a[href*=\"/deck/\"]")
-            ?: doc.selectFirst("table.deck-list a[href]")
-            ?: return null
-        val href = link.attr("href")
-        return if (href.startsWith("http")) href
-            else "https://www.mtggoldfish.com$href"
-    }
+            else "https://mtgtop8.com$archetypeUrl"
 
-    private fun parseDeckPage(deckUrl: String): List<MetaDeckCard> {
-        val doc = connect(deckUrl).get()
+        val archetypeDoc = connect(fullUrl).get()
+        val firstDeckLink = archetypeDoc.selectFirst("tr.hover_tr a[href*='/event?'], tr.chosen_tr a[href*='/event?']")
+            ?: throw IOException("No decks found on archetype page")
+        val deckPath = firstDeckLink.attr("href")
+        val deckUrl = if (deckPath.startsWith("http")) deckPath else "https://mtgtop8.com$deckPath"
+
+        val deckDoc = connect(deckUrl).get()
+        val decklistContainer = deckDoc.selectFirst("div[style*='display:flex'][style*='align-content:stretch']")
+            ?: deckDoc.selectFirst("div[style*='display: flex'][style*='align-content: stretch']")
+            ?: throw IOException("Could not find decklist on event page")
+
         val cards = mutableListOf<MetaDeckCard>()
 
-        val table = doc.selectFirst(".deck-view-deck-table, table.deck-view")
-        if (table != null) {
-            var currentSlot = "mainboard"
-            for (row in table.select("tr")) {
-                val header = row.selectFirst(".deck-category-header, th.deck-category")
-                if (header != null) {
-                    val text = header.text()
-                    currentSlot = if (text.contains("Sideboard", ignoreCase = true)) "sideboard" else "mainboard"
-                    continue
-                }
-                val qtyEl = row.selectFirst(".deck-card-number, .card-qty, td:eq(0)")
-                val nameEl = row.selectFirst(".deck-card-name, a:has(.card-name), td:eq(1) a, a.card-name")
-                if (nameEl != null) {
-                    val qty = qtyEl?.text()?.trim()?.toIntOrNull() ?: 1
-                    val name = nameEl.text().trim()
-                    cards.add(MetaDeckCard(qty, name, currentSlot))
-                }
-            }
-        } else {
-            val entries = doc.select(".card-entry, .deck-card, tr.card-row")
-            for (entry in entries) {
-                val qtyEl = entry.selectFirst(".qty, .card-count, td.card-qty")
-                val nameEl = entry.selectFirst(".name, .card-name, td.card-name a")
-                if (nameEl != null) {
-                    val qty = qtyEl?.text()?.trim()?.toIntOrNull() ?: 1
-                    val name = nameEl.text().trim()
-                    cards.add(MetaDeckCard(qty, name, "mainboard"))
-                }
-            }
+        val sideboardHeader = decklistContainer.selectFirst("div.O14:contains(SIDEBOARD)")
+        val maindeckDivs = decklistContainer.select("div[id^=\"md\"].deck_line")
+        val sideboardDivs = decklistContainer.select("div[id^=\"sb\"].deck_line")
+
+        for (div in maindeckDivs) {
+            val qty = div.ownText().trim().toIntOrNull() ?: 1
+            val name = div.selectFirst("span")?.text()?.trim() ?: continue
+            if (name.isBlank()) continue
+            cards.add(MetaDeckCard(qty, name, "mainboard"))
+        }
+
+        for (div in sideboardDivs) {
+            val qty = div.ownText().trim().toIntOrNull() ?: 1
+            val name = div.selectFirst("span")?.text()?.trim() ?: continue
+            if (name.isBlank()) continue
+            cards.add(MetaDeckCard(qty, name, "sideboard"))
         }
 
         if (cards.isEmpty()) throw IOException("Could not parse decklist from page")
-        return cards
+        cards
     }
 }

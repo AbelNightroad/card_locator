@@ -80,8 +80,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import compose.icons.Octicons
 import compose.icons.octicons.*
-import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.gitlab.abelnightroad.ui.theme.FONTS
 import com.gitlab.abelnightroad.ui.theme.fontFamilyFor
@@ -549,18 +548,15 @@ private fun FullscreenOverlay(
 ) {
     var imageUrl by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(scryfallId) {
-        imageUrl = scryfall.lookupById(scryfallId)?.imageUrl
+        if (scryfallId.isNotBlank()) {
+            imageUrl = scryfall.lookupById(scryfallId)?.imageUrl
+        }
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        val url = imageUrl?.takeIf { it.isNotBlank() } ?: ScryfallImage.large(scryfallId)
-        val painter = rememberAsyncImagePainter(
-            ImageRequest.Builder(LocalContext.current)
-                .data(url)
-                .crossfade(true)
-                .setHeader("User-Agent", "MtGCardTracker/1.0")
-                .build()
-        )
+        val url = if (scryfallId.isNotBlank())
+            imageUrl?.takeIf { it.isNotBlank() } ?: ScryfallImage.large(scryfallId)
+            else ""
 
         Box(
             Modifier.fillMaxSize().clickable(onClick = onDismiss),
@@ -572,17 +568,21 @@ private fun FullscreenOverlay(
                     .clickable(onClick = onDismiss)
             ) {
                 Box(Modifier.aspectRatio(5f / 7f)) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        when (val state = painter.state) {
-                            is AsyncImagePainter.State.Loading -> CircularProgressIndicator()
-                            is AsyncImagePainter.State.Error -> Text("Failed to load image")
-                            else -> Image(
-                                painter = painter,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
+                    if (url.isNotBlank()) {
+                        SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(url)
+                                .crossfade(true)
+                                .setHeader("User-Agent", "MtGCardTracker/1.0")
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit,
+                            loading = { CircularProgressIndicator() },
+                            error = { Text("Failed to load image") }
+                        )
+                    } else {
+                        Text("No image available", modifier = Modifier.align(Alignment.Center))
                     }
                 }
             }
@@ -1112,18 +1112,17 @@ private fun MetaScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         if (deck.coverImageUrl.isNotBlank()) {
-                                            val painter = rememberAsyncImagePainter(
-                                                ImageRequest.Builder(LocalContext.current)
+                                            SubcomposeAsyncImage(
+                                                model = ImageRequest.Builder(LocalContext.current)
                                                     .data(deck.coverImageUrl)
                                                     .crossfade(true)
                                                     .setHeader("User-Agent", "MtGCardTracker/1.0")
-                                                    .build()
-                                            )
-                                            androidx.compose.foundation.Image(
-                                                painter = painter,
+                                                    .build(),
                                                 contentDescription = null,
                                                 modifier = Modifier.fillMaxSize(),
-                                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                                                contentScale = ContentScale.Fit,
+                                                loading = { CircularProgressIndicator() },
+                                                error = { Text("X") }
                                             )
                                         }
                                     }
@@ -1267,7 +1266,7 @@ private fun MetaScreen(
                     }
                     is DecklistState.Error -> {
                         Column {
-                            Text("Could not load decklist from MTGGoldfish.",
+                            Text("Could not load decklist from mtgtop8.",
                                 color = MaterialTheme.colorScheme.error)
                             Spacer(Modifier.height(4.dp))
                             Text("${dlState.message}",

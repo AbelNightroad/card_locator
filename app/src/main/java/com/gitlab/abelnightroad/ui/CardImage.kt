@@ -1,6 +1,5 @@
 package com.gitlab.abelnightroad.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -10,7 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.gitlab.abelnightroad.data.ScryfallImage
 
@@ -20,24 +19,26 @@ fun CardImage(
     modifier: Modifier = Modifier,
     large: Boolean = false
 ) {
-    val url = if (large) ScryfallImage.large(scryfallId) else ScryfallImage.normal(scryfallId)
-    val painter = coil.compose.rememberAsyncImagePainter(
-        ImageRequest.Builder(LocalContext.current)
-            .data(url)
-            .crossfade(true)
-            .setHeader("User-Agent", "MtGCardTracker/1.0")
-            .build()
-    )
+    val url = if (scryfallId.isNotBlank())
+        if (large) ScryfallImage.large(scryfallId) else ScryfallImage.normal(scryfallId)
+        else ""
+
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        when (val state = painter.state) {
-            is AsyncImagePainter.State.Loading -> CircularProgressIndicator()
-            is AsyncImagePainter.State.Error -> Text("Failed to load image")
-            else -> Image(
-                painter = painter,
+        if (url.isNotBlank()) {
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(url)
+                    .crossfade(true)
+                    .setHeader("User-Agent", "MtGCardTracker/1.0")
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
+                contentScale = ContentScale.Fit,
+                loading = { CircularProgressIndicator() },
+                error = { Text("Failed to load image") }
             )
+        } else {
+            Text("No image")
         }
     }
 }

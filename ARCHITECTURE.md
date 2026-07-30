@@ -22,7 +22,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── BackupStore.kt             # kotlinx.serialization DTOs for JSON backup/restore
 │   ├── DeckRepository.kt          # decks + deck_cards queries + validateDeck
 │   ├── FormatValidator.kt         # pluggable format rules (Commander count, color identity)
-│   ├── MetaDecklistLoader.kt      # Jsoup parser for MTGGoldfish decklist pages
+│   ├── MetaDecklistLoader.kt      # Jsoup parser for mtgtop8.com (format → archetypes → decklist)
 │   └── SettingsStore.kt           # DataStore: theme id + dark mode
 ├── db/
 │   ├── AppDatabase.kt             # v5: cards + scryfall_cards + decks + deck_cards + tags
@@ -35,7 +35,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 └── ui/
     ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings, decks, deck view
     ├── MainViewModel.kt
-    ├── MetaViewModel.kt           # parse MTGGoldfish deck tiles + decklist loading state
+    ├── MetaViewModel.kt           # parse mtgtop8 archetypes + decklist loading state
     ├── ImportViewModel.kt         # CSV import
     ├── ScryfallImportViewModel.kt # bulk JSON import
     ├── ManualAddViewModel.kt      # manual add + autocomplete
@@ -66,7 +66,8 @@ app/src/main/java/com/gitlab/abelnightroad/
   from scryfall_cards for fast validation).
 - **DeckWithCards**: a `@Relation` data class embedding a `DeckEntity` with
   its `List<DeckCardEntity>`.
-- **MetaDeckCard**: parsed MTGGoldfish decklist row (quantity, name, slot).
+- **MetaDeckCard**: parsed mtgtop8 decklist row (quantity, name, slot).
+- **MTGTop8Archetype**: parsed mtgtop8 format page entry (name, coverUrl, metaPercent, archetypeId, url).
 - **FormatCount** / **SlotCount**: DAO projection types for aggregate queries.
 - **ValidationResult**: sealed interface (`Valid` | `Invalid(errors)`) from the
   FormatValidator module.
@@ -82,16 +83,16 @@ app/src/main/java/com/gitlab/abelnightroad/
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
 5. Filled bottom nav bar -> Collection, Decks, Tags, Meta, Settings.
     (Import moved to Settings > Backup & Restore as "Import from 3rd-Party".)
-6. Meta screen -> auto-loads Standard on startup; fetches the MTGGoldfish
-   metagame page via Jsoup, scopes parsing to `#metagame-decks-container`,
-   extracts deck data from `.archetype-tile` elements (cover image from
-   `.card-image-tile` background-image CSS, name, meta %, cost), sorts by
-   meta % descending, and displays in a 2-column `LazyVerticalGrid`.
-   Other formats selectable via FilterChips. Tapping a deck opens a dialog
+6. Meta screen -> auto-loads Standard on startup; fetches metagame data from
+   mtgtop8.com via Jsoup. Format page (`/format?f=XX`) left panel parsed for
+   archetypes (`div.hover_tr`/`div.chosen_tr`), extracting name, thumbnail
+   (`/metas_thumbs/`), meta %, and archetype ID, displayed in a 2-column
+   `LazyVerticalGrid`. Other formats selectable via FilterChips
+   (Standard/MO/PI/PAU/LE/VI/PREM/cEDH/EDH). Tapping a deck opens a dialog
    showing its decklist (fetched via MetaDecklistLoader: archetype page ->
-   first deck link -> parse `.deck-view-deck-table` HTML). An "Import to
-   Decks" button creates a deck from the parsed cards with Commander/Brawl
-   color identity validation.
+   first deck link -> event page -> parse `div[id^=md].deck_line` /
+   `div[id^=sb].deck_line`). An "Import to Decks" button creates a deck
+   from the parsed cards with Commander/Brawl color identity validation.
 7. Main screen has a FAB to quickly add a card manually (autocomplete from
    scryfall_cards reference table). Form resets after each save so the user
    can add multiple cards without re-navigating.
@@ -147,17 +148,17 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Reference table from Scryfall bulk data enables offline autocomplete; imported
   once and streamed so memory stays flat.
 - Themes in separate files; default **Nord (dark)**. Fonts: Roboto (default), Inter, Plus Jakarta Sans, Comic Neue.
-- Meta screen uses Jsoup to parse archetype-tile divs from `#metagame-decks-container`
-  (MTGGoldfish no longer uses HTML tables; cover image extracted from
-  `.card-image-tile` background-image CSS via regex). Standard auto-loaded.
+- Meta screen uses Jsoup to parse mtgtop8.com format pages for archetype data
+  (left `td[width=40%]`, `div.hover_tr`/`div.chosen_tr`), and event pages for
+  decklists (`div[id^=md].deck_line` / `div[id^=sb].deck_line`). Standard auto-loaded.
+  mtgtop8 format codes: ST/PI/MO/LE/VI/PAU/PREM/cEDH/EDH.
 - Custom `User-Agent: MtGCardTracker/1.0` set on Scryfall HTTP connections (Jsoup
   `.userAgent()` + `HttpURLConnection.setRequestProperty`).
   Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents.
   Both `getDefaultCardsMeta()` and `download()` check `responseCode` and read
   `errorStream` on non-200 for precise diagnostics.
-- MetaViewModel and MetaDecklistLoader both use a Mozilla User-Agent with
-  `Accept`, `Accept-Language`, `Referer`, `Sec-Fetch-*`, and
-  `Upgrade-Insecure-Requests` headers to avoid MTGGoldfish 403 blocks.
+- MetaDecklistLoader uses a Mozilla User-Agent with `Accept`, `Accept-Language`,
+  and `Referer` headers to avoid mtgtop8 blocks.
 - `addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)` with
   `fallbackToDestructiveMigration(true)` allows graceful upgrade. v4 added `tags`
   table; v5 added `slot`/`color_identity` to `deck_cards` and `color_identity` to
@@ -200,6 +201,9 @@ app/src/main/java/com/gitlab/abelnightroad/
   stored in `scryfall_cards.image_url`. `CardImage` builds the CDN URL directly
   via `ScryfallImage.normal()`/`large()` from the card UUID (deterministic).
   Inline card thumbnails (44dp) shown in CardListScreen and DeckViewScreen.
+- `FullscreenOverlay` and `CardImage` use Coil's `SubcomposeAsyncImage` (not
+  `rememberAsyncImagePainter`) because `SubcomposeAsyncImage` has composable
+  loading/error slots that work reliably inside `Dialog` composition scopes.
 - Deck cards support long-press context menus: clone (duplicate deck with cards)
   and delete (with confirmation). Format cards support long-press delete
   (removes all decks in that format with CASCADE). All destructive operations
@@ -214,7 +218,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 - kotlinx-coroutines-android 1.10.2
 - coil-compose 2.7.0 (images)
 - kotlinx-serialization-json 1.8.1 (bulk parsing)
-- Jsoup 1.18.1 (HTML parsing for MTGGoldfish metagame data)
+- Jsoup 1.18.1 (HTML parsing for mtgtop8.com metagame + decklist data)
 - compose-icons Octicons 1.1.1 (GitHub Primer Octicons for all icons)
 - Custom FilledBottomNavigationBar (filled selected-item background, no dependencies)
 
