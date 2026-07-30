@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -128,70 +127,69 @@ fun AppNavigation(
     var selectedCard by remember { mutableStateOf<CardSearchResult?>(null) }
     var selectedDeckCardScryfallId by remember { mutableStateOf<String?>(null) }
 
-    val topLevelScreens = NAV_ITEMS.map { it.screen }.toSet()
-    val isTopLevel = screen in topLevelScreens
     val selectedNavIndex = NAV_ITEMS.indexOfFirst { it.screen == screen }
 
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            when (val s = screen) {
-                Screen.Main -> MainScreen(
-                    viewModel = mainViewModel,
-                    onTagClick = { screen = Screen.Cards(it) },
-                    onCardClick = { selectedCard = it },
-                    onAddCard = { screen = Screen.AddCard() }
-                )
-                is Screen.Cards -> CardListScreen(
-                    repository = repository,
-                    scryfall = scryfall,
-                    tag = s.tag,
-                    onBack = { screen = Screen.Main },
-                    onCardClick = { selectedCard = it }
-                )
-                is Screen.AddCard -> ManualAddScreen(
-                    repository = repository,
-                    scryfall = scryfall,
-                    onBack = { screen = Screen.Main },
-                    initialTag = s.initialTag
-                )
-                Screen.ManageTags -> ManageTagsScreen(
-                    repository = repository,
-                    onBack = { screen = Screen.Main }
-                )
-                Screen.Settings -> SettingsScreen(
-                    viewModel = mainViewModel,
-                    repository = repository,
-                    onBack = { screen = Screen.Main }
-                )
-                Screen.Meta -> MetaScreen(
-                    deckRepository = deckRepository,
-                    scryfall = scryfall,
-                    onBack = { screen = Screen.Main },
-                    onDeckClick = { deckId -> screen = Screen.DeckView(deckId, backTo = Screen.Meta) }
-                )
-                is Screen.Decks -> DecksScreen(
-                    deckRepository = deckRepository,
-                    initialFormat = s.format,
-                    onBack = { screen = Screen.Main },
-                    onDeckClick = { deckId, format -> screen = Screen.DeckView(deckId, backTo = Screen.Decks(format)) }
-                )
-                is Screen.DeckView -> DeckViewScreen(
-                    deckRepository = deckRepository,
-                    scryfall = scryfall,
-                    deckId = s.deckId,
-                    onBack = { screen = s.backTo },
-                    onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
-                )
-            }
-        }
-        if (isTopLevel) {
-            SwayBottomNavigationBar(
-                items = NAV_ITEMS,
-                selectedIndex = selectedNavIndex.coerceAtLeast(0),
-                onItemSelected = { index -> screen = NAV_ITEMS[index].screen },
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
-        }
+    val bottomBar: @Composable () -> Unit = {
+        SwayBottomNavigationBar(
+            items = NAV_ITEMS,
+            selectedIndex = selectedNavIndex.coerceAtLeast(0),
+            onItemSelected = { index -> screen = NAV_ITEMS[index].screen }
+        )
+    }
+
+    when (val s = screen) {
+        Screen.Main -> MainScreen(
+            viewModel = mainViewModel,
+            onTagClick = { screen = Screen.Cards(it) },
+            onCardClick = { selectedCard = it },
+            onAddCard = { screen = Screen.AddCard() },
+            bottomBar = bottomBar
+        )
+        is Screen.Cards -> CardListScreen(
+            repository = repository,
+            scryfall = scryfall,
+            tag = s.tag,
+            onBack = { screen = Screen.Main },
+            onCardClick = { selectedCard = it }
+        )
+        is Screen.AddCard -> ManualAddScreen(
+            repository = repository,
+            scryfall = scryfall,
+            onBack = { screen = Screen.Main },
+            initialTag = s.initialTag
+        )
+        Screen.ManageTags -> ManageTagsScreen(
+            repository = repository,
+            onBack = { screen = Screen.Main },
+            bottomBar = bottomBar
+        )
+        Screen.Settings -> SettingsScreen(
+            viewModel = mainViewModel,
+            repository = repository,
+            onBack = { screen = Screen.Main },
+            bottomBar = bottomBar
+        )
+        Screen.Meta -> MetaScreen(
+            deckRepository = deckRepository,
+            scryfall = scryfall,
+            onBack = { screen = Screen.Main },
+            onDeckClick = { deckId -> screen = Screen.DeckView(deckId, backTo = Screen.Meta) },
+            bottomBar = bottomBar
+        )
+        is Screen.Decks -> DecksScreen(
+            deckRepository = deckRepository,
+            initialFormat = s.format,
+            onBack = { screen = Screen.Main },
+            onDeckClick = { deckId, format -> screen = Screen.DeckView(deckId, backTo = Screen.Decks(format)) },
+            bottomBar = bottomBar
+        )
+        is Screen.DeckView -> DeckViewScreen(
+            deckRepository = deckRepository,
+            scryfall = scryfall,
+            deckId = s.deckId,
+            onBack = { screen = s.backTo },
+            onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
+        )
     }
 
     BackHandler(enabled = screen !is Screen.Main || selectedCard != null || selectedDeckCardScryfallId != null) {
@@ -235,14 +233,12 @@ private fun SwayBottomNavigationBar(
     items: List<SwayNavItem>,
     selectedIndex: Int,
     onItemSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier,
     iconSize: androidx.compose.ui.unit.Dp = 22.dp,
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 8.dp,
-        shadowElevation = 4.dp,
-        modifier = modifier.navigationBarsPadding()
+        shadowElevation = 4.dp
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
@@ -280,7 +276,8 @@ private fun MainScreen(
     viewModel: MainViewModel,
     onTagClick: (String) -> Unit,
     onCardClick: (CardSearchResult) -> Unit,
-    onAddCard: () -> Unit
+    onAddCard: () -> Unit,
+    bottomBar: @Composable () -> Unit = {}
 ) {
     val tags by viewModel.tagCounts.collectAsState(initial = emptyList())
     val search by viewModel.search.collectAsState()
@@ -295,6 +292,7 @@ private fun MainScreen(
     }.collectAsState(initial = emptyList())
 
     Scaffold(
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = { Text("Card Tracker") },
@@ -552,7 +550,7 @@ private fun FullscreenOverlay(
         imageUrl = scryfall.lookupById(scryfallId)?.imageUrl
     }
 
-    val url = imageUrl ?: ScryfallImage.large(scryfallId)
+    val url = imageUrl?.takeIf { it.isNotBlank() } ?: ScryfallImage.large(scryfallId)
     val painter = rememberAsyncImagePainter(
         ImageRequest.Builder(LocalContext.current)
             .data(url)
@@ -595,7 +593,8 @@ private fun FullscreenOverlay(
 private fun SettingsScreen(
     viewModel: MainViewModel,
     repository: CardRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    bottomBar: @Composable () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -662,6 +661,7 @@ private fun SettingsScreen(
     }
 
     Scaffold(
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = { Text("Settings") },
@@ -1015,7 +1015,8 @@ private fun MetaScreen(
     deckRepository: DeckRepository,
     scryfall: ScryfallRepository,
     onBack: () -> Unit,
-    onDeckClick: (Long) -> Unit
+    onDeckClick: (Long) -> Unit,
+    bottomBar: @Composable () -> Unit = {}
 ) {
     val formats = listOf(
         "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
@@ -1035,6 +1036,7 @@ private fun MetaScreen(
     }
 
     Scaffold(
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = { Text("Metagame") },
@@ -1289,7 +1291,8 @@ private fun MetaScreen(
 @Composable
 private fun ManageTagsScreen(
     repository: CardRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    bottomBar: @Composable () -> Unit = {}
 ) {
     val tags by repository.tagCounts.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
@@ -1300,6 +1303,7 @@ private fun ManageTagsScreen(
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = { Text("Manage Tags") },
@@ -1461,7 +1465,8 @@ private fun DecksScreen(
     deckRepository: DeckRepository,
     initialFormat: String? = null,
     onBack: () -> Unit,
-    onDeckClick: (Long, String) -> Unit
+    onDeckClick: (Long, String) -> Unit,
+    bottomBar: @Composable () -> Unit = {}
 ) {
     val decksVm: DecksViewModel = viewModel { DecksViewModel(deckRepository) }
     val formatCounts by decksVm.formatCounts.collectAsState()
@@ -1478,6 +1483,7 @@ private fun DecksScreen(
 
     if (selectedFormat != null) {
         Scaffold(
+            bottomBar = bottomBar,
             topBar = {
                 TopAppBar(
                     title = { Text(selectedFormat!!) },
@@ -1517,6 +1523,7 @@ private fun DecksScreen(
         }
     } else {
         Scaffold(
+            bottomBar = bottomBar,
             topBar = {
                 TopAppBar(
                     title = { Text("Decks") },

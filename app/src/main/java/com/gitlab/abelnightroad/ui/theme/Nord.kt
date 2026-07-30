@@ -31,13 +31,13 @@ val NordTheme = AppTheme(
         secondary = Frost2,
         onSecondary = SnowStorm2,
         tertiary = AuroraPurple,
-        background = SnowStorm2,
+        background = SnowStorm0,
         onBackground = PolarNight0,
-        surface = SnowStorm1,
+        surface = SnowStorm2,
         onSurface = PolarNight0,
-        surfaceVariant = SnowStorm0,
+        surfaceVariant = SnowStorm1,
         onSurfaceVariant = PolarNight3,
-        outline = SnowStorm0,
+        outline = Frost0,
         error = AuroraRed
     ),
     dark = darkColorScheme(
