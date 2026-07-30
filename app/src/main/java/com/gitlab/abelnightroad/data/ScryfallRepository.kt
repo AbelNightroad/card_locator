@@ -20,14 +20,14 @@ class ScryfallRepository(
     suspend fun lookupByName(name: String): ScryfallCardEntity? = dao.byName(name)
 
     suspend fun lookupByNameResilient(name: String): ScryfallCardEntity? {
-        val trimmed = name.trim()
-        dao.byName(trimmed)?.let { return it }
-        if (trimmed.contains(" // ")) {
-            for (part in trimmed.split(" // ").map { it.trim() }.filter { it.isNotBlank() }) {
+        val normalized = name.trim().replace(" / ", " // ")
+        dao.byName(normalized)?.let { return it }
+        if (normalized.contains(" // ")) {
+            for (part in normalized.split(" // ").map { it.trim() }.filter { it.isNotBlank() }) {
                 dao.byName(part)?.let { return it }
             }
         }
-        dao.byNamePrefix(trimmed)?.let { return it }
+        dao.byNamePrefix(normalized)?.let { return it }
         return null
     }
 

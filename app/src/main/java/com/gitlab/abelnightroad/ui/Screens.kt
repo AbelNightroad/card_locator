@@ -1561,11 +1561,14 @@ private fun DecksScreen(
                         val pc = MaterialTheme.colorScheme.primaryContainer
                         val sc = MaterialTheme.colorScheme.secondaryContainer
                         val tc = MaterialTheme.colorScheme.tertiaryContainer
-                        val ec = MaterialTheme.colorScheme.errorContainer
                         val sv = MaterialTheme.colorScheme.surfaceVariant
                         val bg = MaterialTheme.colorScheme.background
+                        val su = MaterialTheme.colorScheme.surface
+                        val cl = MaterialTheme.colorScheme.surfaceContainerLow
+                        val ch = MaterialTheme.colorScheme.surfaceContainerHigh
+                        val br = MaterialTheme.colorScheme.surfaceBright
                         val formatColors = remember {
-                            listOfNotNull(pc, sc, tc, ec, sv, bg)
+                            listOf(pc, sc, tc, sv, bg, su, cl, ch, br)
                         }
                         val cardColor = remember(fc.format) {
                             formatColors[abs(fc.format.hashCode()) % formatColors.size]
