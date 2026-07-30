@@ -88,7 +88,7 @@ app/src/main/java/com/gitlab/abelnightroad/
    archetypes (`div.hover_tr`/`div.chosen_tr`), extracting name, thumbnail
    (`/metas_thumbs/`), meta %, and archetype ID, displayed in a 2-column
    `LazyVerticalGrid`. Other formats selectable via FilterChips
-   (Standard/MO/PI/PAU/LE/VI/PREM/cEDH/EDH). Tapping a deck opens a dialog
+   (Standard/MO/PI/PAU/LE/VI/PREM/cEDH). Tapping a deck opens a dialog
    showing its decklist (fetched via MetaDecklistLoader: archetype page ->
    first deck link -> event page -> parse `div[id^=md].deck_line` /
    `div[id^=sb].deck_line`). An "Import to Decks" button creates a deck
@@ -110,14 +110,14 @@ app/src/main/java/com/gitlab/abelnightroad/
     quantity +/- controls, rarity/set info, and a "Cover" button to set it
     as the deck's cover image. Tapping a card shows fullscreen image overlay.
     FAB opens AddCardToDeckDialog with Scryfall autocomplete.
-11. AddCardToDeckDialog: for Commander/Brawl formats, shows slot selection
+11. AddCardToDeckDialog: for Commander format, shows slot selection
     chips (mainboard/commander/companion) and displays the selected card's
     color identity. Validates color identity against the existing commander
     — shows an error and disables "Add" if the card's colors exceed the
     commander's identity. Replaces existing commander/companion when adding
     to an occupied slot.
 12. FormatValidator module validates a deck on import (MetaScreen) and can
-    be called for any deck. Commander/Brawl rules: exactly 1 commander,
+    be called for any deck. Commander rules: exactly 1 commander,
     all cards respect commander's color identity. New formats add entries
     to FormatValidator.registry with custom FormatRule instances.
 
@@ -151,7 +151,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Meta screen uses Jsoup to parse mtgtop8.com format pages for archetype data
   (left `td[width=40%]`, `div.hover_tr`/`div.chosen_tr`), and event pages for
   decklists (`div[id^=md].deck_line` / `div[id^=sb].deck_line`). Standard auto-loaded.
-  mtgtop8 format codes: ST/PI/MO/LE/VI/PAU/PREM/cEDH/EDH.
+  mtgtop8 format codes: ST/PI/MO/LE/VI/PAU/PREM/cEDH.
 - Custom `User-Agent: MtGCardTracker/1.0` set on Scryfall HTTP connections (Jsoup
   `.userAgent()` + `HttpURLConnection.setRequestProperty`).
   Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents.
@@ -174,7 +174,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Color identity stored as comma-separated sorted string (e.g. "W,U,B").
   Parsed from Scryfall's `color_identity` JSON array and denormalized onto
   both `scryfall_cards` and `deck_cards` for fast validation without joins.
-- Slot system (mainboard/commander/companion) enables Commander/Brawl format
+- Slot system (mainboard/commander/companion) enables Commander format
   rules. Commander slot is required, companion is optional.
 - FormatValidator uses a pluggable rule pattern: `FormatRule` is a `fun interface`
   with a `validate(format, cards, legalitiesMap)` method. `legalitiesMap` maps
@@ -183,7 +183,7 @@ app/src/main/java/com/gitlab/abelnightroad/
   commander), `ColorIdentityRule` (cards respect commander's colors),
   `LegalityRule` (each card's legalities JSON must contain `"legal"` or
   `"restricted"` for the deck's format). All format validators include
-  `LegalityRule`; Commander/Brawl additionally get count + color rules.
+  `LegalityRule`; Commander additionally get count + color rules.
 - `primaryType()` uses priority-ordered rules (Land > Creature > Planeswalker >
   non-Tribal) to handle multi-type MtG cards for Deck View grouping.
 - `Screen.Decks` is a data class carrying an optional `format` string, preserving

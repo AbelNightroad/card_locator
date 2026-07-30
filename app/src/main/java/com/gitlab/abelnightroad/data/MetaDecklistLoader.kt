@@ -31,8 +31,7 @@ object MetaDecklistLoader {
         "vintage" to "VI",
         "pauper" to "PAU",
         "premodern" to "PREM",
-        "commander" to "cEDH",
-        "brawl" to "EDH"
+        "commander" to "cEDH"
     )
 
     private fun connect(url: String) = Jsoup.connect(url)
@@ -61,10 +60,10 @@ object MetaDecklistLoader {
             val archetypeId = Regex("""a=(\d+)""").find(href)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
 
             val thumb = entry.selectFirst("img[src*=/metas_thumbs/]")
-            val coverUrl = thumb?.attr("src")?.let { "https://mtgtop8.com$it" } ?: ""
+            val coverUrl = thumb?.attr("src")?.let { "https://mtgtop8.com/$it" } ?: ""
 
-            val pctEl = entry.selectFirst("div.S14")
-            val metaPct = pctEl?.text()?.trim() ?: ""
+            val allS14 = entry.select("div.S14")
+            val metaPct = allS14.firstOrNull { it.selectFirst("a") == null }?.text()?.trim() ?: ""
 
             MTGTop8Archetype(name, coverUrl, metaPct, archetypeId, href)
         }
@@ -72,13 +71,13 @@ object MetaDecklistLoader {
 
     suspend fun load(archetypeUrl: String): List<MetaDeckCard> = withContext(Dispatchers.IO) {
         val fullUrl = if (archetypeUrl.startsWith("http")) archetypeUrl
-            else "https://mtgtop8.com$archetypeUrl"
+            else "https://mtgtop8.com/$archetypeUrl"
 
         val archetypeDoc = connect(fullUrl).get()
         val firstDeckLink = archetypeDoc.selectFirst("tr.hover_tr a[href*='/event?'], tr.chosen_tr a[href*='/event?']")
             ?: throw IOException("No decks found on archetype page")
         val deckPath = firstDeckLink.attr("href")
-        val deckUrl = if (deckPath.startsWith("http")) deckPath else "https://mtgtop8.com$deckPath"
+        val deckUrl = if (deckPath.startsWith("http")) deckPath else "https://mtgtop8.com/$deckPath"
 
         val deckDoc = connect(deckUrl).get()
         val decklistContainer = deckDoc.selectFirst("div[style*='display:flex'][style*='align-content:stretch']")

@@ -1022,7 +1022,7 @@ private fun MetaScreen(
 ) {
     val formats = listOf(
         "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
-        "Premodern", "Commander", "Brawl"
+        "Premodern", "Commander"
     )
     var selectedFormat by remember { mutableStateOf("Standard") }
     val metaViewModel: MetaViewModel = viewModel()
@@ -1108,7 +1108,7 @@ private fun MetaScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Box(
-                                        Modifier.fillMaxWidth().aspectRatio(1f),
+                                        Modifier.fillMaxWidth().height(80.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         if (deck.coverImageUrl.isNotBlank()) {
@@ -1179,7 +1179,7 @@ private fun MetaScreen(
                                 val format = selectedFormat
                                 val deckName = deck.name
                                 val deckId = deckRepository.createDeck(deckName, format, "meta")
-                                val isCommanderFormat = format == "Commander" || format == "Brawl"
+                                val isCommanderFormat = format == "Commander"
                                 var commanderColors = ""
                                 var warningCount = 0
                                 for ((i, c) in cards.withIndex()) {
@@ -1457,7 +1457,7 @@ private fun AboutCard() {
 
 private val FORMATS = listOf(
     "All", "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
-    "Premodern", "Commander", "Brawl"
+    "Premodern", "Commander"
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -1940,7 +1940,7 @@ private fun AddCardToDeckDialog(
     var selectedCard by remember { mutableStateOf<com.gitlab.abelnightroad.db.ScryfallCardEntity?>(null) }
     var selectedSlot by remember { mutableStateOf("mainboard") }
     val scope = rememberCoroutineScope()
-    val isCommander = format == "Commander" || format == "Brawl"
+    val isCommander = format == "Commander"
     val slotOptions = if (isCommander) listOf("mainboard", "commander", "companion") else listOf("mainboard")
     val context = LocalContext.current
 
