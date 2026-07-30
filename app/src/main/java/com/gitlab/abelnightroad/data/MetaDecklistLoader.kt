@@ -40,26 +40,31 @@ object MetaDecklistLoader {
         val fullUrl = if (archetypeUrl.startsWith("http")) archetypeUrl
             else "https://www.mtggoldfish.com$archetypeUrl"
         val doc = connect(fullUrl).get()
-        val link = doc.selectFirst("a[href^=\"/deck/\"]") ?: return null
-        return "https://www.mtggoldfish.com${link.attr("href")}"
+        val link = doc.selectFirst("a[href^=\"/deck/\"]")
+            ?: doc.selectFirst("a[href*=\"/deck/\"]")
+            ?: doc.selectFirst("table.deck-list a[href]")
+            ?: return null
+        val href = link.attr("href")
+        return if (href.startsWith("http")) href
+            else "https://www.mtggoldfish.com$href"
     }
 
     private fun parseDeckPage(deckUrl: String): List<MetaDeckCard> {
         val doc = connect(deckUrl).get()
         val cards = mutableListOf<MetaDeckCard>()
 
-        val table = doc.selectFirst(".deck-view-deck-table")
+        val table = doc.selectFirst(".deck-view-deck-table, table.deck-view")
         if (table != null) {
             var currentSlot = "mainboard"
             for (row in table.select("tr")) {
-                val header = row.selectFirst(".deck-category-header")
+                val header = row.selectFirst(".deck-category-header, th.deck-category")
                 if (header != null) {
                     val text = header.text()
                     currentSlot = if (text.contains("Sideboard", ignoreCase = true)) "sideboard" else "mainboard"
                     continue
                 }
                 val qtyEl = row.selectFirst(".deck-card-number, .card-qty, td:eq(0)")
-                val nameEl = row.selectFirst(".deck-card-name, a:has(.card-name), td:eq(1) a")
+                val nameEl = row.selectFirst(".deck-card-name, a:has(.card-name), td:eq(1) a, a.card-name")
                 if (nameEl != null) {
                     val qty = qtyEl?.text()?.trim()?.toIntOrNull() ?: 1
                     val name = nameEl.text().trim()
@@ -67,10 +72,10 @@ object MetaDecklistLoader {
                 }
             }
         } else {
-            val entries = doc.select(".card-entry, .deck-card")
+            val entries = doc.select(".card-entry, .deck-card, tr.card-row")
             for (entry in entries) {
-                val qtyEl = entry.selectFirst(".qty, .card-count")
-                val nameEl = entry.selectFirst(".name, .card-name")
+                val qtyEl = entry.selectFirst(".qty, .card-count, td.card-qty")
+                val nameEl = entry.selectFirst(".name, .card-name, td.card-name a")
                 if (nameEl != null) {
                     val qty = qtyEl?.text()?.trim()?.toIntOrNull() ?: 1
                     val name = nameEl.text().trim()

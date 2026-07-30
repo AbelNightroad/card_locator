@@ -49,7 +49,11 @@ class MetaViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val doc = Jsoup.connect("https://www.mtggoldfish.com/metagame/${format.lowercase()}#paper")
-                    .userAgent("MtGCardTracker/1.0").get()
+                    .userAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Referer", "https://www.mtggoldfish.com/")
+                    .get()
                 val container = doc.selectFirst("#metagame-decks-container")
                     ?: throw IOException("Could not find metagame data on page")
                 val decks = mutableListOf<MetaDeckEntry>()
@@ -59,11 +63,10 @@ class MetaViewModel : ViewModel() {
                     val deckName = titleEl?.text()?.trim() ?: continue
                     if (deckName.isBlank()) continue
                     val deckUrl = titleEl?.attr("href") ?: ""
-                    val imgEl = tile.selectFirst(".card-image-tile")
-                    val imgSrc = imgEl?.attr("style")?.let { style ->
+                    val imgSrc = tile.selectFirst(".card-image-tile")?.attr("style")?.let { style ->
                         val regex = Regex("""url\s*\(\s*['"]?\s*(.*?)\s*['"]?\s*\)""", RegexOption.IGNORE_CASE)
-                        regex.find(style)?.groupValues?.get(1)?.trimEnd('\'')
-                    } ?: ""
+                        regex.find(style)?.groupValues?.get(1)?.trimEnd('\'')?.trimEnd(')')
+                    } ?: tile.selectFirst("img.card-image, .archetype-tile img")?.attr("src") ?: ""
                     val metaEl = tile.selectFirst(".metagame-percentage .archetype-tile-statistic-value")
                     val metaPct = metaEl?.ownText()?.trim() ?: ""
                     val priceEl = tile.selectFirst(".deck-price-paper .archetype-tile-statistic-value")

@@ -41,7 +41,7 @@ app/src/main/java/com/gitlab/abelnightroad/
     ├── ManualAddViewModel.kt      # manual add + autocomplete
     ├── DecksViewModel.kt          # decks list + format filtering + formatCounts
     ├── CardImage.kt
-    └── theme/                     # Catppuccin, Nord, Shades of Purple, Theme, ThemeModel
+    └── theme/                     # Catppuccin, Nord, Cobalt2, Shades of Purple
 ```
 
 ## Domain model
@@ -67,7 +67,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 - **FormatCount** / **SlotCount**: DAO projection types for aggregate queries.
 - **ValidationResult**: sealed interface (`Valid` | `Invalid(errors)`) from the
   FormatValidator module.
-- **Theme**: orthogonal UI config (light/dark + palette). Default = **Nord (dark)**.
+- **Theme**: orthogonal UI config (light/dark + palette). Default = **Nord (dark)**. Available: Catppuccin, Nord, Cobalt2, Shades of Purple.
 
 ## Control flow
 
@@ -77,8 +77,8 @@ app/src/main/java/com/gitlab/abelnightroad/
    (+/- buttons) and delete (✕).
 3. Tap a card -> fullscreen Scryfall image overlay.
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
-5. Sway bottom nav bar -> Collection, Decks, Tags, Meta, Settings.
-   (Import moved to Settings > Backup & Restore as "Import from 3rd-Party".)
+5. Filled bottom nav bar -> Collection, Decks, Tags, Meta, Settings.
+    (Import moved to Settings > Backup & Restore as "Import from 3rd-Party".)
 6. Meta screen -> auto-loads Standard on startup; fetches the MTGGoldfish
    metagame page via Jsoup, scopes parsing to `#metagame-decks-container`,
    extracts deck data from `.archetype-tile` elements (cover image from
@@ -143,18 +143,18 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Card identity = name + set; full metadata persisted locally.
 - Reference table from Scryfall bulk data enables offline autocomplete; imported
   once and streamed so memory stays flat.
-- Themes in separate files; default **Nord (dark)**.
+- Themes in separate files; default **Nord (dark)**. Fonts: Roboto (default), Inter, Plus Jakarta Sans, Comic Neue.
 - Meta screen uses Jsoup to parse archetype-tile divs from `#metagame-decks-container`
   (MTGGoldfish no longer uses HTML tables; cover image extracted from
   `.card-image-tile` background-image CSS via regex). Standard auto-loaded.
-- Custom `User-Agent: MtGCardTracker/1.0` set on all HTTP connections (Jsoup
+- Custom `User-Agent: MtGCardTracker/1.0` set on Scryfall HTTP connections (Jsoup
   `.userAgent()` + `HttpURLConnection.setRequestProperty`).
   Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents.
   Both `getDefaultCardsMeta()` and `download()` check `responseCode` and read
   `errorStream` on non-200 for precise diagnostics.
-- MetaDecklistLoader uses a Mozilla User-Agent with `Accept`, `Accept-Language`,
-  `Referer`, `Sec-Fetch-*`, and `Upgrade-Insecure-Requests` headers via a private
-  `connect()` helper to avoid MTGGoldfish 403 blocks on decklist pages.
+- MetaViewModel and MetaDecklistLoader both use a Mozilla User-Agent with
+  `Accept`, `Accept-Language`, `Referer`, `Sec-Fetch-*`, and
+  `Upgrade-Insecure-Requests` headers to avoid MTGGoldfish 403 blocks.
 - `addMigrations(MIGRATION_4_5, MIGRATION_5_6)` with
   `fallbackToDestructiveMigration(true)` allows graceful upgrade. v4 added `tags`
   table; v5 added `slot`/`color_identity` to `deck_cards` and `color_identity` to
@@ -180,21 +180,24 @@ app/src/main/java/com/gitlab/abelnightroad/
 - `Screen.Decks` is a data class carrying an optional `format` string, preserving
   the selected format across Deck View navigation. The `DeckView.backTo` field
   routes back to the exact `Screen.Decks(format)` instance.
-- SwayBottomNavigationBar applies `navigationBarsPadding()` on the Row (inside
-  the Surface) rather than on the outer Surface, to avoid elevation-shadow
-  bleeding into the nav bar padding area.
+- FilledBottomNavigationBar uses a filled `secondaryContainer` background for
+  the selected item (rounded corners), no animation, labels always visible.
+  Replaced the previous Sway variant (animated circle + bouncing icon) to avoid
+  double-sizing issues with system nav bar padding.
 - Import from 3rd-Party uses `OpenDocument` with MIME types `text/csv`,
   `application/json`, `text/plain`. File type is detected by extension:
   JSON → `BackupStore.decodeToTag`, CSV/TXT → `CsvImport.parse`. Both append
   cards with the user-specified tag.
 - Image URL is parsed from Scryfall bulk data's `image_uris.normal` field and
-  stored in `scryfall_cards.image_url`. `CardImage` looks it up from the
-  database (via `ScryfallRepository.lookupById`) and falls back to computed
-  URL when unavailable.
+  stored in `scryfall_cards.image_url`. `CardImage` builds the CDN URL directly
+  via `ScryfallImage.normal()`/`large()` from the card UUID (deterministic).
+  Inline card thumbnails (44dp) shown in CardListScreen and DeckViewScreen.
 - Deck cards support long-press context menus: clone (duplicate deck with cards)
   and delete (with confirmation). Format cards support long-press delete
   (removes all decks in that format with CASCADE). All destructive operations
   require user confirmation via AlertDialog.
+- CardListScreen top bar includes an export-to-TXT button (downloads icon) that
+  writes the current tag's cards to the Downloads directory.
 
 ## Dependencies
 
@@ -205,7 +208,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 - kotlinx-serialization-json 1.8.1 (bulk parsing)
 - Jsoup 1.18.1 (HTML parsing for MTGGoldfish metagame data)
 - compose-icons Octicons 1.1.1 (GitHub Primer Octicons for all icons)
-- Custom SwayBottomNavigationBar (animated circular indicator, no dependencies)
+- Custom FilledBottomNavigationBar (filled selected-item background, no dependencies)
 
 ## Build
 

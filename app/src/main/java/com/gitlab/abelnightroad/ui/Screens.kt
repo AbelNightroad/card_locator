@@ -76,6 +76,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -153,6 +154,7 @@ fun AppNavigation(
                 )
                 is Screen.Cards -> CardListScreen(
                     repository = repository,
+                    scryfall = scryfall,
                     tag = s.tag,
                     onBack = { screen = Screen.Main },
                     onCardClick = { selectedCard = it }
@@ -206,11 +208,11 @@ fun AppNavigation(
     }
 
     selectedCard?.let { card ->
-        FullscreenOverlay(scryfall = scryfall, scryfallId = card.scryfallId, onDismiss = { selectedCard = null })
+        FullscreenOverlay(scryfallId = card.scryfallId, onDismiss = { selectedCard = null })
     }
 
     selectedDeckCardScryfallId?.let { scryfallId ->
-        FullscreenOverlay(scryfall = scryfall, scryfallId = scryfallId, onDismiss = { selectedDeckCardScryfallId = null })
+        FullscreenOverlay(scryfallId = scryfallId, onDismiss = { selectedDeckCardScryfallId = null })
     }
 }
 
@@ -249,48 +251,39 @@ private fun SwayBottomNavigationBar(
     }
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 4.dp
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 8.dp,
+        shadowElevation = 4.dp
     ) {
         Row(
-            Modifier.fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 6.dp)
-                .navigationBarsPadding(),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
             items.forEachIndexed { index, item ->
-                val progress = animatedProgress[index].value
                 val isSelected = index == selectedIndex
                 Column(
                     Modifier.weight(1f).clickable { onItemSelected(index) }
-                        .padding(vertical = 2.dp),
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                            else Color.Transparent,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .padding(vertical = 6.dp, horizontal = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        Modifier.offset(y = -(progress * 10).dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (progress > 0f) {
-                            Box(
-                                Modifier.size(iconSize + 14.dp).graphicsLayer { alpha = progress }
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                        }
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.label,
-                            modifier = Modifier.size(iconSize),
-                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(iconSize),
+                        tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Text(
                         item.label,
                         fontSize = 10.sp,
-                        modifier = Modifier.graphicsLayer { alpha = progress },
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -455,18 +448,36 @@ private fun CardResultList(
 @Composable
 private fun CardListScreen(
     repository: CardRepository,
+    scryfall: ScryfallRepository,
     tag: String,
     onBack: () -> Unit,
     onCardClick: (CardSearchResult) -> Unit
 ) {
     val cards by repository.cardsByTag(tag).collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(tag) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Text("\u2039") }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            val text = cards.joinToString("\n") { "${it.quantity}x ${it.name} (${it.setCode})" }
+                            val filename = "${tag.replace(" ", "_")}.txt"
+                            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                            val file = java.io.File(downloadsDir, filename)
+                            file.writeText(text)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Exported to Downloads/$filename", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }) {
+                        Icon(Octicons.Download24, "Export to TXT")
+                    }
                 }
             )
         }
@@ -515,6 +526,11 @@ private fun CardListScreen(
                             Modifier.fillMaxWidth().padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            CardImage(
+                                scryfallId = card.scryfallId,
+                                modifier = Modifier.size(44.dp).aspectRatio(5f / 7f)
+                                    .padding(end = 8.dp)
+                            )
                             Column(Modifier.weight(1f)) {
                                 Text(card.name, style = MaterialTheme.typography.titleSmall)
                                 Text(
@@ -548,7 +564,7 @@ private fun CardListScreen(
 }
 
 @Composable
-private fun FullscreenOverlay(scryfall: ScryfallRepository, scryfallId: String, onDismiss: () -> Unit) {
+private fun FullscreenOverlay(scryfallId: String, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Box(
             Modifier.fillMaxSize().clickable(onClick = onDismiss),
@@ -560,7 +576,7 @@ private fun FullscreenOverlay(scryfall: ScryfallRepository, scryfallId: String, 
                     .clickable(onClick = onDismiss)
             ) {
                 Box(Modifier.aspectRatio(5f / 7f)) {
-                    CardImage(scryfall = scryfall, scryfallId = scryfallId, modifier = Modifier.fillMaxSize(), large = true)
+                    CardImage(scryfallId = scryfallId, modifier = Modifier.fillMaxSize(), large = true)
                 }
             }
         }
@@ -1476,7 +1492,7 @@ private fun DecksScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    Modifier.padding(padding).padding(horizontal = 16.dp),
+                    Modifier.padding(padding).padding(start = 16.dp, end = 16.dp, top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -1515,7 +1531,7 @@ private fun DecksScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    Modifier.padding(padding).padding(horizontal = 16.dp),
+                    Modifier.padding(padding).padding(start = 16.dp, end = 16.dp, top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -1822,6 +1838,11 @@ private fun DeckViewScreen(
                                     Modifier.fillMaxWidth().padding(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    CardImage(
+                                        scryfallId = card.scryfallId,
+                                        modifier = Modifier.size(44.dp).aspectRatio(5f / 7f)
+                                            .padding(end = 8.dp)
+                                    )
                                     Column(Modifier.weight(1f)) {
                                         Text(card.cardName, style = MaterialTheme.typography.titleSmall)
                                         if (card.manaCost.isNotBlank()) {
