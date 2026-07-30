@@ -21,7 +21,7 @@ interface ScryfallCardDao {
     /** Prefix autocomplete for the manual card-add screen. */
     @Query(
         "SELECT id, name, set_code, set_name, collector_number, rarity, " +
-            "mana_cost, type_line, oracle_text, price_usd, color_identity FROM scryfall_cards " +
+            "mana_cost, type_line, oracle_text, price_usd, color_identity, image_url FROM scryfall_cards " +
             "WHERE name LIKE :query || '%' COLLATE NOCASE " +
             "ORDER BY name COLLATE NOCASE ASC LIMIT :limit"
     )

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -238,7 +239,8 @@ private fun SwayBottomNavigationBar(
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 8.dp,
-        shadowElevation = 4.dp
+        shadowElevation = 4.dp,
+        modifier = Modifier.navigationBarsPadding()
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
@@ -550,16 +552,16 @@ private fun FullscreenOverlay(
         imageUrl = scryfall.lookupById(scryfallId)?.imageUrl
     }
 
-    val url = imageUrl?.takeIf { it.isNotBlank() } ?: ScryfallImage.large(scryfallId)
-    val painter = rememberAsyncImagePainter(
-        ImageRequest.Builder(LocalContext.current)
-            .data(url)
-            .crossfade(true)
-            .setHeader("User-Agent", "MtGCardTracker/1.0")
-            .build()
-    )
-
     Dialog(onDismissRequest = onDismiss) {
+        val url = imageUrl?.takeIf { it.isNotBlank() } ?: ScryfallImage.large(scryfallId)
+        val painter = rememberAsyncImagePainter(
+            ImageRequest.Builder(LocalContext.current)
+                .data(url)
+                .crossfade(true)
+                .setHeader("User-Agent", "MtGCardTracker/1.0")
+                .build()
+        )
+
         Box(
             Modifier.fillMaxSize().clickable(onClick = onDismiss),
             contentAlignment = Alignment.Center
