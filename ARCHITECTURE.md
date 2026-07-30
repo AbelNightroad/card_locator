@@ -211,9 +211,10 @@ app/src/main/java/com/gitlab/abelnightroad/
   require user confirmation via AlertDialog.
 - CardListScreen top bar includes an export-to-TXT button (downloads icon) that
   writes the current tag's cards to the Downloads directory.
-- Meta import uses `lookupByNameResilient` which handles " // " in card names
-   (MDFC, Adventure, Room) by splitting and trying each face name separately,
-   with a `byNamePrefix` fallback for cases where mtgtop8 omits the " // " suffix.
+- Meta import uses `lookupByNameResilient` which normalizes " / " to " // " (for
+   Room cards like "Roaring Furnace / Steaming Sauna"), splits on " // " and tries
+   each face name, then falls back to `byNamePrefix` for cases where mtgtop8 omits
+   the " // " suffix (e.g., "Bonecrusher Giant" → "Bonecrusher Giant // Stomp").
 - Back navigation uses a `backStack: MutableList<Screen>` (not the `backTo`
   field which was removed). `navigate()` pushes to the stack; `goBack()` pops.
   The bottom nav bar clears the stack. Hardware back presses dismiss overlays
