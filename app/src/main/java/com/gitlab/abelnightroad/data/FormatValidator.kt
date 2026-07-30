@@ -1,34 +1,37 @@
 package com.gitlab.abelnightroad.data
 
 import com.gitlab.abelnightroad.db.DeckCardEntity
+import kotlinx.serialization.json.Json
 
 sealed interface ValidationResult {
     data object Valid : ValidationResult
     data class Invalid(val errors: List<String>) : ValidationResult
 }
 
-fun interface FormatRule {
+interface FormatRule {
     fun validate(
         format: String,
-        cards: List<DeckCardEntity>
+        cards: List<DeckCardEntity>,
+        legalitiesMap: Map<String, String> = emptyMap()
     ): List<String>
 }
 
 class FormatValidator private constructor(val rules: List<FormatRule>) {
     fun validate(
         format: String,
-        cards: List<DeckCardEntity>
+        cards: List<DeckCardEntity>,
+        legalitiesMap: Map<String, String> = emptyMap()
     ): ValidationResult {
-        val errors = rules.flatMap { it.validate(format, cards) }
+        val errors = rules.flatMap { it.validate(format, cards, legalitiesMap) }
         return if (errors.isEmpty()) ValidationResult.Valid
         else ValidationResult.Invalid(errors)
     }
 
     companion object {
-        fun forFormat(format: String): FormatValidator = registry[format] ?: defaultValidator
+        fun forFormat(format: String): FormatValidator = registry[format] ?: withLegality
 
-        val defaultValidator = FormatValidator(emptyList())
-        val commanderValidator = FormatValidator(listOf(CommanderCountRule, ColorIdentityRule))
+        val commanderValidator = FormatValidator(listOf(CommanderCountRule, ColorIdentityRule, LegalityRule))
+        private val withLegality = FormatValidator(listOf(LegalityRule))
 
         private val registry = mapOf(
             "Commander" to commanderValidator,
@@ -42,7 +45,8 @@ class FormatValidator private constructor(val rules: List<FormatRule>) {
 private object CommanderCountRule : FormatRule {
     override fun validate(
         format: String,
-        cards: List<DeckCardEntity>
+        cards: List<DeckCardEntity>,
+        legalitiesMap: Map<String, String>
     ): List<String> {
         val cmdCount = cards.count { it.slot == "commander" }
         return when {
@@ -56,7 +60,8 @@ private object CommanderCountRule : FormatRule {
 private object ColorIdentityRule : FormatRule {
     override fun validate(
         format: String,
-        cards: List<DeckCardEntity>
+        cards: List<DeckCardEntity>,
+        legalitiesMap: Map<String, String>
     ): List<String> {
         val commander = cards.find { it.slot == "commander" } ?: return emptyList()
         val cmdColors = commander.colorIdentity
@@ -65,5 +70,32 @@ private object ColorIdentityRule : FormatRule {
             .filter { it.slot != "commander" && it.slot != "companion" }
             .filter { !DeckRepository.isColorIdentityValid(it.colorIdentity, cmdColors) }
             .map { "${it.cardName} (${it.colorIdentity}) exceeds commander color identity ($cmdColors)" }
+    }
+}
+
+private object LegalityRule : FormatRule {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    override fun validate(
+        format: String,
+        cards: List<DeckCardEntity>,
+        legalitiesMap: Map<String, String>
+    ): List<String> {
+        val formatKey = format.lowercase()
+        return cards
+            .filter { it.scryfallId.isNotBlank() }
+            .filter { card ->
+                val raw = legalitiesMap[card.scryfallId]
+                if (raw.isNullOrBlank()) return@filter false
+                val status = parseLegality(raw, formatKey)
+                status != "legal" && status != "restricted"
+            }
+            .map { "${it.cardName} is not legal in $format" }
+    }
+
+    private fun parseLegality(jsonStr: String, format: String): String? {
+        return try {
+            json.decodeFromString<Map<String, String>>(jsonStr)[format]
+        } catch (_: Exception) { null }
     }
 }

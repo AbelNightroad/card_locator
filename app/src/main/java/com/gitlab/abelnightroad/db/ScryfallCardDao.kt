@@ -21,7 +21,8 @@ interface ScryfallCardDao {
     /** Prefix autocomplete for the manual card-add screen. */
     @Query(
         "SELECT id, name, set_code, set_name, collector_number, rarity, " +
-            "mana_cost, type_line, oracle_text, price_usd, color_identity, image_url FROM scryfall_cards " +
+            "mana_cost, type_line, oracle_text, price_usd, color_identity, image_url, " +
+            "cmc, legalities, reserved, game_changer FROM scryfall_cards " +
             "WHERE name LIKE :query || '%' COLLATE NOCASE " +
             "ORDER BY name COLLATE NOCASE ASC LIMIT :limit"
     )
@@ -32,4 +33,12 @@ interface ScryfallCardDao {
 
     @Query("SELECT * FROM scryfall_cards WHERE name = :name COLLATE NOCASE LIMIT 1")
     suspend fun byName(name: String): ScryfallCardEntity?
+
+    @Query("SELECT id, legalities FROM scryfall_cards WHERE id IN (:ids)")
+    suspend fun getLegalities(ids: List<String>): List<ScryfallCardLegality>
 }
+
+data class ScryfallCardLegality(
+    val id: String,
+    val legalities: String
+)

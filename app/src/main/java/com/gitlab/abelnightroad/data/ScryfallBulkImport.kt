@@ -25,7 +25,7 @@ import kotlin.text.Charsets
  */
 object ScryfallBulkImport {
 
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    internal val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     @OptIn(ExperimentalSerializationApi::class)
     suspend fun import(
@@ -107,6 +107,8 @@ private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
     val imgUrl = imageUris?.normal?.let {
         it.substringBefore("?").ifBlank { null }
     }
+    val legalitiesStr = if (legalities.isEmpty()) "" else
+        ScryfallBulkImport.json.encodeToString(legalities)
     return ScryfallCardEntity(
         id = id,
         name = name,
@@ -119,6 +121,10 @@ private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
         oracleText = oracleText,
         priceUsd = prices.usd?.toDoubleOrNull(),
         colorIdentity = ci,
-        imageUrl = imgUrl
+        imageUrl = imgUrl,
+        cmc = cmc,
+        legalities = legalitiesStr,
+        reserved = reserved,
+        gameChanger = gameChanger ?: false
     )
 }

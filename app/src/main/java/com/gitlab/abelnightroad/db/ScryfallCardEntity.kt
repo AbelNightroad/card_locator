@@ -26,5 +26,9 @@ data class ScryfallCardEntity(
     @ColumnInfo(name = "oracle_text") val oracleText: String,
     @ColumnInfo(name = "price_usd") val priceUsd: Double? = null,
     @ColumnInfo(name = "color_identity") val colorIdentity: String = "",
-    @ColumnInfo(name = "image_url") val imageUrl: String? = null
+    @ColumnInfo(name = "image_url") val imageUrl: String? = null,
+    @ColumnInfo(name = "cmc") val cmc: Double = 0.0,
+    @ColumnInfo(name = "legalities") val legalities: String = "",
+    @ColumnInfo(name = "reserved") val reserved: Boolean = false,
+    @ColumnInfo(name = "game_changer") val gameChanger: Boolean = false
 )

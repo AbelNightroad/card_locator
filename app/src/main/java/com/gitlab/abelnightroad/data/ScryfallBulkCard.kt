@@ -33,5 +33,9 @@ data class ScryfallBulkCard(
     @SerialName("oracle_text") val oracleText: String = "",
     @SerialName("color_identity") val colorIdentity: List<String> = emptyList(),
     @SerialName("image_uris") val imageUris: ScryfallImageUris? = null,
-    val prices: ScryfallPrices = ScryfallPrices()
+    val prices: ScryfallPrices = ScryfallPrices(),
+    val cmc: Double = 0.0,
+    val legalities: Map<String, String> = emptyMap(),
+    val reserved: Boolean = false,
+    @SerialName("game_changer") val gameChanger: Boolean? = null
 )

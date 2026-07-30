@@ -79,7 +79,10 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
     suspend fun validateDeck(deckId: Long): ValidationResult {
         val dwc = dao.getDeckWithCards(deckId).first() ?: return ValidationResult.Invalid(listOf("Deck not found"))
         val validator = FormatValidator.forFormat(dwc.deck.format)
-        return validator.validate(dwc.deck.format, dwc.cards)
+        val scryfallIds = dwc.cards.map { it.scryfallId }.filter { it.isNotBlank() }
+        val legalitiesMap = if (scryfallIds.isEmpty()) emptyMap()
+            else scryfallDao.getLegalities(scryfallIds).associate { it.id to it.legalities }
+        return validator.validate(dwc.deck.format, dwc.cards, legalitiesMap)
     }
 
     suspend fun cardCount(deckId: Long): Int = dao.cardCount(deckId)

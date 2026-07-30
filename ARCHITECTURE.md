@@ -51,8 +51,11 @@ app/src/main/java/com/gitlab/abelnightroad/
 - **ScryfallCardEntity** (`scryfall_cards`): reference row from the Scryfall
   *Default Cards* bulk file, keyed by Scryfall `id`. Fields: name, setCode,
   setName, collectorNumber, rarity, manaCost, typeLine, oracleText,
-  colorIdentity (comma-separated sorted, e.g. "W,U,B"). Indexed on `name`
-  for prefix autocomplete.
+  colorIdentity (comma-separated sorted, e.g. "W,U,B"), imageUrl, cmc,
+  legalities (JSON-encoded map, e.g. `{"standard":"legal","commander":"legal"}`),
+  reserved, gameChanger. Indexed on `name` for prefix autocomplete.
+- **ScryfallCardLegality**: Room query projection (id + legalities JSON string)
+  used by DeckRepository to bulk-load legality info for deck validation.
 - **TagEntity** (`tags`): a standalone tag row (PK on tag name). Tags can exist
   with zero cards; the tag list UNIONs tags and card-derived tags.
 - **DeckEntity** (`decks`): a named deck with a format and optional
@@ -155,10 +158,11 @@ app/src/main/java/com/gitlab/abelnightroad/
 - MetaViewModel and MetaDecklistLoader both use a Mozilla User-Agent with
   `Accept`, `Accept-Language`, `Referer`, `Sec-Fetch-*`, and
   `Upgrade-Insecure-Requests` headers to avoid MTGGoldfish 403 blocks.
-- `addMigrations(MIGRATION_4_5, MIGRATION_5_6)` with
+- `addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)` with
   `fallbackToDestructiveMigration(true)` allows graceful upgrade. v4 added `tags`
   table; v5 added `slot`/`color_identity` to `deck_cards` and `color_identity` to
-  `scryfall_cards`; v6 added `image_url` to `scryfall_cards`.
+  `scryfall_cards`; v6 added `image_url` to `scryfall_cards`; v7 adds `cmc`,
+  `legalities`, `reserved`, `game_changer` to `scryfall_cards`.
   `fallbackToDestructiveMigration(true)` handles any future version gaps.
 - Decks use a separate table (`decks`) rather than reusing tags, because a deck
   is a curated list of cards (not a physical storage location). The
@@ -172,9 +176,13 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Slot system (mainboard/commander/companion) enables Commander/Brawl format
   rules. Commander slot is required, companion is optional.
 - FormatValidator uses a pluggable rule pattern: `FormatRule` is a `fun interface`
-  with a single `validate(format, cards)` method. New format rules can be added
-  without touching existing code — just add a `FormatRule` instance to the
-  `FormatValidator.registry` map for the target format.
+  with a `validate(format, cards, legalitiesMap)` method. `legalitiesMap` maps
+  scryfallId → JSON legalities string, loaded from `scryfall_cards` by
+  `DeckRepository.validateDeck()`. Rules: `CommanderCountRule` (exactly 1
+  commander), `ColorIdentityRule` (cards respect commander's colors),
+  `LegalityRule` (each card's legalities JSON must contain `"legal"` or
+  `"restricted"` for the deck's format). All format validators include
+  `LegalityRule`; Commander/Brawl additionally get count + color rules.
 - `primaryType()` uses priority-ordered rules (Land > Creature > Planeswalker >
   non-Tribal) to handle multi-type MtG cards for Deck View grouping.
 - `Screen.Decks` is a data class carrying an optional `format` string, preserving
