@@ -105,6 +105,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
+import kotlin.math.abs
 
 private val NAV_ITEMS = listOf(
     SwayNavItem(Octicons.Home24, "Collection", Screen.Main),
@@ -126,6 +127,18 @@ fun AppNavigation(
     var screen by remember { mutableStateOf<Screen>(Screen.Main) }
     var selectedCard by remember { mutableStateOf<CardSearchResult?>(null) }
     var selectedDeckCardScryfallId by remember { mutableStateOf<String?>(null) }
+    val backStack = remember { mutableListOf<Screen>() }
+
+    fun navigate(s: Screen) {
+        backStack.add(screen)
+        screen = s
+    }
+
+    fun goBack(): Boolean {
+        if (backStack.isEmpty()) return false
+        screen = backStack.removeLast()
+        return true
+    }
 
     val selectedNavIndex = NAV_ITEMS.indexOfFirst { it.screen == screen }
 
@@ -133,72 +146,72 @@ fun AppNavigation(
         SwayBottomNavigationBar(
             items = NAV_ITEMS,
             selectedIndex = selectedNavIndex.coerceAtLeast(0),
-            onItemSelected = { index -> screen = NAV_ITEMS[index].screen }
+            onItemSelected = { index -> backStack.clear(); screen = NAV_ITEMS[index].screen }
         )
     }
 
     when (val s = screen) {
         Screen.Main -> MainScreen(
             viewModel = mainViewModel,
-            onTagClick = { screen = Screen.Cards(it) },
+            onTagClick = { navigate(Screen.Cards(it)) },
             onCardClick = { selectedCard = it },
-            onAddCard = { screen = Screen.AddCard() },
+            onAddCard = { navigate(Screen.AddCard()) },
             bottomBar = bottomBar
         )
         is Screen.Cards -> CardListScreen(
             repository = repository,
             scryfall = scryfall,
             tag = s.tag,
-            onBack = { screen = Screen.Main },
+            onBack = { goBack() },
             onCardClick = { selectedCard = it }
         )
         is Screen.AddCard -> ManualAddScreen(
             repository = repository,
             scryfall = scryfall,
-            onBack = { screen = Screen.Main },
+            onBack = { goBack() },
             initialTag = s.initialTag
         )
         Screen.ManageTags -> ManageTagsScreen(
             repository = repository,
-            onBack = { screen = Screen.Main },
+            onBack = { goBack() },
             bottomBar = bottomBar
         )
         Screen.Settings -> SettingsScreen(
             viewModel = mainViewModel,
             repository = repository,
-            onBack = { screen = Screen.Main },
+            onBack = { goBack() },
             bottomBar = bottomBar
         )
         Screen.Meta -> MetaScreen(
             deckRepository = deckRepository,
             scryfall = scryfall,
-            onBack = { screen = Screen.Main },
-            onDeckClick = { deckId -> screen = Screen.DeckView(deckId, backTo = Screen.Meta) },
+            onBack = { goBack() },
+            onDeckClick = { deckId -> navigate(Screen.DeckView(deckId)) },
             bottomBar = bottomBar
         )
         is Screen.Decks -> DecksScreen(
             deckRepository = deckRepository,
             initialFormat = s.format,
-            onBack = { screen = Screen.Main },
-            onDeckClick = { deckId, format -> screen = Screen.DeckView(deckId, backTo = Screen.Decks(format)) },
+            onBack = { goBack() },
+            onDeckClick = { deckId, format -> navigate(Screen.DeckView(deckId)) },
             bottomBar = bottomBar
         )
         is Screen.DeckView -> DeckViewScreen(
             deckRepository = deckRepository,
             scryfall = scryfall,
             deckId = s.deckId,
-            onBack = { screen = s.backTo },
+            onBack = { goBack() },
             onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
         )
     }
 
-    BackHandler(enabled = screen !is Screen.Main || selectedCard != null || selectedDeckCardScryfallId != null) {
+    BackHandler(enabled = backStack.isNotEmpty() || selectedCard != null || selectedDeckCardScryfallId != null) {
         if (selectedDeckCardScryfallId != null) {
             selectedDeckCardScryfallId = null
         } else if (selectedCard != null) {
             selectedCard = null
         } else {
-            screen = Screen.Main
+            goBack()
         }
     }
 
@@ -219,7 +232,7 @@ sealed interface Screen {
     data object Settings : Screen
     data object Meta : Screen
     data class Decks(val format: String? = null) : Screen
-    data class DeckView(val deckId: Long, val backTo: Screen = Screen.Decks()) : Screen
+    data class DeckView(val deckId: Long) : Screen
 }
 
 data class SwayNavItem(
@@ -1545,6 +1558,22 @@ private fun DecksScreen(
                 ) {
                     items(formatCounts, key = { it.format }) { fc ->
                         var showFormatMenu by remember { mutableStateOf(false) }
+                        val pc = MaterialTheme.colorScheme.primaryContainer
+                        val sc = MaterialTheme.colorScheme.secondaryContainer
+                        val tc = MaterialTheme.colorScheme.tertiaryContainer
+                        val formatColors = remember {
+                            listOfNotNull(
+                                pc, sc, tc,
+                                Color(0xFFFFF8E1),
+                                Color(0xFFE8F5E9),
+                                Color(0xFFFCE4EC),
+                                Color(0xFFE3F2FD),
+                                Color(0xFFF3E5F5),
+                            )
+                        }
+                        val cardColor = remember(fc.format) {
+                            formatColors[abs(fc.format.hashCode()) % formatColors.size]
+                        }
                         Card(
                             Modifier.fillMaxWidth().combinedClickable(
                                 onClick = {
@@ -1553,6 +1582,7 @@ private fun DecksScreen(
                                 },
                                 onLongClick = { showFormatMenu = true }
                             ),
+                            colors = CardDefaults.cardColors(containerColor = cardColor),
                             elevation = CardDefaults.cardElevation(2.dp)
                         ) {
                             Column(
@@ -1820,7 +1850,7 @@ private fun DeckViewScreen(
             val typeGroupsBySlot = cards.groupBy { it.slot }.mapValues { (_, slotCards) ->
                 slotCards.groupBy { primaryType(it.typeLine) }
             }
-            val slotOrder = listOf("commander", "companion", "mainboard")
+            val slotOrder = listOf("commander", "companion", "mainboard", "sideboard")
             LazyColumn(Modifier.padding(padding).padding(horizontal = 8.dp)) {
                 for (slot in slotOrder) {
                     val typeGroups = typeGroupsBySlot[slot] ?: continue

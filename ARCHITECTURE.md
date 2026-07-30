@@ -103,7 +103,7 @@ app/src/main/java/com/gitlab/abelnightroad/
    (formatCounts from DAO). Tapping a format shows that format's decks.
    Each deck card has a square cover image (1:1 aspect ratio), name, format,
    card count. FAB opens create dialog.
-10. Deck View screen: cards grouped by slot (mainboard/commander/companion)
+10. Deck View screen: cards grouped by slot (mainboard/commander/companion/sideboard)
     then by card type (determined by primaryType — handles multi-type cards:
     Artifact Creature → Creature, Artifact Land → Land, Artifact Vehicle →
     Artifact, Tribal/Kindred → follow subtype). Each card shows mana cost,
@@ -214,6 +214,10 @@ app/src/main/java/com/gitlab/abelnightroad/
   writes the current tag's cards to the Downloads directory.
 - Meta import uses `lookupByNameResilient` which handles " // " in card names
   (MDFC, Adventure, Room) by splitting and trying each face name separately.
+- Back navigation uses a `backStack: MutableList<Screen>` (not the `backTo`
+  field which was removed). `navigate()` pushes to the stack; `goBack()` pops.
+  The bottom nav bar clears the stack. Hardware back presses dismiss overlays
+  first, then pop the stack.
 
 ## Dependencies
 

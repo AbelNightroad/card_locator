@@ -45,24 +45,37 @@ object MetaDecklistLoader {
         val code = formatCodes[format.lowercase()] ?: throw IOException("Unsupported format: $format")
         val doc = connect("https://mtgtop8.com/format?f=$code").get()
 
-        val entries = doc.select("div.hover_tr:has(div.S14 a[href*=archetype]), div.chosen_tr:has(div.S14 a[href*=archetype])")
-        if (entries.isEmpty()) throw IOException("No archetypes found for $format")
+        var entries = doc.select("div.hover_tr:has(div.S14 a[href*=archetype]), div.chosen_tr:has(div.S14 a[href*=archetype])")
 
-        entries.mapNotNull { entry ->
-            val link = entry.selectFirst("div.S14 a")
-            val name = link?.text()?.trim() ?: return@mapNotNull null
-            if (name.isBlank()) return@mapNotNull null
+        if (entries.isEmpty()) {
+            val archetypeLinks = doc.select("a[href*='/archetype?']")
+            if (archetypeLinks.isEmpty()) throw IOException("No archetypes found for $format")
+            archetypeLinks.mapNotNull { link ->
+                val name = link.text().trim()
+                if (name.isBlank()) return@mapNotNull null
+                val href = link.attr("href")
+                val archetypeId = Regex("""a=(\d+)""").find(href)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+                val thumb = link.parent()?.selectFirst("img[src*=/metas_thumbs/]")
+                val coverUrl = thumb?.attr("src")?.let { "https://mtgtop8.com/$it" } ?: ""
+                MTGTop8Archetype(name, coverUrl, "", archetypeId, href)
+            }
+        } else {
+            entries.mapNotNull { entry ->
+                val link = entry.selectFirst("div.S14 a")
+                val name = link?.text()?.trim() ?: return@mapNotNull null
+                if (name.isBlank()) return@mapNotNull null
 
-            val href = link.attr("href")
-            val archetypeId = Regex("""a=(\d+)""").find(href)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+                val href = link.attr("href")
+                val archetypeId = Regex("""a=(\d+)""").find(href)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
 
-            val thumb = entry.selectFirst("img[src*=/metas_thumbs/]")
-            val coverUrl = thumb?.attr("src")?.let { "https://mtgtop8.com/$it" } ?: ""
+                val thumb = entry.selectFirst("img[src*=/metas_thumbs/]")
+                val coverUrl = thumb?.attr("src")?.let { "https://mtgtop8.com/$it" } ?: ""
 
-            val allS14 = entry.select("div.S14")
-            val metaPct = allS14.firstOrNull { it.selectFirst("a") == null }?.text()?.trim() ?: ""
+                val allS14 = entry.select("div.S14")
+                val metaPct = allS14.firstOrNull { it.selectFirst("a") == null }?.text()?.trim() ?: ""
 
-            MTGTop8Archetype(name, coverUrl, metaPct, archetypeId, href)
+                MTGTop8Archetype(name, coverUrl, metaPct, archetypeId, href)
+            }
         }
     }
 
