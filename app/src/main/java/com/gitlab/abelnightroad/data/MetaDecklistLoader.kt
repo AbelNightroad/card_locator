@@ -5,6 +5,9 @@ import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import java.io.IOException
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class MetaDeckCard(
     val quantity: Int,
     val cardName: String,

@@ -23,6 +23,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── DeckRepository.kt          # decks + deck_cards queries + validateDeck
 │   ├── FormatValidator.kt         # pluggable format rules (Commander count, color identity)
 │   ├── MetaDecklistLoader.kt      # Jsoup parser for mtgtop8.com (format → archetypes → decklist)
+│   ├── EdhPlayDecklistParser.kt   # parser for EDH Play text-format decklists
 │   └── SettingsStore.kt           # DataStore: theme id + dark mode
 ├── db/
 │   ├── AppDatabase.kt             # v5: cards + scryfall_cards + decks + deck_cards + tags
@@ -33,14 +34,23 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── DeckCardEntity.kt          # deck membership with slot + color_identity + FK CASCADE
 │   └── DeckDao.kt / DeckWithCards # queries + relations
 └── ui/
-    ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings, decks, deck view
+    ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings, decks, deck view,
+    │                              #   edhplay import, edhplay webview
     ├── MainViewModel.kt
     ├── MetaViewModel.kt           # parse mtgtop8 archetypes + decklist loading state
     ├── ImportViewModel.kt         # CSV import
     ├── ScryfallImportViewModel.kt # bulk JSON import
     ├── ManualAddViewModel.kt      # manual add + autocomplete
     ├── DecksViewModel.kt          # decks list + format filtering + formatCounts
-    ├── CardImage.kt
+    ├── components/                # reusable composables extracted from Screens.kt
+    │   ├── AsyncImage.kt          # ScryfallAsyncImage (Coil + custom User-Agent)
+    │   ├── FullscreenOverlay.kt   # fullscreen card image dialog (no DB lookup, uses ScryfallImage directly)
+    │   ├── LoadingBox.kt          # LoadingBox, ErrorBox, EmptyBox
+    │   ├── QuantityStepper.kt     # +/- quantity controls
+    │   └── EdhPlayWebView.kt      # WebView for EDH Play authenticated import (kotlinx.serialization JSON)
+    ├── navigation/                # navigation types extracted from Screens.kt
+    │   ├── Screen.kt              # Screen sealed interface + SwayNavItem + NAV_ITEMS
+    │   └── BottomNavigationBar.kt # FilledBottomNavigationBar composable (icon-only, no text labels)
     └── theme/                     # Catppuccin, Nord, Cobalt2, Shades of Purple
 ```
 
@@ -67,6 +77,8 @@ app/src/main/java/com/gitlab/abelnightroad/
 - **DeckWithCards**: a `@Relation` data class embedding a `DeckEntity` with
   its `List<DeckCardEntity>`.
 - **MetaDeckCard**: parsed mtgtop8 decklist row (quantity, name, slot).
+   `@Serializable` for kotlinx.serialization. Also used by `EdhPlayDecklistParser`
+   for EDH Play text-format imports.
 - **MTGTop8Archetype**: parsed mtgtop8 format page entry (name, coverUrl, metaPercent, archetypeId, url).
 - **FormatCount** / **SlotCount**: DAO projection types for aggregate queries.
 - **ValidationResult**: sealed interface (`Valid` | `Invalid(errors)`) from the
@@ -103,12 +115,14 @@ app/src/main/java/com/gitlab/abelnightroad/
    (formatCounts from DAO). Tapping a format shows that format's decks.
    Each deck card has a square cover image (1:1 aspect ratio), name, format,
    card count. FAB opens create dialog.
-10. Deck View screen: cards grouped by slot
-    (commander/companion/mainboard → by type, sideboard → flat list without
-    type grouping). Each card shows mana cost, quantity +/- controls,
-    rarity/set info, and a "Cover" button to set it as the deck's cover image.
-    Tapping a card shows fullscreen image overlay. Plus button in the top
-    app bar opens AddCardToDeckDialog with Scryfall autocomplete.
+ 10. Deck View screen: cards grouped by slot
+     (commander/companion/mainboard → by type, sideboard → flat list without
+     type grouping). Each card shows mana cost, quantity controls via
+     `QuantityStepper`, rarity/set info, and a "Cover" button to set it as
+     the deck's cover image (hidden for sideboard cards via `showCoverButton`
+     flag on the unified `DeckCardRow` composable). Tapping a card shows
+     fullscreen image overlay. Plus button in the top app bar opens
+     AddCardToDeckDialog with Scryfall autocomplete.
 11. AddCardToDeckDialog: for Commander format, shows slot selection
     chips (mainboard/commander/companion) and displays the selected card's
     color identity. Validates color identity against the existing commander
@@ -119,6 +133,26 @@ app/src/main/java/com/gitlab/abelnightroad/
     be called for any deck. Commander rules: exactly 1 commander,
     all cards respect commander's color identity. New formats add entries
     to FormatValidator.registry with custom FormatRule instances.
+13. EDH Play import (Decks screen → download icon in top bar):
+    - **Paste decklist:** User pastes text in standard MTG format
+      (`1 Sol Ring`, `4 Lightning Bolt`); section headers like
+      `Commander`, `Mainboard`, `Sideboard` are parsed into slots.
+      `EdhPlayDecklistParser.parse()` produces `List<MetaDeckCard>`.
+      False positives (URLs, "Total:" lines, `//` comments) are filtered.
+    - **WebView import:** User enters an EDH Play URL
+      (`https://edhplay.com/decks/<uuid>`); the app opens a `WebView`
+      that loads the page, waits for the SPA to render, then injects
+      JavaScript to extract card names/quantities from the DOM and
+      bridge them back via `EdhPlayBridge.onDeckExtracted`. JSON response
+      is parsed with kotlinx.serialization (`Json.decodeFromString<List<MetaDeckCard>>`).
+      URL validation ensures `https?://` scheme before loading.
+    - **Format selector:** Both paste and WebView import screens show a
+      format dropdown (defaults to Commander). Format is passed to
+      `importDeckCards()` for color identity validation.
+    - All flows use the shared `importDeckCards()` function which resolves
+      cards against `scryfall_cards` via `lookupByNameResilient`, creates a
+      deck via `deckRepository.createDeck`, and navigates to DeckView on success.
+      Scryfall lookups are parallelized with `coroutineScope { cards.map { async { ... } }.awaitAll() }`.
 
 ## Manual add + autocomplete (data flow)
 
@@ -189,8 +223,20 @@ app/src/main/java/com/gitlab/abelnightroad/
 - `Screen.Decks` is a data class carrying an optional `format` string, preserving
   the selected format across Deck View navigation. The `DeckView.backTo` field
   routes back to the exact `Screen.Decks(format)` instance.
+- `Screen.EdhPlayImport` navigates to the EDH Play import screen (paste decklist
+  or enter URL with format selector). `Screen.EdhPlayWebView(deckUrl)` opens
+  the WebView for authenticated import. Both use the shared `importDeckCards()`
+  function with parallel Scryfall lookups for fast resolution.
+- `importDeckCards()` is a shared top-level suspend function that resolves
+  cards against the Scryfall reference table using parallel async lookups
+  (`coroutineScope { cards.map { async { ... } }.awaitAll() }`), enforces
+  Commander color identity rules, and adds resolved cards to the deck.
+  Used by MetaScreen, EdhPlayImportScreen, and EdhPlayWebViewScreen.
+- `ALL_FORMATS` is the shared format list (without "All") used by MetaScreen
+  and EdhPlayImportScreen. `DECK_FORMATS` adds "All" prefix for Decks screen
+  format filtering.
 - FilledBottomNavigationBar uses a filled `secondaryContainer` background for
-  the selected item (rounded corners), no animation, labels always visible.
+  the selected item (rounded corners), icon-only (no text labels), no animation.
   Replaced the previous Sway variant (animated circle + bouncing icon) to avoid
   double-sizing issues with system nav bar padding.
 - Import from 3rd-Party uses `OpenDocument` with MIME types `text/csv`,
@@ -198,13 +244,13 @@ app/src/main/java/com/gitlab/abelnightroad/
   JSON → `BackupStore.decodeToTag`, CSV/TXT → `CsvImport.parse`. Both append
   cards with the user-specified tag.
 - Image URL is parsed from Scryfall bulk data's `image_uris.normal` field and
-  stored in `scryfall_cards.image_url`. `CardImage` builds the CDN URL directly
+  stored in `scryfall_cards.image_url`. `ScryfallAsyncImage` builds the CDN URL directly
   via `ScryfallImage.normal()`/`large()`/`artCrop()` from the card UUID (deterministic).
   Deck grid covers use `artCrop()` (landscape art crop 5:3); fullscreen overlay uses `large()`.
   Inline card thumbnails (44dp) shown in CardListScreen and DeckViewScreen.
-- `FullscreenOverlay` and `CardImage` use Coil's `SubcomposeAsyncImage` (not
-  `rememberAsyncImagePainter`) because `SubcomposeAsyncImage` has composable
-  loading/error slots that work reliably inside `Dialog` composition scopes.
+- `FullscreenOverlay` uses Coil's `SubcomposeAsyncImage` directly via `ScryfallAsyncImage`,
+  with `ScryfallImage.large()` URL construction — no database lookup needed.
+  The outer Box handles dismiss-on-tap; the Card has no clickable modifier (fixed double-clickable issue).
 - Deck cards support long-press context menus: clone (duplicate deck with cards)
   and delete (with confirmation). Format cards support long-press delete
   (removes all decks in that format with CASCADE). All destructive operations
@@ -215,6 +261,9 @@ app/src/main/java/com/gitlab/abelnightroad/
    Room cards like "Roaring Furnace / Steaming Sauna"), splits on " // " and tries
    each face name, then falls back to `byNamePrefix` for cases where mtgtop8 omits
    the " // " suffix (e.g., "Bonecrusher Giant" → "Bonecrusher Giant // Stomp").
+   All three import flows (Meta, EDH Play paste, EDH Play WebView) use the shared
+   `importDeckCards()` function which parallelizes Scryfall lookups with
+   `coroutineScope { cards.map { async { ... } }.awaitAll() }` for fast resolution.
 - Back navigation uses a `backStack: MutableList<Screen>` (not the `backTo`
   field which was removed). `navigate()` pushes to the stack; `goBack()` pops.
   The bottom nav bar clears the stack. Hardware back presses dismiss overlays
@@ -233,8 +282,8 @@ app/src/main/java/com/gitlab/abelnightroad/
 
 ## Build
 
-Uses the system JDK (no `jdkToolchain` pin). `gradle assembleDebug` or
-`make build`. Unit tests: `gradle test`.
+Uses the system JDK (no `jdkToolchain` pin). `./gradlew assembleDebug` or
+`make build`. Unit tests: `./gradlew test`.
 
 ## Git conventions
 

@@ -7,14 +7,14 @@ OUTPUT_APK := app/build/outputs/apk/release/CardTracker-$(VERSION_BUILD).apk
 .PHONY: build clean test
 
 build: clean
-	gradle assembleRelease
+	./gradlew assembleRelease
 	@$(MAKE) move_file
 
 clean:
-	gradle clean
+	./gradlew clean
 
 test:
-	timeout 900 gradle test
+	timeout 900 ./gradlew test
 
 move_file:
 	@mv $(RELEASE_APK) $(OUTPUT_APK) > /dev/null 2>&1 && \

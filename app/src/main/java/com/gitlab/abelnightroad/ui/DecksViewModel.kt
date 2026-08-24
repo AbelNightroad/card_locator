@@ -40,9 +40,8 @@ class DecksViewModel(private val repository: DeckRepository) : ViewModel() {
         }
     }
 
-    fun importFromMeta(name: String, format: String, coverScryfallId: String?, onCreated: (Long) -> Unit) {
+    fun importFromMeta(name: String, format: String, onCreated: (Long) -> Unit) {
         viewModelScope.launch {
-            val deck = DeckEntity(name = name, format = format, source = "meta", coverScryfallId = coverScryfallId)
             val id = repository.createDeck(name, format, "meta")
             onCreated(id)
         }

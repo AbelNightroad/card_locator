@@ -5,7 +5,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,6 +39,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -50,7 +49,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -67,21 +65,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import compose.icons.Octicons
 import compose.icons.octicons.*
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
 import com.gitlab.abelnightroad.ui.theme.FONTS
 import com.gitlab.abelnightroad.ui.theme.fontFamilyFor
 import com.gitlab.abelnightroad.data.BackupStore
@@ -90,6 +82,7 @@ import com.gitlab.abelnightroad.data.CsvImport
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.MetaDeckCard
 import com.gitlab.abelnightroad.data.MetaDecklistLoader
+import com.gitlab.abelnightroad.data.EdhPlayDecklistParser
 import com.gitlab.abelnightroad.data.ValidationResult
 import com.gitlab.abelnightroad.data.ScryfallImage
 import com.gitlab.abelnightroad.data.ScryfallRepository
@@ -104,16 +97,86 @@ import com.gitlab.abelnightroad.ui.theme.THEMES
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.flowOf
 import kotlin.math.abs
+import com.gitlab.abelnightroad.ui.navigation.Screen
+import com.gitlab.abelnightroad.ui.navigation.FilledBottomNavigationBar
+import com.gitlab.abelnightroad.ui.navigation.NAV_ITEMS
+import com.gitlab.abelnightroad.ui.components.FullscreenOverlay
+import com.gitlab.abelnightroad.ui.components.ScryfallAsyncImage
+import com.gitlab.abelnightroad.ui.components.QuantityStepper
+import com.gitlab.abelnightroad.ui.components.EdhPlayWebView
 
-private val NAV_ITEMS = listOf(
-    SwayNavItem(Octicons.Home24, "Collection", Screen.Main),
-    SwayNavItem(Octicons.Book24, "Decks", Screen.Decks()),
-    SwayNavItem(Octicons.Tag24, "Tags", Screen.ManageTags),
-    SwayNavItem(Octicons.Graph24, "Meta", Screen.Meta),
-    SwayNavItem(Octicons.Gear24, "Settings", Screen.Settings),
+private val ALL_FORMATS = listOf(
+    "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
+    "Premodern", "Commander"
 )
+
+private val DECK_FORMATS = listOf(
+    "All", "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
+    "Premodern", "Commander"
+)
+
+private suspend fun importDeckCards(
+    deckId: Long,
+    cards: List<MetaDeckCard>,
+    deckRepository: DeckRepository,
+    scryfall: ScryfallRepository,
+    format: String = "Commander",
+    onProgress: suspend (String) -> Unit = {}
+) {
+    val isCommanderFormat = format == "Commander"
+    val resolved = coroutineScope {
+        cards.map { c ->
+            async {
+                val scryfallCard = scryfall.lookupByNameResilient(c.cardName)
+                c to scryfallCard
+            }
+        }.awaitAll()
+    }
+
+    var commanderColors = ""
+    var warningCount = 0
+    for ((i, pair) in resolved.withIndex()) {
+        val (c, scryfallCard) = pair
+        val actualSlot = if (isCommanderFormat && i == 0) "commander" else c.slot
+        if (scryfallCard != null) {
+            if (isCommanderFormat && i == 0) {
+                commanderColors = scryfallCard.colorIdentity
+            }
+            if (isCommanderFormat && i > 0 && commanderColors.isNotBlank()
+                && !DeckRepository.isColorIdentityValid(scryfallCard.colorIdentity, commanderColors)) {
+                warningCount++
+                continue
+            }
+            deckRepository.addCardToDeck(
+                deckId = deckId,
+                scryfallId = scryfallCard.id,
+                cardName = scryfallCard.name,
+                setCode = scryfallCard.setCode,
+                setName = scryfallCard.setName,
+                collectorNumber = scryfallCard.collectorNumber,
+                rarity = scryfallCard.rarity,
+                quantity = c.quantity,
+                manaCost = scryfallCard.manaCost,
+                typeLine = scryfallCard.typeLine,
+                slot = actualSlot
+            )
+        } else {
+            deckRepository.addCardToDeck(
+                deckId = deckId,
+                scryfallId = "",
+                cardName = c.cardName,
+                setCode = "", setName = "",
+                collectorNumber = "", rarity = "",
+                quantity = c.quantity, slot = actualSlot
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,7 +206,7 @@ fun AppNavigation(
     val selectedNavIndex = NAV_ITEMS.indexOfFirst { it.screen == screen }
 
     val bottomBar: @Composable () -> Unit = {
-        SwayBottomNavigationBar(
+        FilledBottomNavigationBar(
             items = NAV_ITEMS,
             selectedIndex = selectedNavIndex.coerceAtLeast(0),
             onItemSelected = { index -> backStack.clear(); screen = NAV_ITEMS[index].screen }
@@ -194,6 +257,7 @@ fun AppNavigation(
             initialFormat = s.format,
             onBack = { goBack() },
             onDeckClick = { deckId, format -> navigate(Screen.DeckView(deckId)) },
+            onEdhPlayImport = { navigate(Screen.EdhPlayImport) },
             bottomBar = bottomBar
         )
         is Screen.DeckView -> DeckViewScreen(
@@ -202,6 +266,20 @@ fun AppNavigation(
             deckId = s.deckId,
             onBack = { goBack() },
             onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
+        )
+        Screen.EdhPlayImport -> EdhPlayImportScreen(
+            deckRepository = deckRepository,
+            scryfall = scryfall,
+            onBack = { goBack() },
+            onNavigateToWebView = { url -> navigate(Screen.EdhPlayWebView(url)) },
+            onImportComplete = { deckId -> goBack(); navigate(Screen.DeckView(deckId)) }
+        )
+        is Screen.EdhPlayWebView -> EdhPlayWebViewScreen(
+            deckUrl = s.deckUrl,
+            deckRepository = deckRepository,
+            scryfall = scryfall,
+            onBack = { goBack() },
+            onImportComplete = { deckId -> goBack(); navigate(Screen.DeckView(deckId)) }
         )
     }
 
@@ -216,71 +294,11 @@ fun AppNavigation(
     }
 
     selectedCard?.let { card ->
-        FullscreenOverlay(scryfallId = card.scryfallId, scryfall = scryfall, onDismiss = { selectedCard = null })
+        FullscreenOverlay(scryfallId = card.scryfallId, onDismiss = { selectedCard = null })
     }
 
     selectedDeckCardScryfallId?.let { scryfallId ->
-        FullscreenOverlay(scryfallId = scryfallId, scryfall = scryfall, onDismiss = { selectedDeckCardScryfallId = null })
-    }
-}
-
-sealed interface Screen {
-    data object Main : Screen
-    data class Cards(val tag: String) : Screen
-    data class AddCard(val initialTag: String = "") : Screen
-    data object ManageTags : Screen
-    data object Settings : Screen
-    data object Meta : Screen
-    data class Decks(val format: String? = null) : Screen
-    data class DeckView(val deckId: Long) : Screen
-}
-
-data class SwayNavItem(
-    val icon: ImageVector,
-    val label: String,
-    val screen: Screen
-)
-
-@Composable
-private fun SwayBottomNavigationBar(
-    items: List<SwayNavItem>,
-    selectedIndex: Int,
-    onItemSelected: (Int) -> Unit,
-    iconSize: androidx.compose.ui.unit.Dp = 22.dp,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp,
-        shadowElevation = 4.dp,
-        modifier = Modifier.navigationBarsPadding()
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items.forEachIndexed { index, item ->
-                val isSelected = index == selectedIndex
-                Box(
-                    Modifier.weight(1f).clickable { onItemSelected(index) }
-                        .background(
-                            if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-                            else Color.Transparent,
-                            RoundedCornerShape(16.dp)
-                        )
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label,
-                        modifier = Modifier.size(iconSize),
-                        tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
+        FullscreenOverlay(scryfallId = scryfallId, onDismiss = { selectedDeckCardScryfallId = null })
     }
 }
 
@@ -528,23 +546,11 @@ private fun CardListScreen(
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = { scope.launch { repository.decrementQuantity(card.id) } },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Text("\u2212", fontWeight = FontWeight.Bold)
-                                }
-                                Text("${card.quantity}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold)
-                                IconButton(
-                                    onClick = { scope.launch { repository.incrementQuantity(card.id) } },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Text("+", fontWeight = FontWeight.Bold)
-                                }
-                            }
+                            QuantityStepper(
+                                quantity = card.quantity,
+                                onDecrease = { scope.launch { repository.decrementQuantity(card.id) } },
+                                onIncrease = { scope.launch { repository.incrementQuantity(card.id) } }
+                            )
                         }
                     }
                 }
@@ -553,55 +559,7 @@ private fun CardListScreen(
     }
 }
 
-@Composable
-private fun FullscreenOverlay(
-    scryfallId: String,
-    scryfall: ScryfallRepository,
-    onDismiss: () -> Unit
-) {
-    var imageUrl by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(scryfallId) {
-        if (scryfallId.isNotBlank()) {
-            imageUrl = scryfall.lookupById(scryfallId)?.imageUrl
-        }
-    }
 
-    Dialog(onDismissRequest = onDismiss) {
-        val url = if (scryfallId.isNotBlank())
-            imageUrl?.takeIf { it.isNotBlank() } ?: ScryfallImage.large(scryfallId)
-            else ""
-
-        Box(
-            Modifier.fillMaxSize().clickable(onClick = onDismiss),
-            contentAlignment = Alignment.Center
-        ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(0.8f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onDismiss)
-            ) {
-                Box(Modifier.aspectRatio(5f / 7f)) {
-                    if (url.isNotBlank()) {
-                        SubcomposeAsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(url)
-                                .crossfade(true)
-                                .setHeader("User-Agent", "MtGCardTracker/1.0")
-                                .build(),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit,
-                            loading = { CircularProgressIndicator() },
-                            error = { Text("Failed to load image") }
-                        )
-                    } else {
-                        Text("No image available", modifier = Modifier.align(Alignment.Center))
-                    }
-                }
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1033,10 +991,7 @@ private fun MetaScreen(
     onDeckClick: (Long) -> Unit,
     bottomBar: @Composable () -> Unit = {}
 ) {
-    val formats = listOf(
-        "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
-        "Premodern", "Commander"
-    )
+    val formats = ALL_FORMATS
     var selectedFormat by remember { mutableStateOf("Standard") }
     val metaViewModel: MetaViewModel = viewModel()
     val metaState by metaViewModel.state.collectAsState()
@@ -1125,13 +1080,8 @@ private fun MetaScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         if (deck.coverImageUrl.isNotBlank()) {
-                                            SubcomposeAsyncImage(
-                                                model = ImageRequest.Builder(LocalContext.current)
-                                                    .data(deck.coverImageUrl)
-                                                    .crossfade(true)
-                                                    .setHeader("User-Agent", "MtGCardTracker/1.0")
-                                                    .build(),
-                                                contentDescription = null,
+                                            ScryfallAsyncImage(
+                                                url = deck.coverImageUrl,
                                                 modifier = Modifier.fillMaxSize(),
                                                 contentScale = ContentScale.Fit,
                                                 loading = { CircularProgressIndicator() },
@@ -1185,50 +1135,11 @@ private fun MetaScreen(
                                 val format = selectedFormat
                                 val deckName = deck.name
                                 val deckId = deckRepository.createDeck(deckName, format, "meta")
-                                val isCommanderFormat = format == "Commander"
-                                var commanderColors = ""
-                                var warningCount = 0
-                                for ((i, c) in cards.withIndex()) {
-                                    val actualSlot = if (isCommanderFormat && i == 0) "commander" else c.slot
-                                    val scryfallCard = scryfall.lookupByNameResilient(c.cardName)
-                                    if (scryfallCard != null) {
-                                        if (isCommanderFormat && i == 0) {
-                                            commanderColors = scryfallCard.colorIdentity
-                                        }
-                                        if (isCommanderFormat && i > 0 && commanderColors.isNotBlank()
-                                            && !DeckRepository.isColorIdentityValid(scryfallCard.colorIdentity, commanderColors)) {
-                                            warningCount++
-                                            continue
-                                        }
-                                        deckRepository.addCardToDeck(
-                                            deckId = deckId,
-                                            scryfallId = scryfallCard.id,
-                                            cardName = scryfallCard.name,
-                                            setCode = scryfallCard.setCode,
-                                            setName = scryfallCard.setName,
-                                            collectorNumber = scryfallCard.collectorNumber,
-                                            rarity = scryfallCard.rarity,
-                                            quantity = c.quantity,
-                                            manaCost = scryfallCard.manaCost,
-                                            typeLine = scryfallCard.typeLine,
-                                            slot = actualSlot
-                                        )
-                                    } else {
-                                        deckRepository.addCardToDeck(
-                                            deckId = deckId,
-                                            scryfallId = "",
-                                            cardName = c.cardName,
-                                            setCode = "", setName = "",
-                                            collectorNumber = "", rarity = "",
-                                            quantity = c.quantity, slot = actualSlot
-                                        )
-                                    }
-                                }
+                                importDeckCards(deckId, cards, deckRepository, scryfall, format)
                                 val validation = deckRepository.validateDeck(deckId)
                                 showDecklistDialog = false
-                                val msg = when {
-                                    warningCount > 0 -> "Imported $deckName ($warningCount cards skipped for color identity)"
-                                    validation is ValidationResult.Invalid -> "Imported $deckName (${validation.errors.size} warnings)"
+                                val msg = when (validation) {
+                                    is ValidationResult.Invalid -> "Imported $deckName (${validation.errors.size} warnings)"
                                     else -> "Imported $deckName"
                                 }
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -1461,10 +1372,7 @@ private fun AboutCard() {
     }
 }
 
-private val FORMATS = listOf(
-    "All", "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage",
-    "Premodern", "Commander"
-)
+private val FORMATS = DECK_FORMATS
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -1473,6 +1381,7 @@ private fun DecksScreen(
     initialFormat: String? = null,
     onBack: () -> Unit,
     onDeckClick: (Long, String) -> Unit,
+    onEdhPlayImport: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {}
 ) {
     val decksVm: DecksViewModel = viewModel { DecksViewModel(deckRepository) }
@@ -1534,7 +1443,12 @@ private fun DecksScreen(
             topBar = {
                 TopAppBar(
                     title = { Text("Decks") },
-                    navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } }
+                    navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } },
+                    actions = {
+                        IconButton(onClick = onEdhPlayImport) {
+                            Icon(Octicons.Download24, "Import from EDH Play")
+                        }
+                    }
                 )
             },
             floatingActionButton = {
@@ -1701,7 +1615,11 @@ private fun DeckGridCard(
                 contentAlignment = Alignment.Center
             ) {
                 if (deck.coverScryfallId != null) {
-                    CardImage(scryfallId = deck.coverScryfallId, modifier = Modifier.fillMaxSize())
+                    ScryfallAsyncImage(
+                        url = ScryfallImage.artCrop(deck.coverScryfallId),
+                        modifier = Modifier.fillMaxSize(),
+                        contentDescription = deck.name
+                    )
                 } else {
                     Text("\u2660", style = MaterialTheme.typography.headlineLarge,
                         color = MaterialTheme.colorScheme.primary)
@@ -1864,7 +1782,7 @@ private fun DeckViewScreen(
                     if (slot == "sideboard") {
                         val flatCards = typeGroups.values.flatten()
                         items(flatCards, key = { it.id }) { card ->
-                            SideboardCardRow(card, scope, deckRepository, deckId, onCardClick)
+                            DeckCardRow(card, scope, deckRepository, deckId, onCardClick, context, showCoverButton = false)
                         }
                     } else {
                         for ((type, typeCards) in typeGroups) {
@@ -1903,7 +1821,8 @@ private fun DeckCardRow(
     deckRepository: DeckRepository,
     deckId: Long,
     onCardClick: (String) -> Unit,
-    context: android.content.Context
+    context: android.content.Context,
+    showCoverButton: Boolean = true
 ) {
     Card(
         Modifier.fillMaxWidth().padding(vertical = 3.dp)
@@ -1922,101 +1841,41 @@ private fun DeckCardRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = {
-                        scope.launch {
-                            if (card.quantity > 1) {
-                                deckRepository.updateCardQuantity(card.id, card.quantity - 1)
-                            } else {
-                                deckRepository.removeCard(card.id)
-                            }
-                        }
-                    },
-                    modifier = Modifier.size(32.dp)
-                ) { Text("\u2212", fontWeight = FontWeight.Bold) }
-                Text("${card.quantity}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold)
-                IconButton(
-                    onClick = {
-                        scope.launch {
-                            deckRepository.updateCardQuantity(card.id, card.quantity + 1)
-                        }
-                    },
-                    modifier = Modifier.size(32.dp)
-                ) { Text("+", fontWeight = FontWeight.Bold) }
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("${card.rarity} \u00b7 ${card.setName}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(
-                onClick = {
+            QuantityStepper(
+                quantity = card.quantity,
+                onDecrease = {
                     scope.launch {
-                        deckRepository.updateDeckCover(deckId, card.scryfallId)
-                        Toast.makeText(context, "Cover set", Toast.LENGTH_SHORT).show()
+                        if (card.quantity > 1) {
+                            deckRepository.updateCardQuantity(card.id, card.quantity - 1)
+                        } else {
+                            deckRepository.removeCard(card.id)
+                        }
                     }
                 },
-                modifier = Modifier.height(28.dp)
-            ) { Text("Cover", fontSize = 11.sp) }
-        }
-    }
-}
-
-@Composable
-private fun SideboardCardRow(
-    card: com.gitlab.abelnightroad.db.DeckCardEntity,
-    scope: kotlinx.coroutines.CoroutineScope,
-    deckRepository: DeckRepository,
-    deckId: Long,
-    onCardClick: (String) -> Unit
-) {
-    Card(
-        Modifier.fillMaxWidth().padding(vertical = 3.dp)
-            .clickable { onCardClick(card.scryfallId) },
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(card.cardName, style = MaterialTheme.typography.titleSmall)
-                if (card.manaCost.isNotBlank()) {
-                    Text(card.manaCost,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                onIncrease = {
+                    scope.launch {
+                        deckRepository.updateCardQuantity(card.id, card.quantity + 1)
+                    }
                 }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
+            )
+        }
+        if (showCoverButton) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("${card.rarity} \u00b7 ${card.setName}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(
                     onClick = {
                         scope.launch {
-                            if (card.quantity > 1) {
-                                deckRepository.updateCardQuantity(card.id, card.quantity - 1)
-                            } else {
-                                deckRepository.removeCard(card.id)
-                            }
+                            deckRepository.updateDeckCover(deckId, card.scryfallId)
+                            Toast.makeText(context, "Cover set", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    modifier = Modifier.size(32.dp)
-                ) { Text("\u2212", fontWeight = FontWeight.Bold) }
-                Text("${card.quantity}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold)
-                IconButton(
-                    onClick = {
-                        scope.launch {
-                            deckRepository.updateCardQuantity(card.id, card.quantity + 1)
-                        }
-                    },
-                    modifier = Modifier.size(32.dp)
-                ) { Text("+", fontWeight = FontWeight.Bold) }
+                    modifier = Modifier.height(28.dp)
+                ) { Text("Cover", fontSize = 11.sp) }
             }
         }
     }
@@ -2151,6 +2010,191 @@ private fun AddCardToDeckDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EdhPlayImportScreen(
+    deckRepository: DeckRepository,
+    scryfall: ScryfallRepository,
+    onBack: () -> Unit,
+    onNavigateToWebView: (String) -> Unit = {},
+    onImportComplete: (Long) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var decklistText by remember { mutableStateOf("") }
+    var deckName by remember { mutableStateOf("") }
+    var deckUrl by remember { mutableStateOf("") }
+    var isImporting by remember { mutableStateOf(false) }
+    var selectedFormat by remember { mutableStateOf("Commander") }
+    var formatExpanded by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Import from EDH Play") },
+                navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } }
+            )
+        }
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text("Paste your EDH Play decklist below:",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(bottom = 8.dp))
+
+            OutlinedTextField(
+                value = deckName,
+                onValueChange = { deckName = it },
+                label = { Text("Deck Name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Box {
+                OutlinedButton(onClick = { formatExpanded = true }) {
+                    Text("Format: $selectedFormat")
+                }
+                DropdownMenu(expanded = formatExpanded, onDismissRequest = { formatExpanded = false }) {
+                    ALL_FORMATS.forEach { format ->
+                        DropdownMenuItem(
+                            text = { Text(format) },
+                            onClick = {
+                                selectedFormat = format
+                                formatExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = decklistText,
+                onValueChange = { decklistText = it },
+                label = { Text("Decklist") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp),
+                textStyle = MaterialTheme.typography.bodySmall
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            HorizontalDivider()
+
+            Spacer(Modifier.height(16.dp))
+
+            Text("Or import from EDH Play URL:",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(bottom = 8.dp))
+
+            OutlinedTextField(
+                value = deckUrl,
+                onValueChange = { deckUrl = it },
+                label = { Text("EDH Play Deck URL") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("https://edhplay.com/decks/...") }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            val isUrlValid = deckUrl.isNotBlank() && Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(deckUrl)
+            Button(
+                onClick = { onNavigateToWebView(deckUrl) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = isUrlValid
+            ) {
+                Text("Open in WebView")
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    if (decklistText.isBlank()) return@Button
+                    isImporting = true
+                    scope.launch {
+                        try {
+                            val cards = EdhPlayDecklistParser.parse(decklistText)
+                            if (cards.isEmpty()) {
+                                Toast.makeText(context, "No cards found in decklist", Toast.LENGTH_SHORT).show()
+                                isImporting = false
+                                return@launch
+                            }
+                            val name = deckName.ifBlank { "EDH Play Import" }
+                            val deckId = deckRepository.createDeck(name, selectedFormat, "edhplay")
+                            importDeckCards(deckId, cards, deckRepository, scryfall, selectedFormat)
+                            val msg = "Imported $name (${cards.size} cards)"
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            onImportComplete(deckId)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                        isImporting = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = decklistText.isNotBlank() && !isImporting
+            ) {
+                if (isImporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text("Import Deck")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EdhPlayWebViewScreen(
+    deckUrl: String,
+    deckRepository: DeckRepository,
+    scryfall: ScryfallRepository,
+    onBack: () -> Unit,
+    onImportComplete: (Long) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    EdhPlayWebView(
+        deckUrl = deckUrl,
+        onBack = onBack,
+        onDeckParsed = { cards ->
+            if (cards.isEmpty()) {
+                Toast.makeText(context, "No cards found on page", Toast.LENGTH_SHORT).show()
+                return@EdhPlayWebView
+            }
+            scope.launch {
+                try {
+                    val name = "EDH Play Import"
+                    val deckId = deckRepository.createDeck(name, "Commander", "edhplay")
+                    importDeckCards(deckId, cards, deckRepository, scryfall, "Commander")
+                    val msg = "Imported $name (${cards.size} cards)"
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    onImportComplete(deckId)
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     )
 }
