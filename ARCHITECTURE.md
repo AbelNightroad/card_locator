@@ -14,6 +14,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── AppDatabaseProvider.kt     # Room singleton (graceful migration with addMigrations)
 │   ├── CardRepository.kt          # collection (cards + tags) queries + CSV import
 │   ├── CsvImport.kt               # ManaBox CSV parser
+│   ├── DomainUtils.kt             # primaryType(), SUPERTYPES (shared domain logic)
 │   ├── ScryfallBulkCard.kt        # DTO for the Scryfall bulk JSON shape
 │   ├── ScryfallBulkClient.kt      # Bulk Data API meta fetch + file download
 │   ├── ScryfallBulkImport.kt      # streaming parser (gzip + array/jsonl) -> scryfall_cards
@@ -24,6 +25,11 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── FormatValidator.kt         # pluggable format rules (Commander count, color identity)
 │   ├── MetaDecklistLoader.kt      # Jsoup parser for mtgtop8.com (format → archetypes → decklist)
 │   ├── EdhPlayDecklistParser.kt   # parser for EDH Play text-format decklists
+│   ├── UniversalDecklistParser.kt # universal text parser (QTY CARD_NAME, section headers, set codes)
+│   ├── MtgGoldfishCsvParser.kt    # MTG Goldfish CSV format parser
+│   ├── TappedOutCsvParser.kt      # TappedOut CSV format parser
+│   ├── TappedOutDckParser.kt      # TappedOut .dck text format parser
+│   ├── MoxfieldApiClient.kt        # Moxfield API v3 client (fetch deck JSON)
 │   └── SettingsStore.kt           # DataStore: theme id + dark mode
 ├── db/
 │   ├── AppDatabase.kt             # v5: cards + scryfall_cards + decks + deck_cards + tags
@@ -34,20 +40,39 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── DeckCardEntity.kt          # deck membership with slot + color_identity + FK CASCADE
 │   └── DeckDao.kt / DeckWithCards # queries + relations
 └── ui/
-    ├── Screens.kt                 # nav, main, cards, import, add card, meta, settings, decks, deck view,
-    │                              #   edhplay import, edhplay webview
+    ├── Screens.kt                 # AppNavigation only (routes to per-screen composables)
+    ├── MainScreen.kt              # MainScreen, TagList, TagRow, CardResultList
+    ├── CardListScreen.kt          # CardListScreen with SwipeToDismiss + export-to-TXT
+    ├── ManualAddScreen.kt         # ManualAddScreen with autocomplete + tag suggestions
+    ├── SettingsScreen.kt          # SettingsScreen, ScryfallCard, ImportDialog, AboutCard
+    ├── MetaScreen.kt              # MetaScreen with format chips + decklist dialog + import
+    ├── ManageTagsScreen.kt        # ManageTagsScreen with add/rename/delete tags
+    ├── DecksScreen.kt             # DecksScreen, DeckGridCard, CreateDeckDialog
+    ├── DeckViewScreen.kt          # DeckViewScreen, DeckCardRow, AddCardToDeckDialog, DecklistTab
+    ├── DeckStatisticsScreen.kt    # Deck tab showing stats (TabRow with Decklist + Statistics)
+    ├── EdhPlayImportScreen.kt     # EDH Play paste decklist import
+    ├── EdhPlayWebViewScreen.kt    # EDH Play WebView import
+    ├── UnifiedImportScreen.kt     # Unified import UI (Moxfield/MTG Goldfish/TappedOut/EDH Play)
+    ├── ImportUtils.kt             # importDeckCards (parallel Scryfall lookups),
+    │                              #   ALL_FORMATS, DECK_FORMATS, FORMATS constants
     ├── MainViewModel.kt
     ├── MetaViewModel.kt           # parse mtgtop8 archetypes + decklist loading state
     ├── ImportViewModel.kt         # CSV import
     ├── ScryfallImportViewModel.kt # bulk JSON import
     ├── ManualAddViewModel.kt      # manual add + autocomplete
-    ├── DecksViewModel.kt          # decks list + format filtering + formatCounts
+    ├── DeckViewViewModel.kt       # deck card quantity/remove/cover + add card to deck
+    ├── DeckStatisticsViewModel.kt # compute deck stats (mana value, types, colors, rarity)
+    ├── CardListViewModel.kt       # card list export, delete, quantity changes
+    ├── ManageTagsViewModel.kt     # tag CRUD operations
+    ├── DecksViewModel.kt          # decks list + format filtering + formatCounts + clone/delete
+    ├── UnifiedImportViewModel.kt  # unified import state machine (Moxfield URL, paste, file)
     ├── components/                # reusable composables extracted from Screens.kt
     │   ├── AsyncImage.kt          # ScryfallAsyncImage (Coil + custom User-Agent)
     │   ├── FullscreenOverlay.kt   # fullscreen card image dialog (no DB lookup, uses ScryfallImage directly)
     │   ├── LoadingBox.kt          # LoadingBox, ErrorBox, EmptyBox
     │   ├── QuantityStepper.kt     # +/- quantity controls
-    │   └── EdhPlayWebView.kt      # WebView for EDH Play authenticated import (kotlinx.serialization JSON)
+    │   ├── EdhPlayWebView.kt      # WebView for EDH Play authenticated import (kotlinx.serialization JSON)
+    │   └── DeckStatsCharts.kt     # Canvas chart composables (BarChart, DonutChart, HorizontalBarChart)
     ├── navigation/                # navigation types extracted from Screens.kt
     │   ├── Screen.kt              # Screen sealed interface + SwayNavItem + NAV_ITEMS
     │   └── BottomNavigationBar.kt # FilledBottomNavigationBar composable (icon-only, no text labels)

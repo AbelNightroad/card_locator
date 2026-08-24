@@ -52,4 +52,18 @@ class DecksViewModel(private val repository: DeckRepository) : ViewModel() {
             repository.deleteDeck(deck)
         }
     }
+
+    fun cloneDeck(deckId: Long, onCloned: (Long) -> Unit) {
+        viewModelScope.launch {
+            val newId = repository.cloneDeck(deckId)
+            onCloned(newId)
+        }
+    }
+
+    fun deleteDecksByFormat(format: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            repository.deleteDecksByFormat(format)
+            onDone()
+        }
+    }
 }

@@ -17,6 +17,7 @@ sealed interface Screen {
     data object Meta : Screen
     data class Decks(val format: String? = null) : Screen
     data class DeckView(val deckId: Long) : Screen
+    data object UnifiedImport : Screen
     data object EdhPlayImport : Screen
     data class EdhPlayWebView(val deckUrl: String) : Screen
 }
