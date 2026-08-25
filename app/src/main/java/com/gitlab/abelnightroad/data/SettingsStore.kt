@@ -19,11 +19,13 @@ class SettingsStore(private val context: Context) {
     private val fontKey = stringPreferencesKey("font_id")
     private val scryfallUpdatedAtKey = stringPreferencesKey("scryfall_updated_at")
     private val lastScryfallCheckKey = longPreferencesKey("scryfall_last_check")
+    private val onboardingKey = booleanPreferencesKey("onboarding_complete")
 
     val themeId: Flow<String> = context.dataStore.data.map { it[themeKey] ?: "nord" }
     val darkMode: Flow<Boolean> = context.dataStore.data.map { it[darkKey] ?: true }
     val fontId: Flow<String> = context.dataStore.data.map { it[fontKey] ?: "roboto" }
     val scryfallUpdatedAt: Flow<String?> = context.dataStore.data.map { it[scryfallUpdatedAtKey] }
+    val onboardingComplete: Flow<Boolean> = context.dataStore.data.map { it[onboardingKey] ?: false }
 
     suspend fun setTheme(id: String) {
         context.dataStore.edit { it[themeKey] = id }
@@ -49,5 +51,9 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setLastScryfallCheck(value: Long) {
         context.dataStore.edit { it[lastScryfallCheckKey] = value }
+    }
+
+    suspend fun setOnboardingComplete() {
+        context.dataStore.edit { it[onboardingKey] = true }
     }
 }

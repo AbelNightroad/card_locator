@@ -49,6 +49,7 @@ internal fun DeckStatisticsScreen(deckId: Long, vm: DeckViewViewModel) {
     val deckWithCards by vm.deckWithCards.collectAsState()
     val cards = deckWithCards?.cards ?: emptyList()
     val stats = remember(cards) { DeckStatisticsViewModel().computeStats(cards) }
+    val totalValue = remember(cards) { cards.sumOf { it.priceUsd * it.quantity } }
 
     if (cards.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -75,6 +76,12 @@ internal fun DeckStatisticsScreen(deckId: Long, vm: DeckViewViewModel) {
                     StatItem("Avg CMC", String.format("%.1f", stats.avgCmc))
                     StatItem("Lands", "${stats.landCount}")
                     StatItem("Creatures", "${stats.creatureCount}")
+                }
+                if (totalValue > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Total Value: $${"%.2f".format(totalValue)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold)
                 }
             }
         }

@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,12 +27,17 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,13 +72,38 @@ internal fun DeckViewScreen(
     var showAddCardDialog by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val removedCard by vm.removedCard.collectAsState()
+
+    LaunchedEffect(removedCard) {
+        removedCard?.let {
+            val result = snackbarHostState.showSnackbar(
+                message = "${it.card.cardName} removed",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                vm.undoRemove()
+            } else {
+                vm.clearRemovedCard()
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(deckWithCards?.deck?.name ?: "Deck") },
                 navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } },
                 actions = {
+                    IconButton(onClick = {
+                        val cards = deckWithCards?.cards
+                        val name = deckWithCards?.deck?.name ?: "deck"
+                        if (!cards.isNullOrEmpty()) vm.exportDeck(context, name, cards)
+                    }) {
+                        Icon(Octicons.Share24, "Export Deck")
+                    }
                     IconButton(onClick = { showAddCardDialog = true }) {
                         Icon(Octicons.Plus24, "Add Card to Deck")
                     }
@@ -80,18 +112,29 @@ internal fun DeckViewScreen(
         }
     ) { padding ->
         val cards = deckWithCards?.cards ?: emptyList()
+        val pagerState = rememberPagerState(pageCount = { 2 })
+
+        LaunchedEffect(pagerState.currentPage) { selectedTab = pagerState.currentPage }
+        LaunchedEffect(selectedTab) {
+            if (pagerState.currentPage != selectedTab) {
+                pagerState.animateScrollToPage(selectedTab)
+            }
+        }
+
         Column(Modifier.padding(padding)) {
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
+            TabRow(selectedTabIndex = pagerState.currentPage) {
+                Tab(selected = pagerState.currentPage == 0, onClick = {}) {
                     Text("Decklist", modifier = Modifier.padding(12.dp))
                 }
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
+                Tab(selected = pagerState.currentPage == 1, onClick = {}) {
                     Text("Statistics", modifier = Modifier.padding(12.dp))
                 }
             }
-            when (selectedTab) {
-                0 -> DecklistTab(cards, vm, onCardClick)
-                1 -> DeckStatisticsScreen(deckId, vm)
+            HorizontalPager(state = pagerState) { page ->
+                when (page) {
+                    0 -> DecklistTab(cards, vm, onCardClick)
+                    1 -> DeckStatisticsScreen(deckId, vm)
+                }
             }
         }
     }
@@ -114,6 +157,14 @@ private fun DeckCardRow(
     showCoverButton: Boolean = true
 ) {
     val context = LocalContext.current
+    val conditionColor = when (card.condition) {
+        "NM" -> MaterialTheme.colorScheme.primary
+        "LP" -> MaterialTheme.colorScheme.tertiary
+        "MP" -> MaterialTheme.colorScheme.secondary
+        "HP" -> MaterialTheme.colorScheme.error
+        "DM" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.outline
+    }
     Card(
         Modifier.fillMaxWidth().padding(vertical = 3.dp)
             .clickable { onCardClick() },
@@ -124,12 +175,26 @@ private fun DeckCardRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(card.cardName, style = MaterialTheme.typography.titleSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(card.cardName, style = MaterialTheme.typography.titleSmall)
+                    if (card.condition != "NM") {
+                        Spacer(Modifier.width(6.dp))
+                        Text(card.condition,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = conditionColor)
+                    }
+                }
                 if (card.manaCost.isNotBlank()) {
                     Text(card.manaCost,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+            if (card.priceUsd > 0) {
+                Text("$${"%.2f".format(card.priceUsd * card.quantity)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp))
             }
             QuantityStepper(
                 quantity = card.quantity,
@@ -171,6 +236,7 @@ private fun AddCardToDeckDialog(
     }.collectAsState(initial = emptyList())
     var selectedCard by remember { mutableStateOf<com.gitlab.abelnightroad.db.ScryfallCardEntity?>(null) }
     var selectedSlot by remember { mutableStateOf("mainboard") }
+    var selectedCondition by remember { mutableStateOf("NM") }
     val isCommander = format == "Commander"
     val slotOptions = if (isCommander) listOf("mainboard", "commander", "companion") else listOf("mainboard")
 
@@ -246,13 +312,26 @@ private fun AddCardToDeckDialog(
                         }
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Condition:", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.width(8.dp))
+                    com.gitlab.abelnightroad.data.CardConditions.ALL.forEach { cond ->
+                        FilterChip(
+                            selected = selectedCondition == cond,
+                            onClick = { selectedCondition = cond },
+                            label = { Text(cond, style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
                     selectedCard?.let { card ->
-                        vm.addCardToDeck(card, selectedSlot, hasCommander, hasCompanion)
+                        vm.addCardToDeck(card, selectedSlot, hasCommander, hasCompanion, selectedCondition)
                     }
                     onDismiss()
                 },
@@ -302,7 +381,7 @@ private fun DecklistTab(
                     DeckCardRow(
                         card = card,
                         onQuantityChange = { delta ->
-                            if (delta < 0 && card.quantity <= 1) vm.removeCard(card.id)
+                            if (delta < 0 && card.quantity <= 1) vm.removeCardWithUndo(card.id, cards)
                             else vm.updateCardQuantity(card.id, card.quantity + delta)
                         },
                         onCardClick = { onCardClick(card.scryfallId) },
@@ -323,7 +402,7 @@ private fun DecklistTab(
                         DeckCardRow(
                             card = card,
                             onQuantityChange = { delta ->
-                                if (delta < 0 && card.quantity <= 1) vm.removeCard(card.id)
+                                if (delta < 0 && card.quantity <= 1) vm.removeCardWithUndo(card.id, cards)
                                 else vm.updateCardQuantity(card.id, card.quantity + delta)
                             },
                             onCardClick = { onCardClick(card.scryfallId) },

@@ -2,9 +2,11 @@ package com.gitlab.abelnightroad.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.DeckRepository
@@ -15,6 +17,7 @@ import com.gitlab.abelnightroad.ui.navigation.Screen
 import com.gitlab.abelnightroad.ui.navigation.FilledBottomNavigationBar
 import com.gitlab.abelnightroad.ui.navigation.NAV_ITEMS
 import com.gitlab.abelnightroad.ui.components.FullscreenOverlay
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavigation(
@@ -24,6 +27,16 @@ fun AppNavigation(
     scryfall: ScryfallRepository,
     settings: SettingsStore
 ) {
+    val onboardingComplete by settings.onboardingComplete.collectAsState(initial = true)
+    val scope = rememberCoroutineScope()
+
+    if (!onboardingComplete) {
+        OnboardingScreen(onComplete = {
+            scope.launch { settings.setOnboardingComplete() }
+        })
+        return
+    }
+
     var screen by remember { mutableStateOf<Screen>(Screen.Main) }
     var selectedCard by remember { mutableStateOf<CardSearchResult?>(null) }
     var selectedDeckCardScryfallId by remember { mutableStateOf<String?>(null) }

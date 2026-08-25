@@ -30,37 +30,40 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── TappedOutCsvParser.kt      # TappedOut CSV format parser
 │   ├── TappedOutDckParser.kt      # TappedOut .dck text format parser
 │   ├── MoxfieldApiClient.kt        # Moxfield API v3 client (fetch deck JSON)
-│   └── SettingsStore.kt           # DataStore: theme id + dark mode
+│   ├── CardConditions.kt           # NM/LP/MP/HP/DM constants + display names
+│   └── SettingsStore.kt           # DataStore: theme id + dark mode + onboarding
 ├── db/
-│   ├── AppDatabase.kt             # v5: cards + scryfall_cards + decks + deck_cards + tags
+│   ├── AppDatabase.kt             # v8: cards + scryfall_cards + decks + deck_cards + tags
 │   ├── CardEntity.kt / CardDao.kt
 │   ├── TagEntity.kt / TagDao.kt   # standalone tags (zero-card support)
 │   ├── ScryfallCardEntity.kt / ScryfallCardDao.kt  # color_identity column
 │   ├── DeckEntity.kt              # deck row (name, format, source, coverScryfallId)
-│   ├── DeckCardEntity.kt          # deck membership with slot + color_identity + FK CASCADE
+│   ├── DeckCardEntity.kt          # deck membership with slot + color_identity + condition + priceUsd + FK CASCADE
 │   └── DeckDao.kt / DeckWithCards # queries + relations
 └── ui/
     ├── Screens.kt                 # AppNavigation only (routes to per-screen composables)
-    ├── MainScreen.kt              # MainScreen, TagList, TagRow, CardResultList
+    ├── MainScreen.kt              # MainScreen, TagList, TagRow, CardResultList + advanced search
     ├── CardListScreen.kt          # CardListScreen with SwipeToDismiss + export-to-TXT
     ├── ManualAddScreen.kt         # ManualAddScreen with autocomplete + tag suggestions
     ├── SettingsScreen.kt          # SettingsScreen, ScryfallCard, ImportDialog, AboutCard
     ├── MetaScreen.kt              # MetaScreen with format chips + decklist dialog + import
     ├── ManageTagsScreen.kt        # ManageTagsScreen with add/rename/delete tags
     ├── DecksScreen.kt             # DecksScreen, DeckGridCard, CreateDeckDialog
-    ├── DeckViewScreen.kt          # DeckViewScreen, DeckCardRow, AddCardToDeckDialog, DecklistTab
-    ├── DeckStatisticsScreen.kt    # Deck tab showing stats (TabRow with Decklist + Statistics)
+    ├── DeckViewScreen.kt          # DeckViewScreen, DeckCardRow (condition/price), AddCardToDeckDialog, DecklistTab
+    ├── DeckStatisticsScreen.kt    # Deck tab showing stats (TabRow with Decklist + Statistics, total value)
+    ├── DeckExportUtils.kt         # exportDeckToTxt + shareDeckFile (share intent)
+    ├── OnboardingScreen.kt        # 3-page onboarding walkthrough (first launch only)
     ├── EdhPlayImportScreen.kt     # EDH Play paste decklist import
     ├── EdhPlayWebViewScreen.kt    # EDH Play WebView import
     ├── UnifiedImportScreen.kt     # Unified import UI (Moxfield/MTG Goldfish/TappedOut/EDH Play)
     ├── ImportUtils.kt             # importDeckCards (parallel Scryfall lookups),
     │                              #   ALL_FORMATS, DECK_FORMATS, FORMATS constants
-    ├── MainViewModel.kt
+    ├── MainViewModel.kt           # collection view + advanced search filters (color/type/rarity)
     ├── MetaViewModel.kt           # parse mtgtop8 archetypes + decklist loading state
     ├── ImportViewModel.kt         # CSV import
     ├── ScryfallImportViewModel.kt # bulk JSON import
     ├── ManualAddViewModel.kt      # manual add + autocomplete
-    ├── DeckViewViewModel.kt       # deck card quantity/remove/cover + add card to deck
+    ├── DeckViewViewModel.kt       # deck card quantity/remove/cover + undo + export + add card to deck
     ├── DeckStatisticsViewModel.kt # compute deck stats (mana value, types, colors, rarity)
     ├── CardListViewModel.kt       # card list export, delete, quantity changes
     ├── ManageTagsViewModel.kt     # tag CRUD operations
@@ -72,7 +75,8 @@ app/src/main/java/com/gitlab/abelnightroad/
     │   ├── LoadingBox.kt          # LoadingBox, ErrorBox, EmptyBox
     │   ├── QuantityStepper.kt     # +/- quantity controls
     │   ├── EdhPlayWebView.kt      # WebView for EDH Play authenticated import (kotlinx.serialization JSON)
-    │   └── DeckStatsCharts.kt     # Canvas chart composables (BarChart, DonutChart, HorizontalBarChart)
+    │   ├── DeckStatsCharts.kt     # Canvas chart composables (BarChart, DonutChart, HorizontalBarChart)
+    │   └── SearchFilterChips.kt   # Advanced search filter chips (color, type, rarity)
     ├── navigation/                # navigation types extracted from Screens.kt
     │   ├── Screen.kt              # Screen sealed interface + SwayNavItem + NAV_ITEMS
     │   └── BottomNavigationBar.kt # FilledBottomNavigationBar composable (icon-only, no text labels)
@@ -97,8 +101,9 @@ app/src/main/java/com/gitlab/abelnightroad/
   `coverScryfallId`. Stored with `source` (manual/meta) and `createdAt`.
 - **DeckCardEntity** (`deck_cards`): a card in a deck, linked by FK with
   CASCADE delete to `decks`. Stores full card metadata at addition time plus
-  `slot` (mainboard/commander/companion) and `colorIdentity` (denormalized
-  from scryfall_cards for fast validation).
+  `slot` (mainboard/commander/companion), `colorIdentity` (denormalized
+  from scryfall_cards for fast validation), `condition` (NM/LP/MP/HP/DM),
+  and `priceUsd` (copied from Scryfall at add time).
 - **DeckWithCards**: a `@Relation` data class embedding a `DeckEntity` with
   its `List<DeckCardEntity>`.
 - **MetaDeckCard**: parsed mtgtop8 decklist row (quantity, name, slot).
@@ -109,6 +114,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 - **ValidationResult**: sealed interface (`Valid` | `Invalid(errors)`) from the
   FormatValidator module.
 - **Theme**: orthogonal UI config (light/dark + palette). Default = **Nord (dark)**. Available: Catppuccin, Nord, Cobalt2, Shades of Purple.
+- **Onboarding**: first-launch walkthrough (3 pages). Tracks completion via `SettingsStore.onboardingComplete`.
 
 ## Control flow
 

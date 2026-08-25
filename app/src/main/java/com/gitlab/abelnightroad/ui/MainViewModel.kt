@@ -22,6 +22,15 @@ class MainViewModel(
     private val _multiCopyOnly = MutableStateFlow(false)
     val multiCopyOnly: StateFlow<Boolean> = _multiCopyOnly
 
+    private val _colorFilter = MutableStateFlow<String?>(null)
+    val colorFilter: StateFlow<String?> = _colorFilter
+
+    private val _typeFilter = MutableStateFlow<String?>(null)
+    val typeFilter: StateFlow<String?> = _typeFilter
+
+    private val _rarityFilter = MutableStateFlow<String?>(null)
+    val rarityFilter: StateFlow<String?> = _rarityFilter
+
     val themeId = settings.themeId
     val darkMode = settings.darkMode
     val scryfallUpdatedAt = settings.scryfallUpdatedAt
@@ -29,16 +38,34 @@ class MainViewModel(
 
     fun searchFlow(query: String) = repository.searchByName(query)
 
+    fun advancedSearchFlow(query: String, color: String?, type: String?, rarity: String?) =
+        repository.searchAdvanced(query, color, type, rarity)
+
     fun setSearch(value: String) {
         _search.value = value
     }
 
     fun clearSearch() {
         _search.value = ""
+        _colorFilter.value = null
+        _typeFilter.value = null
+        _rarityFilter.value = null
     }
 
     fun toggleMultiCopyOnly() {
         _multiCopyOnly.value = !_multiCopyOnly.value
+    }
+
+    fun setColorFilter(color: String?) {
+        _colorFilter.value = if (_colorFilter.value == color) null else color
+    }
+
+    fun setTypeFilter(type: String?) {
+        _typeFilter.value = if (_typeFilter.value == type) null else type
+    }
+
+    fun setRarityFilter(rarity: String?) {
+        _rarityFilter.value = if (_rarityFilter.value == rarity) null else rarity
     }
 
     fun setTheme(id: String) {

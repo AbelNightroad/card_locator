@@ -95,6 +95,17 @@ interface CardDao {
     )
     fun searchByName(query: String): Flow<List<CardSearchResult>>
 
+    @Query(
+        "SELECT id, name, set_code, set_name, collector_number, foil, rarity, " +
+            "quantity, scryfall_id, tag FROM cards " +
+            "WHERE name LIKE '%' || :query || '%' COLLATE NOCASE " +
+            "AND (:color IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%' || :color || '%')) " +
+            "AND (:type IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) " +
+            "AND (:rarity IS NULL OR rarity = :rarity) " +
+            "ORDER BY name COLLATE NOCASE ASC"
+    )
+    fun searchAdvanced(query: String, color: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
+
     @Transaction
     @Query(
         "SELECT name, set_code, set_name, scryfall_id, " +

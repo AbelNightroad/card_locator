@@ -32,6 +32,7 @@ import compose.icons.octicons.*
 import com.gitlab.abelnightroad.db.CardSearchResult
 import com.gitlab.abelnightroad.db.MultiCopyCard
 import com.gitlab.abelnightroad.db.TagCount
+import com.gitlab.abelnightroad.ui.components.SearchFilterChips
 import kotlinx.coroutines.flow.flowOf
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,11 +49,14 @@ internal fun MainScreen(
     val multiOnly by viewModel.multiCopyOnly.collectAsState()
     val multiCards by viewModel.multiCopyCards.collectAsState(initial = emptyList())
     val dark by viewModel.darkMode.collectAsState(initial = true)
+    val colorFilter by viewModel.colorFilter.collectAsState()
+    val typeFilter by viewModel.typeFilter.collectAsState()
+    val rarityFilter by viewModel.rarityFilter.collectAsState()
 
     val searchResults: List<CardSearchResult> by if (search.isBlank()) {
         flowOf(emptyList<CardSearchResult>())
     } else {
-        viewModel.searchFlow(search)
+        viewModel.advancedSearchFlow(search, colorFilter, typeFilter, rarityFilter)
     }.collectAsState(initial = emptyList())
 
     Scaffold(
@@ -102,6 +106,17 @@ internal fun MainScreen(
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+
+            if (search.isNotBlank()) {
+                SearchFilterChips(
+                    colorFilter = colorFilter,
+                    typeFilter = typeFilter,
+                    rarityFilter = rarityFilter,
+                    onColorClick = viewModel::setColorFilter,
+                    onTypeClick = viewModel::setTypeFilter,
+                    onRarityClick = viewModel::setRarityFilter
+                )
             }
 
             when {

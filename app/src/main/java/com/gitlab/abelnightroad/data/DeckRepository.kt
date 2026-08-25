@@ -31,7 +31,7 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
 
     suspend fun deleteDeck(deck: DeckEntity) = dao.deleteDeck(deck)
 
-    suspend fun addCardToDeck(deckId: Long, scryfallId: String, cardName: String, setCode: String, setName: String, collectorNumber: String, rarity: String, quantity: Int = 1, manaCost: String = "", typeLine: String = "", slot: String = "mainboard"): Long {
+    suspend fun addCardToDeck(deckId: Long, scryfallId: String, cardName: String, setCode: String, setName: String, collectorNumber: String, rarity: String, quantity: Int = 1, manaCost: String = "", typeLine: String = "", slot: String = "mainboard", condition: String = "NM", priceUsd: Double = 0.0): Long {
         val ci = withContext(Dispatchers.IO) {
             scryfallDao.byId(scryfallId)?.colorIdentity ?: ""
         }
@@ -47,7 +47,9 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
             manaCost = manaCost,
             typeLine = typeLine,
             slot = slot,
-            colorIdentity = ci
+            colorIdentity = ci,
+            condition = condition,
+            priceUsd = priceUsd
         )
         return dao.insertCard(card)
     }

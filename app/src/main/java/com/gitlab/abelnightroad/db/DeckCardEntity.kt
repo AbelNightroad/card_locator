@@ -29,5 +29,7 @@ data class DeckCardEntity(
     @ColumnInfo(name = "mana_cost") val manaCost: String,
     @ColumnInfo(name = "type_line") val typeLine: String,
     val slot: String = "mainboard",
-    @ColumnInfo(name = "color_identity") val colorIdentity: String = ""
+    @ColumnInfo(name = "color_identity") val colorIdentity: String = "",
+    @ColumnInfo(name = "condition") val condition: String = "NM",
+    @ColumnInfo(name = "price_usd") val priceUsd: Double = 0.0
 )
