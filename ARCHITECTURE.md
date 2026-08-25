@@ -211,7 +211,7 @@ app/src/main/java/com/gitlab/abelnightroad/
 - Card identity = name + set; full metadata persisted locally.
 - Reference table from Scryfall bulk data enables offline autocomplete; imported
   once and streamed so memory stays flat.
-- Themes in separate files; default **Nord (dark)**. Fonts: Roboto (default), Inter, Plus Jakarta Sans, Comic Neue.
+- Themes in separate files; default **Nord (dark)**. Fonts: Roboto (default), Comic Neue, Germania One.
 - Meta screen uses Jsoup to parse mtgtop8.com format pages for archetype data
   (`div.hover_tr:has(div.S14 a[href*=archetype])`), and event pages for
   decklists (`div[id^=md].deck_line` / `div[id^=sb].deck_line`). Standard auto-loaded.
