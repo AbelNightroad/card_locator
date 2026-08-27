@@ -1,5 +1,6 @@
 package com.gitlab.abelnightroad.ui
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -8,10 +9,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.DeckRepository
+import com.gitlab.abelnightroad.data.ScanRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.data.SettingsStore
+import com.gitlab.abelnightroad.data.TextRecognitionProcessor
 import com.gitlab.abelnightroad.db.CardSearchResult
 import com.gitlab.abelnightroad.ui.navigation.Screen
 import com.gitlab.abelnightroad.ui.navigation.FilledBottomNavigationBar
@@ -25,10 +30,12 @@ fun AppNavigation(
     repository: CardRepository,
     deckRepository: DeckRepository,
     scryfall: ScryfallRepository,
+    scanRepository: ScanRepository,
     settings: SettingsStore
 ) {
     val onboardingComplete by settings.onboardingComplete.collectAsState(initial = true)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     if (!onboardingComplete) {
         OnboardingScreen(onComplete = {
@@ -41,6 +48,12 @@ fun AppNavigation(
     var selectedCard by remember { mutableStateOf<CardSearchResult?>(null) }
     var selectedDeckCardScryfallId by remember { mutableStateOf<String?>(null) }
     val backStack = remember { mutableListOf<Screen>() }
+    var currentScanSessionId by remember { mutableStateOf<Long?>(null) }
+
+    val scanProcessor = remember { TextRecognitionProcessor(context) }
+    val scanViewModel: ScanViewModel = remember {
+        ScanViewModel(scanRepository, repository, scryfall, scanProcessor)
+    }
 
     fun navigate(s: Screen) {
         backStack.add(screen)
@@ -70,6 +83,21 @@ fun AppNavigation(
             onCardClick = { selectedCard = it },
             onAddCard = { navigate(Screen.AddCard()) },
             bottomBar = bottomBar
+        )
+        Screen.Scan -> ScanCameraScreen(
+            onBack = { goBack() },
+            onImageCaptured = { filePath ->
+                scope.launch {
+                    val sid = scanViewModel.ensureSession()
+                    scanViewModel.processImage(filePath)
+                    navigate(Screen.ScanResults(sid))
+                }
+            }
+        )
+        is Screen.ScanResults -> ScanResultsScreen(
+            viewModel = scanViewModel,
+            sessionId = s.sessionId,
+            onBack = { goBack() }
         )
         is Screen.Cards -> CardListScreen(
             repository = repository,

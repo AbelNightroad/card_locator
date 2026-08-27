@@ -15,6 +15,8 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── CardRepository.kt          # collection (cards + tags) queries + CSV import
 │   ├── CsvImport.kt               # ManaBox CSV parser
 │   ├── DomainUtils.kt             # primaryType(), SUPERTYPES (shared domain logic)
+│   ├── ScanRepository.kt          # scan session CRUD + batch add scanned cards to collection
+│   ├── TextRecognitionProcessor.kt # ML Kit OCR (CJK→Latin cascade) + card name extraction heuristic
 │   ├── ScryfallBulkCard.kt        # DTO for the Scryfall bulk JSON shape
 │   ├── ScryfallBulkClient.kt      # Bulk Data API meta fetch + file download
 │   ├── ScryfallBulkImport.kt      # streaming parser (gzip + array/jsonl) -> scryfall_cards
@@ -33,13 +35,16 @@ app/src/main/java/com/gitlab/abelnightroad/
 │   ├── CardConditions.kt           # NM/LP/MP/HP/DM constants + display names
 │   └── SettingsStore.kt           # DataStore: theme id + dark mode + onboarding
 ├── db/
-│   ├── AppDatabase.kt             # v8: cards + scryfall_cards + decks + deck_cards + tags
+│   ├── AppDatabase.kt             # v9: cards + scryfall_cards + decks + deck_cards + tags + scan_sessions + scanned_cards
 │   ├── CardEntity.kt / CardDao.kt
 │   ├── TagEntity.kt / TagDao.kt   # standalone tags (zero-card support)
 │   ├── ScryfallCardEntity.kt / ScryfallCardDao.kt  # color_identity column
 │   ├── DeckEntity.kt              # deck row (name, format, source, coverScryfallId)
 │   ├── DeckCardEntity.kt          # deck membership with slot + color_identity + condition + priceUsd + FK CASCADE
-│   └── DeckDao.kt / DeckWithCards # queries + relations
+│   ├── DeckDao.kt / DeckWithCards # queries + relations
+│   ├── ScanSessionEntity.kt       # scan session (id + createdAt timestamp)
+│   ├── ScannedCardEntity.kt       # scanned card with FK CASCADE to scan_sessions
+│   └── ScanSessionDao.kt          # session/card CRUD for scan feature
 └── ui/
     ├── Screens.kt                 # AppNavigation only (routes to per-screen composables)
     ├── MainScreen.kt              # MainScreen, TagList, TagRow, CardResultList + advanced search
@@ -69,8 +74,12 @@ app/src/main/java/com/gitlab/abelnightroad/
     ├── ManageTagsViewModel.kt     # tag CRUD operations
     ├── DecksViewModel.kt          # decks list + format filtering + formatCounts + clone/delete
     ├── UnifiedImportViewModel.kt  # unified import state machine (Moxfield URL, paste, file)
+    ├── ScanViewModel.kt           # scan flow: OCR → Scryfall lookup → session management → add to collection
+    ├── ScanCameraScreen.kt        # CameraX preview + capture button + permission handling
+    ├── ScanResultsScreen.kt       # scanned card list with delete/confirm actions
     ├── components/                # reusable composables extracted from Screens.kt
     │   ├── AsyncImage.kt          # ScryfallAsyncImage (Coil + custom User-Agent)
+    │   ├── CameraPreview.kt       # Reusable CameraX PreviewView composable
     │   ├── FullscreenOverlay.kt   # fullscreen card image dialog (no DB lookup, uses ScryfallImage directly)
     │   ├── LoadingBox.kt          # LoadingBox, ErrorBox, EmptyBox
     │   ├── QuantityStepper.kt     # +/- quantity controls
@@ -106,6 +115,12 @@ app/src/main/java/com/gitlab/abelnightroad/
   and `priceUsd` (copied from Scryfall at add time).
 - **DeckWithCards**: a `@Relation` data class embedding a `DeckEntity` with
   its `List<DeckCardEntity>`.
+- **ScanSessionEntity** (`scan_sessions`): a scan session with auto-generated ID
+  and `createdAt` ISO timestamp. Created when user starts a scan batch.
+- **ScannedCardEntity** (`scanned_cards`): a card detected via OCR, linked by FK
+  with CASCADE delete to `scan_sessions`. Stores full card metadata (name, setCode,
+  setName, collectorNumber, rarity, manaCost, typeLine, oracleText, colorIdentity,
+  scryfallId, priceUsd, language). Indexed on `sessionId`.
 - **MetaDeckCard**: parsed mtgtop8 decklist row (quantity, name, slot).
    `@Serializable` for kotlinx.serialization. Also used by `EdhPlayDecklistParser`
    for EDH Play text-format imports.
@@ -124,8 +139,8 @@ app/src/main/java/com/gitlab/abelnightroad/
    (+/- buttons) and delete (✕).
 3. Tap a card -> fullscreen Scryfall image overlay.
 4. Search bar -> global name search; filter button -> >4 copies across all tags.
-5. Filled bottom nav bar -> Collection, Decks, Tags, Meta, Settings.
-    (Import moved to Settings > Backup & Restore as "Import from 3rd-Party".)
+5. Filled bottom nav bar -> Collection, Scan, Decks, Tags, Meta, Settings.
+     (Import moved to Settings > Backup & Restore as "Import from 3rd-Party".)
 6. Meta screen -> auto-loads Standard on startup; fetches metagame data from
    mtgtop8.com via Jsoup. Format page (`/format?f=XX`) left panel parsed for
    archetypes (`div.hover_tr`/`div.chosen_tr`), extracting name, thumbnail
@@ -228,7 +243,9 @@ app/src/main/java/com/gitlab/abelnightroad/
   table; v5 added `slot`/`color_identity` to `deck_cards` and `color_identity` to
   `scryfall_cards`; v6 added `image_url` to `scryfall_cards`; v7 adds `cmc`,
   `legalities`, `reserved`, `game_changer` to `scryfall_cards`.
-  `fallbackToDestructiveMigration(true)` handles any future version gaps.
+   `fallbackToDestructiveMigration(true)` handles any future version gaps.
+   v8 added `cmc`, `legalities`, `reserved`, `game_changer` to `scryfall_cards`;
+   v9 added `scan_sessions` and `scanned_cards` tables for the Card Scan feature.
 - Decks use a separate table (`decks`) rather than reusing tags, because a deck
   is a curated list of cards (not a physical storage location). The
   `deck_cards` junction table with FK CASCADE enables clean deck deletion.
@@ -295,10 +312,27 @@ app/src/main/java/com/gitlab/abelnightroad/
    All three import flows (Meta, EDH Play paste, EDH Play WebView) use the shared
    `importDeckCards()` function which parallelizes Scryfall lookups with
    `coroutineScope { cards.map { async { ... } }.awaitAll() }` for fast resolution.
+
+14. Card Scan (Scan bottom nav item):
+    - Camera preview with capture button (haptic feedback on tap).
+    - Captured image → ML Kit OCR (CJK→Latin cascade) → `extractCardName()`
+      heuristic → Scryfall lookup → card added to `scanned_cards` session.
+    - ScanResultsScreen shows detected cards with thumbnails, delete, and
+      "Add to Collection" button with tag picker.
+    - Errors (OCR failure, card not found) shown as toasts; user can retry
+      by going back to camera.
 - Back navigation uses a `backStack: MutableList<Screen>` (not the `backTo`
   field which was removed). `navigate()` pushes to the stack; `goBack()` pops.
   The bottom nav bar clears the stack. Hardware back presses dismiss overlays
   first, then pop the stack.
+- **Card Scan feature** uses CameraX for live preview + image capture, ML Kit
+  Text Recognition for OCR (Chinese → Japanese → Korean → Latin cascade, best
+  result by text length), and `extractCardName()` heuristic to parse the card
+  name from OCR output (skips mana costs, type lines, watermarks). Scanned
+  cards are persisted in `scanned_cards` (Room, FK cascade). User reviews the
+  list, picks a tag, and batch-adds to the collection via `ScanRepository.addToCollection()`.
+  Camera permission is requested at runtime with graceful denied-state handling.
+  Haptic feedback (short vibration) fires on image capture via `Vibrator`/`VibratorManager`.
 
 ## Dependencies
 
@@ -309,6 +343,9 @@ app/src/main/java/com/gitlab/abelnightroad/
 - kotlinx-serialization-json 1.8.1 (bulk parsing)
 - Jsoup 1.18.1 (HTML parsing for mtgtop8.com metagame + decklist data)
 - compose-icons Octicons 1.1.1 (GitHub Primer Octicons for all icons)
+- CameraX 1.4.1 (camera-core, camera-camera2, camera-lifecycle, camera-view)
+- ML Kit Text Recognition (Latin 16.0.1, Chinese 16.0.1, Japanese 16.0.1, Korean 16.0.1) + Play Services wrapper
+- kotlinx-coroutines-play-services 1.10.2 (ML Kit `await()` extensions)
 - Custom FilledBottomNavigationBar (filled selected-item background, no dependencies)
 
 ## Build
