@@ -20,12 +20,14 @@ class SettingsStore(private val context: Context) {
     private val scryfallUpdatedAtKey = stringPreferencesKey("scryfall_updated_at")
     private val lastScryfallCheckKey = longPreferencesKey("scryfall_last_check")
     private val onboardingKey = booleanPreferencesKey("onboarding_complete")
+    private val hapticFeedbackKey = booleanPreferencesKey("haptic_feedback")
 
     val themeId: Flow<String> = context.dataStore.data.map { it[themeKey] ?: "nord" }
     val darkMode: Flow<Boolean> = context.dataStore.data.map { it[darkKey] ?: true }
     val fontId: Flow<String> = context.dataStore.data.map { it[fontKey] ?: "roboto" }
     val scryfallUpdatedAt: Flow<String?> = context.dataStore.data.map { it[scryfallUpdatedAtKey] }
     val onboardingComplete: Flow<Boolean> = context.dataStore.data.map { it[onboardingKey] ?: false }
+    val hapticFeedback: Flow<Boolean> = context.dataStore.data.map { it[hapticFeedbackKey] ?: true }
 
     suspend fun setTheme(id: String) {
         context.dataStore.edit { it[themeKey] = id }
@@ -55,5 +57,9 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setOnboardingComplete() {
         context.dataStore.edit { it[onboardingKey] = true }
+    }
+
+    suspend fun setHapticFeedback(enabled: Boolean) {
+        context.dataStore.edit { it[hapticFeedbackKey] = enabled }
     }
 }

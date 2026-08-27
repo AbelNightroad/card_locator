@@ -35,6 +35,7 @@ class MainViewModel(
     val darkMode = settings.darkMode
     val scryfallUpdatedAt = settings.scryfallUpdatedAt
     val fontId = settings.fontId
+    val hapticFeedback = settings.hapticFeedback
 
     fun searchFlow(query: String) = repository.searchByName(query)
 
@@ -78,5 +79,9 @@ class MainViewModel(
 
     fun setFont(id: String) {
         viewModelScope.launch { settings.setFont(id) }
+    }
+
+    fun setHapticFeedback(enabled: Boolean) {
+        viewModelScope.launch { settings.setHapticFeedback(enabled) }
     }
 }

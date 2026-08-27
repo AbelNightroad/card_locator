@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -62,6 +63,7 @@ internal fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val themeId by viewModel.themeId.collectAsState(initial = "nord")
     val fontId by viewModel.fontId.collectAsState(initial = "roboto")
+    val hapticFeedback by viewModel.hapticFeedback.collectAsState(initial = true)
     val scryfallUpdatedAt by viewModel.scryfallUpdatedAt.collectAsState(initial = null)
     var expanded by remember { mutableStateOf(false) }
     var fontExpanded by remember { mutableStateOf(false) }
@@ -182,6 +184,26 @@ internal fun SettingsScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Card Scan", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Haptic feedback on capture", style = MaterialTheme.typography.bodyLarge)
+                        Switch(
+                            checked = hapticFeedback,
+                            onCheckedChange = { viewModel.setHapticFeedback(it) }
+                        )
                     }
                 }
             }

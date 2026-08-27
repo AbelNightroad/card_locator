@@ -34,6 +34,7 @@ fun AppNavigation(
     settings: SettingsStore
 ) {
     val onboardingComplete by settings.onboardingComplete.collectAsState(initial = true)
+    val hapticFeedback by settings.hapticFeedback.collectAsState(initial = true)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -86,6 +87,7 @@ fun AppNavigation(
         )
         Screen.Scan -> ScanCameraScreen(
             onBack = { goBack() },
+            hapticFeedback = hapticFeedback,
             onImageCaptured = { filePath ->
                 scope.launch {
                     val sid = scanViewModel.ensureSession()

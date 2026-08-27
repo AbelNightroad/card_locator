@@ -67,6 +67,7 @@ private fun performHapticFeedback(context: Context) {
 @Composable
 internal fun ScanCameraScreen(
     onBack: () -> Unit,
+    hapticFeedback: Boolean = true,
     onImageCaptured: (filePath: String) -> Unit
 ) {
     val context = LocalContext.current
@@ -142,7 +143,7 @@ internal fun ScanCameraScreen(
                             return@Button
                         }
 
-                        performHapticFeedback(context)
+                        if (hapticFeedback) performHapticFeedback(context)
 
                         val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
                         capture.takePicture(
