@@ -60,7 +60,7 @@ internal fun DecksScreen(
     initialFormat: String? = null,
     onBack: () -> Unit,
     onDeckClick: (Long, String) -> Unit,
-    onEdhPlayImport: () -> Unit = {},
+    onImport: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {}
 ) {
     val decksVm: DecksViewModel = viewModel { DecksViewModel(deckRepository) }
@@ -123,8 +123,8 @@ internal fun DecksScreen(
                     title = { Text("Decks") },
                     navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } },
                     actions = {
-                        IconButton(onClick = onEdhPlayImport) {
-                            Icon(Octicons.Download24, "Import from EDH Play")
+                        IconButton(onClick = onImport) {
+                            Icon(Octicons.Download24, "Import Deck")
                         }
                     }
                 )

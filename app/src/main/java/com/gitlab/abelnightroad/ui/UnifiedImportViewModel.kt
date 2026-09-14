@@ -4,7 +4,9 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.gitlab.abelnightroad.data.ArchidektApiClient
 import com.gitlab.abelnightroad.data.DeckRepository
+import com.gitlab.abelnightroad.data.EdhrecApiClient
 import com.gitlab.abelnightroad.data.MtgGoldfishCsvParser
 import com.gitlab.abelnightroad.data.MoxfieldApiClient
 import com.gitlab.abelnightroad.data.ScryfallRepository
@@ -18,9 +20,10 @@ import kotlinx.coroutines.launch
 
 enum class ImportSource(val label: String) {
     MOXFIELD("Moxfield"),
+    EDHREC("EDHREC"),
+    ARCHIDEKT("Archidekt"),
     MTG_GOLDFISH("MTG Goldfish"),
-    TAPPED_OUT("TappedOut"),
-    EDH_PLAY("EDH Play")
+    TAPPED_OUT("TappedOut")
 }
 
 sealed interface ImportState {
@@ -50,25 +53,47 @@ class UnifiedImportViewModel(
     fun setDeckName(name: String) { _deckName.value = name }
     fun setFormat(format: String) { _format.value = format }
 
-    fun parseMoxfieldUrl(url: String) {
-        val deckId = MoxfieldApiClient.extractDeckId(url)
-        if (deckId == null) {
-            _state.value = ImportState.Error("Invalid Moxfield URL")
+    fun parseUrl(url: String, source: ImportSource) {
+        if (url.isBlank()) {
+            _state.value = ImportState.Error("No URL provided")
             return
         }
         _state.value = ImportState.Parsing
         viewModelScope.launch {
             try {
-                val deck = MoxfieldApiClient.fetchDeck(deckId)
-                val cards = MoxfieldApiClient.toMetaDeckCards(deck)
-                if (cards.isEmpty()) {
-                    _state.value = ImportState.Error("No cards found in Moxfield deck")
-                    return@launch
+                when (source) {
+                    ImportSource.MOXFIELD -> {
+                        val deckId = MoxfieldApiClient.extractDeckId(url)
+                            ?: throw Exception("Invalid Moxfield URL")
+                        val deck = MoxfieldApiClient.fetchDeck(deckId)
+                        val cards = MoxfieldApiClient.toMetaDeckCards(deck)
+                        if (cards.isEmpty()) throw Exception("No cards found in Moxfield deck")
+                        _deckName.value = _deckName.value.ifBlank { deck.name }
+                        _state.value = ImportState.Preview(cards, ImportSource.MOXFIELD)
+                    }
+                    ImportSource.EDHREC -> {
+                        val slug = EdhrecApiClient.extractSlug(url)
+                            ?: throw Exception("Invalid EDHREC URL")
+                        val deck = EdhrecApiClient.fetchAverageDeck(slug)
+                        val cards = EdhrecApiClient.toMetaDeckCards(deck)
+                        if (cards.isEmpty()) throw Exception("No cards found in EDHREC deck")
+                        _state.value = ImportState.Preview(cards, ImportSource.EDHREC)
+                    }
+                    ImportSource.ARCHIDEKT -> {
+                        val deckId = ArchidektApiClient.extractDeckId(url)
+                            ?: throw Exception("Invalid Archidekt URL")
+                        val deck = ArchidektApiClient.fetchDeck(deckId)
+                        val cards = ArchidektApiClient.toMetaDeckCards(deck)
+                        if (cards.isEmpty()) throw Exception("No cards found in Archidekt deck")
+                        _deckName.value = _deckName.value.ifBlank { deck.name }
+                        _state.value = ImportState.Preview(cards, ImportSource.ARCHIDEKT)
+                    }
+                    else -> {
+                        _state.value = ImportState.Error("URL import not supported for ${source.label}")
+                    }
                 }
-                _deckName.value = _deckName.value.ifBlank { deck.name }
-                _state.value = ImportState.Preview(cards, ImportSource.MOXFIELD)
             } catch (e: Exception) {
-                _state.value = ImportState.Error("Failed to fetch Moxfield deck: ${e.message}")
+                _state.value = ImportState.Error("Failed to fetch deck: ${e.message}")
             }
         }
     }
@@ -90,10 +115,9 @@ class UnifiedImportViewModel(
                         if (text.contains(",")) TappedOutCsvParser.parse(text)
                         else TappedOutDckParser.parse(text)
                     }
-                    ImportSource.EDH_PLAY -> {
-                        com.gitlab.abelnightroad.data.EdhPlayDecklistParser.parse(text)
-                    }
-                    ImportSource.MOXFIELD -> {
+                    ImportSource.MOXFIELD,
+                    ImportSource.EDHREC,
+                    ImportSource.ARCHIDEKT -> {
                         UniversalDecklistParser.parse(text)
                     }
                 }
@@ -126,10 +150,9 @@ class UnifiedImportViewModel(
                         if (text.contains(",")) TappedOutCsvParser.parse(text)
                         else TappedOutDckParser.parse(text)
                     }
-                    ImportSource.EDH_PLAY -> {
-                        com.gitlab.abelnightroad.data.EdhPlayDecklistParser.parse(text)
-                    }
-                    ImportSource.MOXFIELD -> {
+                    ImportSource.MOXFIELD,
+                    ImportSource.EDHREC,
+                    ImportSource.ARCHIDEKT -> {
                         UniversalDecklistParser.parse(text)
                     }
                 }

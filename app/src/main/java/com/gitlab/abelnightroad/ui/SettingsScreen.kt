@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +33,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,6 +52,8 @@ import com.gitlab.abelnightroad.ui.theme.THEMES
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +75,11 @@ internal fun SettingsScreen(
     var showImportDialog by remember { mutableStateOf(false) }
     var importTag by remember { mutableStateOf("MegaBox-01") }
     var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var importResultImported by remember { mutableIntStateOf(0) }
+    var importResultSkipped by remember { mutableIntStateOf(0) }
+    var importResultSkippedRows by remember { mutableStateOf<List<CsvImport.SkippedRow>>(emptyList()) }
+    var showImportResultDialog by remember { mutableStateOf(false) }
+    var showSkippedCardsDialog by remember { mutableStateOf(false) }
 
     val importFileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -265,17 +274,24 @@ internal fun SettingsScreen(
                             val input = context.contentResolver.openInputStream(uri)
                                 ?: throw Exception("Could not read file")
                             val text = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                            val importedCount = if (path.endsWith(".json")) {
+                            if (path.endsWith(".json")) {
                                 val cards = BackupStore.decodeToTag(text, importTag)
                                 repository.insertAll(cards)
-                                cards.size
+                                withContext(Dispatchers.Main) {
+                                    importResultImported = cards.size
+                                    importResultSkipped = 0
+                                    importResultSkippedRows = emptyList()
+                                    showImportResultDialog = true
+                                }
                             } else {
                                 val result = CsvImport.parse(text, importTag)
                                 repository.insertAll(result.cards)
-                                result.cards.size
-                            }
-                            withContext(Dispatchers.Main) {
-                                backupStatus = "Imported $importedCount cards"
+                                withContext(Dispatchers.Main) {
+                                    importResultImported = result.cards.size
+                                    importResultSkipped = result.skipped
+                                    importResultSkippedRows = result.skippedRows
+                                    showImportResultDialog = true
+                                }
                             }
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
@@ -290,6 +306,57 @@ internal fun SettingsScreen(
             onDismiss = {
                 showImportDialog = false
                 pendingImportUri = null
+            }
+        )
+    }
+
+    if (showImportResultDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportResultDialog = false },
+            title = { Text("Import Complete") },
+            text = {
+                Column {
+                    Text("Imported $importResultImported cards, skipped $importResultSkipped")
+                    if (importResultSkipped > 0) {
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = { showSkippedCardsDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("View Skipped Cards ($importResultSkipped)")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showImportResultDialog = false }) { Text("OK") }
+            }
+        )
+    }
+
+    if (showSkippedCardsDialog) {
+        AlertDialog(
+            onDismissRequest = { showSkippedCardsDialog = false },
+            title = { Text("Skipped Cards ($importResultSkipped)") },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                    items(importResultSkippedRows) { skipped ->
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text(
+                                text = skipped.row.take(80).ifBlank { "(empty row)" },
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = skipped.reason,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSkippedCardsDialog = false }) { Text("Close") }
             }
         )
     }

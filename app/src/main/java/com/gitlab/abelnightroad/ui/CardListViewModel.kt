@@ -1,5 +1,7 @@
 package com.gitlab.abelnightroad.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,9 +21,17 @@ class CardListViewModel(private val repository: CardRepository) : ViewModel() {
         repository.cardsByTag(tag)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    fun exportToClipboard(tag: String, cards: List<CardSearchResult>, context: Context) {
+        val text = cards.joinToString("\n") { "${it.quantity} ${it.name}" }
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText(tag, text)
+        clipboard.setPrimaryClip(clip)
+        android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
     fun exportToTxt(tag: String, cards: List<CardSearchResult>, context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
-            val text = cards.joinToString("\n") { "${it.quantity}x ${it.name} (${it.setCode})" }
+            val text = cards.joinToString("\n") { "${it.quantity} ${it.name}" }
             val filename = "${tag.replace(" ", "_")}.txt"
             val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
                 android.os.Environment.DIRECTORY_DOWNLOADS

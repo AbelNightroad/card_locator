@@ -19,7 +19,9 @@ object CsvImport {
         "Altered", "Condition", "Language", "Purchase price currency", "Added"
     )
 
-    data class Result(val cards: List<CardEntity>, val skipped: Int)
+    data class SkippedRow(val row: String, val reason: String)
+
+    data class Result(val cards: List<CardEntity>, val skipped: Int, val skippedRows: List<SkippedRow>)
 
     fun parse(input: InputStream, tag: String): Result {
         val text = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -28,7 +30,7 @@ object CsvImport {
 
     fun parse(text: String, tag: String): Result {
         val rows = splitCsv(text)
-        if (rows.isEmpty()) return Result(emptyList(), 0)
+        if (rows.isEmpty()) return Result(emptyList(), 0, emptyList())
 
         val nameIdx = HEADER.indexOf("Name")
         val setCodeIdx = HEADER.indexOf("Set code")
@@ -48,17 +50,17 @@ object CsvImport {
         val addedIdx = HEADER.indexOf("Added")
 
         val cards = mutableListOf<CardEntity>()
-        var skipped = 0
+        val skippedRows = mutableListOf<SkippedRow>()
 
         for (i in 1 until rows.size) {
             val cols = parseLine(rows[i])
             if (cols.size < HEADER.size) {
-                skipped++
+                skippedRows.add(SkippedRow(rows[i], "Not enough columns"))
                 continue
             }
             val qty = cols[qtyIdx].toIntOrNull() ?: 0
             if (qty <= 0) {
-                skipped++
+                skippedRows.add(SkippedRow(rows[i], "Invalid quantity"))
                 continue
             }
             cards.add(
@@ -83,7 +85,7 @@ object CsvImport {
                 )
             )
         }
-        return Result(cards, skipped)
+        return Result(cards, skippedRows.size, skippedRows)
     }
 
     /** Splits text into raw CSV rows, respecting quoted fields spanning commas. */

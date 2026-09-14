@@ -1,359 +1,724 @@
-# Architecture
+# ARCHITECTURE.md — MtG Card Tracker Rebuild Spec
 
-Native Android app (**MtG Card Tracker**) for Magic: The Gathering collectors.
-Package `com.gitlab.abelnightroad`. Kotlin + Jetpack Compose + Room +
-kotlinx.serialization. Min SDK 26, compile/target 35. Build uses the system JDK
-(developed on JDK 26) and Gradle 9.5.1.
+> This document is a complete technical specification for rebuilding the MtG Card
+> Tracker Android app from scratch. Every schema, API contract, navigation route,
+> and UI behavior is documented here.
 
-## Directory layout
+---
+
+## 1. Project Identity
+
+| Field | Value |
+|-------|-------|
+| **App name** | MtG Card Tracker |
+| **Package** | `com.gitlab.abelnightroad` |
+| **Language** | Kotlin |
+| **UI framework** | Jetpack Compose + Material3 |
+| **Database** | Room (SQLite) |
+| **Serialization** | kotlinx.serialization |
+| **Min SDK** | 26 |
+| **Target/Compile SDK** | 35 |
+| **Gradle** | 9.5.1 |
+| **JDK** | 17 (system JDK, no toolchain pin) |
+
+---
+
+## 2. Build Configuration
+
+### Plugins
+
+| Plugin | Version |
+|--------|---------|
+| `com.android.application` | 8.10.1 |
+| `org.jetbrains.kotlin.android` | 2.1.21 |
+| `org.jetbrains.kotlin.plugin.compose` | 2.1.21 |
+| `org.jetbrains.kotlin.plugin.serialization` | 2.1.21 |
+| `com.google.devtools.ksp` | 2.1.21-2.0.1 |
+
+### Dependencies (exact versions)
+
+| Group:Artifact | Version |
+|----------------|---------|
+| `androidx.compose:compose-bom` | 2025.06.00 |
+| `androidx.compose.material3:material3` | BOM |
+| `androidx.compose.material:material-icons-extended` | BOM |
+| `androidx.activity:activity-compose` | 1.10.1 |
+| `androidx.lifecycle:lifecycle-viewmodel-compose` | 2.9.0 |
+| `androidx.lifecycle:lifecycle-runtime-ktx` | 2.9.0 |
+| `androidx.navigation:navigation-compose` | 2.9.0 |
+| `androidx.datastore:datastore-preferences` | 1.1.4 |
+| `androidx.room:room-runtime` | 2.7.0 |
+| `androidx.room:room-ktx` | 2.7.0 |
+| `androidx.room:room-compiler` | 2.7.0 (KSP) |
+| `org.jetbrains.kotlinx:kotlinx-coroutines-android` | 1.10.2 |
+| `io.coil-kt:coil-compose` | 2.7.0 |
+| `org.jetbrains.kotlinx:kotlinx-serialization-json` | 1.8.1 |
+| `org.jsoup:jsoup` | 1.18.1 |
+| `br.com.devsrsouza.compose.icons:octicons` | 1.1.1 |
+| `androidx.camera:camera-core` | 1.4.1 |
+| `androidx.camera:camera-camera2` | 1.4.1 |
+| `androidx.camera:camera-lifecycle` | 1.4.1 |
+| `androidx.camera:camera-view` | 1.4.1 |
+| `com.google.mlkit:text-recognition` | 16.0.1 |
+| `com.google.mlkit:text-recognition-chinese` | 16.0.1 |
+| `com.google.mlkit:text-recognition-japanese` | 16.0.1 |
+| `com.google.mlkit:text-recognition-korean` | 16.0.1 |
+| `com.google.android.gms:play-services-mlkit-text-recognition` | 19.0.1 |
+| `com.google.android.gms:play-services-tasks` | 18.1.0 |
+| `org.jetbrains.kotlinx:kotlinx-coroutines-play-services` | 1.10.2 |
+
+### Gradle Properties
 
 ```
-app/src/main/java/com/gitlab/abelnightroad/
-├── MainActivity.kt
-├── data/
-│   ├── AppDatabaseProvider.kt     # Room singleton (graceful migration with addMigrations)
-│   ├── CardRepository.kt          # collection (cards + tags) queries + CSV import
-│   ├── CsvImport.kt               # ManaBox CSV parser
-│   ├── DomainUtils.kt             # primaryType(), SUPERTYPES (shared domain logic)
-│   ├── ScanRepository.kt          # scan session CRUD + batch add scanned cards to collection
-│   ├── TextRecognitionProcessor.kt # ML Kit OCR (CJK→Latin cascade) + card name extraction heuristic
-│   ├── ScryfallBulkCard.kt        # DTO for the Scryfall bulk JSON shape
-│   ├── ScryfallBulkClient.kt      # Bulk Data API meta fetch + file download
-│   ├── ScryfallBulkImport.kt      # streaming parser (gzip + array/jsonl) -> scryfall_cards
-│   ├── ScryfallRepository.kt      # reference table queries + bulk import
-│   ├── ScryfallImage.kt           # Scryfall image URL builder
-│   ├── BackupStore.kt             # kotlinx.serialization DTOs for JSON backup/restore
-│   ├── DeckRepository.kt          # decks + deck_cards queries + validateDeck
-│   ├── FormatValidator.kt         # pluggable format rules (Commander count, color identity)
-│   ├── MetaDecklistLoader.kt      # Jsoup parser for mtgtop8.com (format → archetypes → decklist)
-│   ├── EdhPlayDecklistParser.kt   # parser for EDH Play text-format decklists
-│   ├── UniversalDecklistParser.kt # universal text parser (QTY CARD_NAME, section headers, set codes)
-│   ├── MtgGoldfishCsvParser.kt    # MTG Goldfish CSV format parser
-│   ├── TappedOutCsvParser.kt      # TappedOut CSV format parser
-│   ├── TappedOutDckParser.kt      # TappedOut .dck text format parser
-│   ├── MoxfieldApiClient.kt        # Moxfield API v3 client (fetch deck JSON)
-│   ├── CardConditions.kt           # NM/LP/MP/HP/DM constants + display names
-│   └── SettingsStore.kt           # DataStore: theme id + dark mode + onboarding
-├── db/
-│   ├── AppDatabase.kt             # v9: cards + scryfall_cards + decks + deck_cards + tags + scan_sessions + scanned_cards
-│   ├── CardEntity.kt / CardDao.kt
-│   ├── TagEntity.kt / TagDao.kt   # standalone tags (zero-card support)
-│   ├── ScryfallCardEntity.kt / ScryfallCardDao.kt  # color_identity column
-│   ├── DeckEntity.kt              # deck row (name, format, source, coverScryfallId)
-│   ├── DeckCardEntity.kt          # deck membership with slot + color_identity + condition + priceUsd + FK CASCADE
-│   ├── DeckDao.kt / DeckWithCards # queries + relations
-│   ├── ScanSessionEntity.kt       # scan session (id + createdAt timestamp)
-│   ├── ScannedCardEntity.kt       # scanned card with FK CASCADE to scan_sessions
-│   └── ScanSessionDao.kt          # session/card CRUD for scan feature
-└── ui/
-    ├── Screens.kt                 # AppNavigation only (routes to per-screen composables)
-    ├── MainScreen.kt              # MainScreen, TagList, TagRow, CardResultList + advanced search
-    ├── CardListScreen.kt          # CardListScreen with SwipeToDismiss + export-to-TXT
-    ├── ManualAddScreen.kt         # ManualAddScreen with autocomplete + tag suggestions
-    ├── SettingsScreen.kt          # SettingsScreen, ScryfallCard, ImportDialog, AboutCard
-    ├── MetaScreen.kt              # MetaScreen with format chips + decklist dialog + import
-    ├── ManageTagsScreen.kt        # ManageTagsScreen with add/rename/delete tags
-    ├── DecksScreen.kt             # DecksScreen, DeckGridCard, CreateDeckDialog
-    ├── DeckViewScreen.kt          # DeckViewScreen, DeckCardRow (condition/price), AddCardToDeckDialog, DecklistTab
-    ├── DeckStatisticsScreen.kt    # Deck tab showing stats (TabRow with Decklist + Statistics, total value)
-    ├── DeckExportUtils.kt         # exportDeckToTxt + shareDeckFile (share intent)
-    ├── OnboardingScreen.kt        # 3-page onboarding walkthrough (first launch only)
-    ├── EdhPlayImportScreen.kt     # EDH Play paste decklist import
-    ├── EdhPlayWebViewScreen.kt    # EDH Play WebView import
-    ├── UnifiedImportScreen.kt     # Unified import UI (Moxfield/MTG Goldfish/TappedOut/EDH Play)
-    ├── ImportUtils.kt             # importDeckCards (parallel Scryfall lookups),
-    │                              #   ALL_FORMATS, DECK_FORMATS, FORMATS constants
-    ├── MainViewModel.kt           # collection view + advanced search filters (color/type/rarity)
-    ├── MetaViewModel.kt           # parse mtgtop8 archetypes + decklist loading state
-    ├── ImportViewModel.kt         # CSV import
-    ├── ScryfallImportViewModel.kt # bulk JSON import
-    ├── ManualAddViewModel.kt      # manual add + autocomplete
-    ├── DeckViewViewModel.kt       # deck card quantity/remove/cover + undo + export + add card to deck
-    ├── DeckStatisticsViewModel.kt # compute deck stats (mana value, types, colors, rarity)
-    ├── CardListViewModel.kt       # card list export, delete, quantity changes
-    ├── ManageTagsViewModel.kt     # tag CRUD operations
-    ├── DecksViewModel.kt          # decks list + format filtering + formatCounts + clone/delete
-    ├── UnifiedImportViewModel.kt  # unified import state machine (Moxfield URL, paste, file)
-    ├── ScanViewModel.kt           # scan flow: OCR → Scryfall lookup → session management → add to collection
-    ├── ScanCameraScreen.kt        # CameraX preview + capture button + permission handling
-    ├── ScanResultsScreen.kt       # scanned card list with delete/confirm actions
-    ├── components/                # reusable composables extracted from Screens.kt
-    │   ├── AsyncImage.kt          # ScryfallAsyncImage (Coil + custom User-Agent)
-    │   ├── CameraPreview.kt       # Reusable CameraX PreviewView composable
-    │   ├── FullscreenOverlay.kt   # fullscreen card image dialog (no DB lookup, uses ScryfallImage directly)
-    │   ├── LoadingBox.kt          # LoadingBox, ErrorBox, EmptyBox
-    │   ├── QuantityStepper.kt     # +/- quantity controls
-    │   ├── EdhPlayWebView.kt      # WebView for EDH Play authenticated import (kotlinx.serialization JSON)
-    │   ├── DeckStatsCharts.kt     # Canvas chart composables (BarChart, DonutChart, HorizontalBarChart)
-    │   └── SearchFilterChips.kt   # Advanced search filter chips (color, type, rarity)
-    ├── navigation/                # navigation types extracted from Screens.kt
-    │   ├── Screen.kt              # Screen sealed interface + SwayNavItem + NAV_ITEMS
-    │   └── BottomNavigationBar.kt # FilledBottomNavigationBar composable (icon-only, no text labels)
-    └── theme/                     # Catppuccin, Nord, Cobalt2, Shades of Purple
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+android.nonTransitiveRClass=true
+kotlin.code.style=official
 ```
 
-## Domain model
+### Fonts
 
-- **CardEntity** (`cards`): a physical card copy stored in a Tag. Row id
-  autogenerated; carries full Scryfall-style metadata plus `tag`.
-- **ScryfallCardEntity** (`scryfall_cards`): reference row from the Scryfall
-  *Default Cards* bulk file, keyed by Scryfall `id`. Fields: name, setCode,
-  setName, collectorNumber, rarity, manaCost, typeLine, oracleText,
-  colorIdentity (comma-separated sorted, e.g. "W,U,B"), imageUrl, cmc,
-  legalities (JSON-encoded map, e.g. `{"standard":"legal","commander":"legal"}`),
-  reserved, gameChanger. Indexed on `name` for prefix autocomplete.
-- **ScryfallCardLegality**: Room query projection (id + legalities JSON string)
-  used by DeckRepository to bulk-load legality info for deck validation.
-- **TagEntity** (`tags`): a standalone tag row (PK on tag name). Tags can exist
-  with zero cards; the tag list UNIONs tags and card-derived tags.
-- **DeckEntity** (`decks`): a named deck with a format and optional
-  `coverScryfallId`. Stored with `source` (manual/meta) and `createdAt`.
-- **DeckCardEntity** (`deck_cards`): a card in a deck, linked by FK with
-  CASCADE delete to `decks`. Stores full card metadata at addition time plus
-  `slot` (mainboard/commander/companion), `colorIdentity` (denormalized
-  from scryfall_cards for fast validation), `condition` (NM/LP/MP/HP/DM),
-  and `priceUsd` (copied from Scryfall at add time).
-- **DeckWithCards**: a `@Relation` data class embedding a `DeckEntity` with
-  its `List<DeckCardEntity>`.
-- **ScanSessionEntity** (`scan_sessions`): a scan session with auto-generated ID
-  and `createdAt` ISO timestamp. Created when user starts a scan batch.
-- **ScannedCardEntity** (`scanned_cards`): a card detected via OCR, linked by FK
-  with CASCADE delete to `scan_sessions`. Stores full card metadata (name, setCode,
-  setName, collectorNumber, rarity, manaCost, typeLine, oracleText, colorIdentity,
-  scryfallId, priceUsd, language). Indexed on `sessionId`.
-- **MetaDeckCard**: parsed mtgtop8 decklist row (quantity, name, slot).
-   `@Serializable` for kotlinx.serialization. Also used by `EdhPlayDecklistParser`
-   for EDH Play text-format imports.
-- **MTGTop8Archetype**: parsed mtgtop8 format page entry (name, coverUrl, metaPercent, archetypeId, url).
-- **FormatCount** / **SlotCount**: DAO projection types for aggregate queries.
-- **ValidationResult**: sealed interface (`Valid` | `Invalid(errors)`) from the
-  FormatValidator module.
-- **Theme**: orthogonal UI config (light/dark + palette). Default = **Nord (dark)**. Available: Catppuccin, Nord, Cobalt2, Shades of Purple.
-- **Onboarding**: first-launch walkthrough (3 pages). Tracks completion via `SettingsStore.onboardingComplete`.
+Place `.ttf` files in `app/src/main/res/font/`:
+- `comic_neue.ttf` (Comic Neue)
+- `germania_one.ttf` (Germania One)
+- Roboto is system default, no file needed.
 
-## Control flow
+---
 
-1. Launch -> main list of Tags with per-tag card counts (theme from SettingsStore,
-   default `nord` / dark).
-2. Tap a Tag -> that tag's card list, with per-card quantity controls
-   (+/- buttons) and delete (✕).
-3. Tap a card -> fullscreen Scryfall image overlay.
-4. Search bar -> global name search; filter button -> >4 copies across all tags.
-5. Filled bottom nav bar -> Collection, Scan, Decks, Tags, Meta, Settings.
-     (Import moved to Settings > Backup & Restore as "Import from 3rd-Party".)
-6. Meta screen -> auto-loads Standard on startup; fetches metagame data from
-   mtgtop8.com via Jsoup. Format page (`/format?f=XX`) left panel parsed for
-   archetypes (`div.hover_tr`/`div.chosen_tr`), extracting name, thumbnail
-   (`/metas_thumbs/`), meta %, and archetype ID, displayed in a 2-column
-   `LazyVerticalGrid`. Other formats selectable via FilterChips
-    (Standard/MO/PI/PAU/LE/VI/PREM/EDH). Tapping a deck opens a dialog
-   showing its decklist (fetched via MetaDecklistLoader: archetype page ->
-   first deck link -> event page -> parse `div[id^=md].deck_line` /
-   `div[id^=sb].deck_line`). An "Import to Decks" button creates a deck
-   from the parsed cards with Commander/Brawl color identity validation.
-7. Main screen has a FAB to quickly add a card manually (autocomplete from
-   scryfall_cards reference table). Form resets after each save so the user
-   can add multiple cards without re-navigating.
-8. Settings screen has sections wrapped in Cards: Theme + Font selector, Backup &
-   Restore (export/import JSON + CSV "Import from 3rd-Party"), Scryfall Reference
-   Data, and About. Content is scrollable.
-9. Decks screen shows a 2-column grid of formats that have ≥1 deck
-   (formatCounts from DAO). Tapping a format shows that format's decks.
-   Each deck card has a square cover image (1:1 aspect ratio), name, format,
-   card count. FAB opens create dialog.
- 10. Deck View screen: cards grouped by slot
-     (commander/companion/mainboard → by type, sideboard → flat list without
-     type grouping). Each card shows mana cost, quantity controls via
-     `QuantityStepper`, rarity/set info, and a "Cover" button to set it as
-     the deck's cover image (hidden for sideboard cards via `showCoverButton`
-     flag on the unified `DeckCardRow` composable). Tapping a card shows
-     fullscreen image overlay. Plus button in the top app bar opens
-     AddCardToDeckDialog with Scryfall autocomplete.
-11. AddCardToDeckDialog: for Commander format, shows slot selection
-    chips (mainboard/commander/companion) and displays the selected card's
-    color identity. Validates color identity against the existing commander
-    — shows an error and disables "Add" if the card's colors exceed the
-    commander's identity. Replaces existing commander/companion when adding
-    to an occupied slot.
-12. FormatValidator module validates a deck on import (MetaScreen) and can
-    be called for any deck. Commander rules: exactly 1 commander,
-    all cards respect commander's color identity. New formats add entries
-    to FormatValidator.registry with custom FormatRule instances.
-13. EDH Play import (Decks screen → download icon in top bar):
-    - **Paste decklist:** User pastes text in standard MTG format
-      (`1 Sol Ring`, `4 Lightning Bolt`); section headers like
-      `Commander`, `Mainboard`, `Sideboard` are parsed into slots.
-      `EdhPlayDecklistParser.parse()` produces `List<MetaDeckCard>`.
-      False positives (URLs, "Total:" lines, `//` comments) are filtered.
-    - **WebView import:** User enters an EDH Play URL
-      (`https://edhplay.com/decks/<uuid>`); the app opens a `WebView`
-      that loads the page, waits for the SPA to render, then injects
-      JavaScript to extract card names/quantities from the DOM and
-      bridge them back via `EdhPlayBridge.onDeckExtracted`. JSON response
-      is parsed with kotlinx.serialization (`Json.decodeFromString<List<MetaDeckCard>>`).
-      URL validation ensures `https?://` scheme before loading.
-    - **Format selector:** Both paste and WebView import screens show a
-      format dropdown (defaults to Commander). Format is passed to
-      `importDeckCards()` for color identity validation.
-    - All flows use the shared `importDeckCards()` function which resolves
-      cards against `scryfall_cards` via `lookupByNameResilient`, creates a
-      deck via `deckRepository.createDeck`, and navigates to DeckView on success.
-      Scryfall lookups are parallelized with `coroutineScope { cards.map { async { ... } }.awaitAll() }`.
+## 3. Database Schema (Room v9)
 
-## Manual add + autocomplete (data flow)
+Database name: `card_locator.db`
+`fallbackToDestructiveMigration(true)` is enabled.
 
-- **Populate (auto-sync):** On launch `MainActivity` calls
-  `ScryfallRepository.syncIfNeeded`, which checks the table and a 15-day
-  `lastScryfallCheck` stamp. If empty (or, every 15 days, if the Scryfall
-  Bulk Data API `updated_at` changed) it downloads the `jsonl_download_uri`
-  (~557 MB) via `ScryfallBulkClient`, streams it through `ScryfallBulkImport`
-  into `scryfall_cards`, records `updated_at`, and **always deletes** the
-  downloaded `jsonl.gz`.
-- **Populate (manual):** Import screen -> "Choose Scryfall bulk file" ->
-  `ScryfallImportViewModel` opens the picked stream -> `ScryfallBulkImport.import`
-  which transparently handles gzip + JSON-array (`decodeToSequence`) or
-  JSON-Lines, maps each object to `ScryfallCardEntity` (skips blank id/name),
-  and inserts in batches of 500 via `ScryfallCardDao.insertAll`.
-- **Autocomplete:** Add Card screen -> `ManualAddViewModel` debounces the name
-  query and calls `ScryfallCardDao.autocomplete` (`WHERE name LIKE 'q%'`) live from
-  `scryfall_cards`. Selecting a suggestion fills set / collector number / rarity /
-  Scryfall id; the user sets quantity / foil / condition / tag and saves into
-  `cards` via `CardRepository.addCard`.
+### 3.1 `cards` table
 
-## Design decisions
+```sql
+CREATE TABLE cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    set_code TEXT NOT NULL,
+    set_name TEXT NOT NULL,
+    collector_number TEXT NOT NULL,
+    foil TEXT NOT NULL,
+    rarity TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    mana_box_id TEXT NOT NULL,
+    scryfall_id TEXT NOT NULL,
+    purchase_price REAL NOT NULL DEFAULT 0,
+    misprint INTEGER NOT NULL DEFAULT 0,
+    altered INTEGER NOT NULL DEFAULT 0,
+    condition TEXT NOT NULL,
+    language TEXT NOT NULL,
+    purchase_price_currency TEXT NOT NULL,
+    added TEXT NOT NULL,
+    tag TEXT NOT NULL
+);
+CREATE INDEX index_cards_tag ON cards(tag);
+CREATE INDEX index_cards_name_set_code ON cards(name, set_code);
+```
 
-- Tag-based storage model (boxes/binders identified by Tag).
-- Card identity = name + set; full metadata persisted locally.
-- Reference table from Scryfall bulk data enables offline autocomplete; imported
-  once and streamed so memory stays flat.
-- Themes in separate files; default **Nord (dark)**. Fonts: Roboto (default), Comic Neue, Germania One.
-- Meta screen uses Jsoup to parse mtgtop8.com format pages for archetype data
-  (`div.hover_tr:has(div.S14 a[href*=archetype])`), and event pages for
-  decklists (`div[id^=md].deck_line` / `div[id^=sb].deck_line`). Standard auto-loaded.
-   mtgtop8 format codes: ST/PI/MO/LE/VI/PAU/PREM/EDH.
-- Custom `User-Agent: MtGCardTracker/1.0` set on Scryfall HTTP connections (Jsoup
-  `.userAgent()` + `HttpURLConnection.setRequestProperty`).
-  Scryfall API returns `400 generic_user_agent` for generic okhttp User-Agents.
-  Both `getDefaultCardsMeta()` and `download()` check `responseCode` and read
-  `errorStream` on non-200 for precise diagnostics.
-- MetaDecklistLoader uses a Mozilla User-Agent with `Accept`, `Accept-Language`,
-  and `Referer` headers to avoid mtgtop8 blocks.
-- `addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)` with
-  `fallbackToDestructiveMigration(true)` allows graceful upgrade. v4 added `tags`
-  table; v5 added `slot`/`color_identity` to `deck_cards` and `color_identity` to
-  `scryfall_cards`; v6 added `image_url` to `scryfall_cards`; v7 adds `cmc`,
-  `legalities`, `reserved`, `game_changer` to `scryfall_cards`.
-   `fallbackToDestructiveMigration(true)` handles any future version gaps.
-   v8 added `cmc`, `legalities`, `reserved`, `game_changer` to `scryfall_cards`;
-   v9 added `scan_sessions` and `scanned_cards` tables for the Card Scan feature.
-- Decks use a separate table (`decks`) rather than reusing tags, because a deck
-  is a curated list of cards (not a physical storage location). The
-  `deck_cards` junction table with FK CASCADE enables clean deck deletion.
-- The database layer (entities, DAO, repository, ViewModel) was pre-scaffolded
-  before the UI. See `DeckEntity.kt`, `DeckDao.kt`, `DeckRepository.kt`,
-  `DecksViewModel.kt`.
-- Color identity stored as comma-separated sorted string (e.g. "W,U,B").
-  Parsed from Scryfall's `color_identity` JSON array and denormalized onto
-  both `scryfall_cards` and `deck_cards` for fast validation without joins.
-- Slot system (mainboard/commander/companion) enables Commander format
-  rules. Commander slot is required, companion is optional.
-- FormatValidator uses a pluggable rule pattern: `FormatRule` is a `fun interface`
-  with a `validate(format, cards, legalitiesMap)` method. `legalitiesMap` maps
-  scryfallId → JSON legalities string, loaded from `scryfall_cards` by
-  `DeckRepository.validateDeck()`. Rules: `CommanderCountRule` (exactly 1
-  commander), `ColorIdentityRule` (cards respect commander's colors),
-  `LegalityRule` (each card's legalities JSON must contain `"legal"` or
-  `"restricted"` for the deck's format). All format validators include
-  `LegalityRule`; Commander additionally get count + color rules.
-- `primaryType()` filters out supertypes (Legendary, Snow, World, Basic), uses
-  priority-ordered rules (Land > Creature > Planeswalker > Artifact > Battle >
-  non-Tribal) to handle multi-type MtG cards for Deck View grouping.
-- `Screen.Decks` is a data class carrying an optional `format` string, preserving
-  the selected format across Deck View navigation. The `DeckView.backTo` field
-  routes back to the exact `Screen.Decks(format)` instance.
-- `Screen.EdhPlayImport` navigates to the EDH Play import screen (paste decklist
-  or enter URL with format selector). `Screen.EdhPlayWebView(deckUrl)` opens
-  the WebView for authenticated import. Both use the shared `importDeckCards()`
-  function with parallel Scryfall lookups for fast resolution.
-- `importDeckCards()` is a shared top-level suspend function that resolves
-  cards against the Scryfall reference table using parallel async lookups
-  (`coroutineScope { cards.map { async { ... } }.awaitAll() }`), enforces
-  Commander color identity rules, and adds resolved cards to the deck.
-  Used by MetaScreen, EdhPlayImportScreen, and EdhPlayWebViewScreen.
-- `ALL_FORMATS` is the shared format list (without "All") used by MetaScreen
-  and EdhPlayImportScreen. `DECK_FORMATS` adds "All" prefix for Decks screen
-  format filtering.
-- FilledBottomNavigationBar uses a filled `secondaryContainer` background for
-  the selected item (rounded corners), icon-only (no text labels), no animation.
-  Replaced the previous Sway variant (animated circle + bouncing icon) to avoid
-  double-sizing issues with system nav bar padding.
-- Import from 3rd-Party uses `OpenDocument` with MIME types `text/csv`,
-  `application/json`, `text/plain`. File type is detected by extension:
-  JSON → `BackupStore.decodeToTag`, CSV/TXT → `CsvImport.parse`. Both append
-  cards with the user-specified tag.
-- Image URL is parsed from Scryfall bulk data's `image_uris.normal` field and
-  stored in `scryfall_cards.image_url`. `ScryfallAsyncImage` builds the CDN URL directly
-  via `ScryfallImage.normal()`/`large()`/`artCrop()` from the card UUID (deterministic).
-  Deck grid covers use `artCrop()` (landscape art crop 5:3); fullscreen overlay uses `large()`.
-  Inline card thumbnails (44dp) shown in CardListScreen and DeckViewScreen.
-- `FullscreenOverlay` uses Coil's `SubcomposeAsyncImage` directly via `ScryfallAsyncImage`,
-  with `ScryfallImage.large()` URL construction — no database lookup needed.
-  The outer Box handles dismiss-on-tap; the Card has no clickable modifier (fixed double-clickable issue).
-- Deck cards support long-press context menus: clone (duplicate deck with cards)
-  and delete (with confirmation). Format cards support long-press delete
-  (removes all decks in that format with CASCADE). All destructive operations
-  require user confirmation via AlertDialog.
-- CardListScreen top bar includes an export-to-TXT button (downloads icon) that
-  writes the current tag's cards to the Downloads directory.
-- Meta import uses `lookupByNameResilient` which normalizes " / " to " // " (for
-   Room cards like "Roaring Furnace / Steaming Sauna"), splits on " // " and tries
-   each face name, then falls back to `byNamePrefix` for cases where mtgtop8 omits
-   the " // " suffix (e.g., "Bonecrusher Giant" → "Bonecrusher Giant // Stomp").
-   All three import flows (Meta, EDH Play paste, EDH Play WebView) use the shared
-   `importDeckCards()` function which parallelizes Scryfall lookups with
-   `coroutineScope { cards.map { async { ... } }.awaitAll() }` for fast resolution.
+### 3.2 `scryfall_cards` table
 
-14. Card Scan (Scan bottom nav item):
-    - Camera preview with capture button (haptic feedback on tap).
-    - Captured image → ML Kit OCR (CJK→Latin cascade) → `extractCardName()`
-      heuristic → Scryfall lookup → card added to `scanned_cards` session.
-    - ScanResultsScreen shows detected cards with thumbnails, delete, and
-      "Add to Collection" button with tag picker.
-    - Errors (OCR failure, card not found) shown as toasts; user can retry
-      by going back to camera.
-- Back navigation uses a `backStack: MutableList<Screen>` (not the `backTo`
-  field which was removed). `navigate()` pushes to the stack; `goBack()` pops.
-  The bottom nav bar clears the stack. Hardware back presses dismiss overlays
-  first, then pop the stack.
-- **Card Scan feature** uses CameraX for live preview + image capture, ML Kit
-  Text Recognition for OCR (Chinese → Japanese → Korean → Latin cascade, best
-  result by text length), and `extractCardName()` heuristic to parse the card
-  name from OCR output (skips mana costs, type lines, watermarks). Scanned
-  cards are persisted in `scanned_cards` (Room, FK cascade). User reviews the
-  list, picks a tag, and batch-adds to the collection via `ScanRepository.addToCollection()`.
-  Camera permission is requested at runtime with graceful denied-state handling.
-  Haptic feedback (short vibration) fires on image capture via `Vibrator`/`VibratorManager`.
+```sql
+CREATE TABLE scryfall_cards (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    set_code TEXT NOT NULL,
+    set_name TEXT NOT NULL,
+    collector_number TEXT NOT NULL,
+    rarity TEXT NOT NULL,
+    mana_cost TEXT NOT NULL,
+    type_line TEXT NOT NULL,
+    oracle_text TEXT NOT NULL,
+    price_usd REAL DEFAULT NULL,
+    color_identity TEXT NOT NULL DEFAULT '',
+    image_url TEXT DEFAULT NULL,
+    cmc REAL NOT NULL DEFAULT 0.0,
+    legalities TEXT NOT NULL DEFAULT '',
+    reserved INTEGER NOT NULL DEFAULT 0,
+    game_changer INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX index_scryfall_cards_name ON scryfall_cards(name);
+```
 
-## Dependencies
+### 3.3 `decks` table
 
-- AndroidX (Compose BOM 2025.06.00, Material3, Navigation, Lifecycle, DataStore)
-- Room 2.7.0 (with KSP)
-- kotlinx-coroutines-android 1.10.2
-- coil-compose 2.7.0 (images)
-- kotlinx-serialization-json 1.8.1 (bulk parsing)
-- Jsoup 1.18.1 (HTML parsing for mtgtop8.com metagame + decklist data)
-- compose-icons Octicons 1.1.1 (GitHub Primer Octicons for all icons)
-- CameraX 1.4.1 (camera-core, camera-camera2, camera-lifecycle, camera-view)
-- ML Kit Text Recognition (Latin 16.0.1, Chinese 16.0.1, Japanese 16.0.1, Korean 16.0.1) + Play Services wrapper
-- kotlinx-coroutines-play-services 1.10.2 (ML Kit `await()` extensions)
-- Custom FilledBottomNavigationBar (filled selected-item background, no dependencies)
+```sql
+CREATE TABLE decks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    format TEXT NOT NULL,
+    source TEXT NOT NULL,
+    cover_scryfall_id TEXT DEFAULT NULL,
+    created_at INTEGER NOT NULL DEFAULT (current_timestamp)
+);
+```
 
-## Build
+### 3.4 `deck_cards` table
 
-Uses the system JDK (no `jdkToolchain` pin). `./gradlew assembleDebug` or
-`make build`. Unit tests: `./gradlew test`.
+```sql
+CREATE TABLE deck_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deck_id INTEGER NOT NULL,
+    scryfall_id TEXT NOT NULL,
+    card_name TEXT NOT NULL,
+    set_code TEXT NOT NULL,
+    set_name TEXT NOT NULL,
+    collector_number TEXT NOT NULL,
+    rarity TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    mana_cost TEXT NOT NULL,
+    type_line TEXT NOT NULL,
+    slot TEXT NOT NULL DEFAULT 'mainboard',
+    color_identity TEXT NOT NULL DEFAULT '',
+    condition TEXT NOT NULL DEFAULT 'NM',
+    price_usd REAL NOT NULL DEFAULT 0.0,
+    FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE
+);
+CREATE INDEX index_deck_cards_deck_id ON deck_cards(deck_id);
+```
 
-## Git conventions
+### 3.5 `tags` table
 
-- Commit after every discrete change; never add `Co-Authored-By` trailers.
-- Always follows the git conventional commits for best practice
+```sql
+CREATE TABLE tags (tag TEXT PRIMARY KEY NOT NULL);
+```
+
+### 3.6 `scan_sessions` table
+
+```sql
+CREATE TABLE scan_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    createdAt TEXT NOT NULL
+);
+```
+
+### 3.7 `scanned_cards` table
+
+```sql
+CREATE TABLE scanned_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sessionId INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    setCode TEXT NOT NULL,
+    setName TEXT NOT NULL,
+    collectorNumber TEXT NOT NULL,
+    rarity TEXT NOT NULL,
+    manaCost TEXT NOT NULL,
+    typeLine TEXT NOT NULL,
+    oracleText TEXT NOT NULL,
+    colorIdentity TEXT NOT NULL,
+    scryfallId TEXT NOT NULL,
+    priceUsd REAL NOT NULL,
+    language TEXT NOT NULL,
+    FOREIGN KEY (sessionId) REFERENCES scan_sessions(id) ON DELETE CASCADE
+);
+CREATE INDEX index_scanned_cards_sessionId ON scanned_cards(sessionId);
+```
+
+### Migrations
+
+All migrations are applied in `AppDatabaseProvider`. `fallbackToDestructiveMigration(true)` handles any gaps.
+
+| From→To | Changes |
+|---------|---------|
+| 3→4 | `CREATE TABLE tags(tag TEXT PK)`, populate from `DISTINCT tag FROM cards` |
+| 4→5 | Add `slot`, `color_identity` to `deck_cards`; add `color_identity` to `scryfall_cards` |
+| 5→6 | Add `image_url` to `scryfall_cards` |
+| 6→7 | Add `cmc`, `legalities`, `reserved`, `game_changer` to `scryfall_cards` |
+| 7→8 | Add `condition`, `price_usd` to `deck_cards` |
+| 8→9 | Create `scan_sessions` and `scanned_cards` tables |
+
+---
+
+## 4. DAOs — Complete Query Reference
+
+### CardDao
+
+```kotlin
+data class TagCount(val tag: String, val cardCount: Long, val totalValue: Double = 0.0)
+data class CardSearchResult(
+    val id: Long, val name: String, val setCode: String, val setName: String,
+    val collectorNumber: String, val foil: String, val rarity: String,
+    val quantity: Int, val scryfallId: String, val tag: String
+)
+data class MultiCopyCard(
+    val name: String, val setCode: String, val setName: String,
+    val scryfallId: String, val totalQuantity: Int
+)
+
+@Insert(onConflict = REPLACE) suspend fun insert(card: CardEntity)
+@Insert(onConflict = REPLACE) suspend fun insertAll(cards: List<CardEntity>)
+@Query("UPDATE cards SET quantity = quantity + 1 WHERE id = :id") suspend fun incrementQuantity(id: Long)
+@Query("DELETE FROM cards WHERE id = :id AND quantity = 1") suspend fun deleteIfQuantityOne(id: Long)
+@Query("UPDATE cards SET quantity = quantity - 1 WHERE id = :id AND quantity > 1") suspend fun decrementQuantity(id: Long)
+@Query("DELETE FROM cards WHERE id = :id") suspend fun deleteById(id: Long)
+@Query("DELETE FROM cards WHERE tag = :tag") suspend fun deleteByTag(tag: String)
+@Query("UPDATE cards SET tag = :newTag WHERE tag = :oldTag") suspend fun renameTag(oldTag: String, newTag: String)
+@Query("DELETE FROM cards") suspend fun clear()
+@Query("SELECT * FROM cards") suspend fun getAll(): List<CardEntity>
+@Query("SELECT COUNT(*) FROM cards") suspend fun count(): Int
+
+@Query("SELECT tag, COUNT(*) as cardCount, COALESCE(SUM(quantity * purchase_price), 0.0) as totalValue FROM cards GROUP BY tag UNION ALL SELECT tag, 0 as cardCount, 0.0 as totalValue FROM tags WHERE tag NOT IN (SELECT DISTINCT tag FROM cards) ORDER BY tag")
+fun tagCounts(): Flow<List<TagCount>>
+
+@Query("SELECT id, name, set_code as setCode, set_name as setName, collector_number as collectorNumber, foil, rarity, quantity, scryfall_id as scryfallId, tag FROM cards WHERE tag = :tag ORDER BY name")
+fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
+
+@Query("SELECT id, name, set_code as setCode, set_name as setName, collector_number as collectorNumber, foil, rarity, quantity, scryfall_id as scryfallId, tag FROM cards WHERE name LIKE '%' || :query || '%' ORDER BY name")
+fun searchByName(query: String): Flow<List<CardSearchResult>>
+
+@Query("SELECT id, name, set_code as setCode, set_name as setName, collector_number as collectorNumber, foil, rarity, quantity, scryfall_id as scryfallId, tag FROM cards WHERE name LIKE '%' || :query || '%' AND (:color IS NULL OR tag IN (SELECT tag FROM cards WHERE tag = tag AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%' || :color || '%'))) AND (:type IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) AND (:rarity IS NULL OR rarity = :rarity) ORDER BY name")
+fun searchAdvanced(query: String, color: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
+
+@Query("SELECT name, set_code as setCode, set_name as setName, scryfall_id as scryfallId, SUM(quantity) as totalQuantity FROM cards GROUP BY name, set_code HAVING SUM(quantity) > 4 ORDER BY name")
+fun multiCopyCards(): Flow<List<MultiCopyCard>>
+```
+
+### ScryfallCardDao
+
+```kotlin
+data class ScryfallCardLegality(val id: String, val legalities: String)
+
+@Insert(onConflict = REPLACE) suspend fun insertAll(cards: List<ScryfallCardEntity>)
+@Query("DELETE FROM scryfall_cards") suspend fun clear()
+@Query("SELECT COUNT(*) FROM scryfall_cards") suspend fun count(): Int
+@Query("SELECT * FROM scryfall_cards WHERE name LIKE :query || '%' LIMIT :limit")
+fun autocomplete(query: String, limit: Int = 50): Flow<List<ScryfallCardEntity>>
+@Query("SELECT * FROM scryfall_cards WHERE id = :id") suspend fun byId(id: String): ScryfallCardEntity?
+@Query("SELECT * FROM scryfall_cards WHERE name = :name LIMIT 1") suspend fun byName(name: String): ScryfallCardEntity?
+@Query("SELECT * FROM scryfall_cards WHERE name LIKE :name || '%' LIMIT 1") suspend fun byNamePrefix(name: String): ScryfallCardEntity?
+@Query("SELECT id, legalities FROM scryfall_cards WHERE id IN (:ids)") suspend fun getLegalities(ids: List<String>): List<ScryfallCardLegality>
+```
+
+### DeckDao
+
+```kotlin
+data class FormatCount(val format: String, val deckCount: Int)
+data class SlotCount(val slot: String, val cnt: Int)
+
+@Transaction
+data class DeckWithCards(
+    @Embedded val deck: DeckEntity,
+    @Relation(parentColumn = "id", entityColumn = "deck_id")
+    val cards: List<DeckCardEntity>
+)
+
+@Insert suspend fun insertDeck(deck: DeckEntity): Long
+@Delete suspend fun deleteDeck(deck: DeckEntity)
+@Query("SELECT * FROM decks ORDER BY name") fun allDecks(): Flow<List<DeckEntity>>
+@Query("SELECT * FROM decks WHERE format = :format ORDER BY name") fun decksByFormat(format: String): Flow<List<DeckEntity>>
+@Transaction @Query("SELECT * FROM decks WHERE id = :deckId") fun getDeckWithCards(deckId: Long): Flow<DeckWithCards?>
+@Insert suspend fun insertCard(card: DeckCardEntity): Long
+@Query("DELETE FROM deck_cards WHERE id = :cardId") suspend fun deleteCard(cardId: Long)
+@Query("DELETE FROM deck_cards WHERE deck_id = :deckId") suspend fun deleteAllCards(deckId: Long)
+@Query("UPDATE deck_cards SET quantity = :quantity WHERE id = :cardId") suspend fun updateCardQuantity(cardId: Long, quantity: Int)
+@Query("UPDATE decks SET cover_scryfall_id = :scryfallId WHERE id = :deckId") suspend fun updateDeckCover(deckId: Long, scryfallId: String?)
+@Query("SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = :deckId") suspend fun cardCount(deckId: Long): Int
+@Query("SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = :deckId") fun cardCountFlow(deckId: Long): Flow<Int>
+@Query("SELECT slot, COUNT(*) as cnt FROM deck_cards WHERE deck_id = :deckId GROUP BY slot") fun slotCounts(deckId: Long): Flow<List<SlotCount>>
+@Query("SELECT format, COUNT(*) as deckCount FROM decks GROUP BY format HAVING COUNT(*) > 0") fun formatCounts(): Flow<List<FormatCount>>
+@Query("DELETE FROM deck_cards WHERE deck_id = :deckId AND slot = :slot") suspend fun deleteCardsBySlot(deckId: Long, slot: String)
+@Query("SELECT * FROM deck_cards WHERE deck_id = :deckId AND slot = :slot LIMIT 1") suspend fun findCardBySlot(deckId: Long, slot: String): DeckCardEntity?
+@Query("SELECT * FROM deck_cards WHERE deck_id = :deckId") suspend fun getCardsForDeck(deckId: Long): List<DeckCardEntity>
+@Query("DELETE FROM decks WHERE format = :format") suspend fun deleteDecksByFormat(format: String)
+```
+
+### TagDao
+
+```kotlin
+@Insert(onConflict = IGNORE) suspend fun insert(tag: TagEntity)
+@Query("DELETE FROM tags WHERE tag = :tag") suspend fun delete(tag: String)
+@Query("DELETE FROM cards WHERE tag = :tag") suspend fun deleteCardsByTag(tag: String)
+@Query("UPDATE tags SET tag = :newTag WHERE tag = :oldTag") suspend fun rename(oldTag: String, newTag: String)
+```
+
+### ScanSessionDao
+
+```kotlin
+@Insert suspend fun insertSession(session: ScanSessionEntity): Long
+@Insert suspend fun insertCard(card: ScannedCardEntity): Long
+@Query("SELECT * FROM scanned_cards WHERE sessionId = :sessionId") fun getCardsBySession(sessionId: Long): Flow<List<ScannedCardEntity>>
+@Query("SELECT * FROM scanned_cards WHERE sessionId = :sessionId") suspend fun getCardsBySessionOnce(sessionId: Long): List<ScannedCardEntity>
+@Query("DELETE FROM scanned_cards WHERE id = :cardId") suspend fun deleteCard(cardId: Long)
+@Query("DELETE FROM scan_sessions WHERE id = :sessionId") suspend fun deleteSession(sessionId: Long)
+@Query("SELECT * FROM scan_sessions ORDER BY createdAt DESC") fun getAllSessions(): Flow<List<ScanSessionEntity>>
+```
+
+---
+
+## 5. Data Layer
+
+### Repositories
+
+| Repository | Created via | Dependencies | Purpose |
+|------------|-------------|--------------|---------|
+| `CardRepository` | `CardRepository.create(context)` | `CardDao`, `TagDao` | Collection CRUD, CSV import, tag management |
+| `DeckRepository` | `DeckRepository.create(context)` | `DeckDao`, `ScryfallCardDao` | Deck CRUD, validation, clone, color identity |
+| `ScryfallRepository` | `ScryfallRepository.create(context)` | `ScryfallCardDao`, `SettingsStore` | 15-day bulk sync, autocomplete, name lookup |
+| `ScanRepository` | `ScanRepository.create(context)` | `ScanSessionDao` | Scan sessions, add-to-collection |
+| `SettingsStore` | `SettingsStore(context)` | DataStore | Preferences |
+
+Each `create(context)` method obtains the Room database via `AppDatabaseProvider.get(context)`.
+
+### AppDatabaseProvider
+
+Singleton pattern. Returns `AppDatabase` instance. Applies all migrations (3→9) + `fallbackToDestructiveMigration(true)`.
+
+### SettingsStore (DataStore Preferences)
+
+| Key | Type | Default | Exposed as Flow |
+|-----|------|---------|-----------------|
+| `theme_id` | String | `"nord"` | `themeId` |
+| `dark_mode` | Boolean | `true` | `darkMode` |
+| `font_id` | String | `"roboto"` | `fontId` |
+| `scryfall_updated_at` | String | `null` | `scryfallUpdatedAt` |
+| `scryfall_last_check` | Long | `0L` | No |
+| `onboarding_complete` | Boolean | `false` | `onboardingComplete` |
+| `haptic_feedback` | Boolean | `true` | `hapticFeedback` |
+
+---
+
+## 6. External APIs
+
+### 6.1 Scryfall Bulk Data
+
+**Sync flow:** On launch, `ScryfallRepository.syncIfNeeded()` checks:
+1. `scryfall_cards` table empty? → sync.
+2. `scryfall_last_check` older than 15 days? → check `updated_at` from Scryfall API.
+3. If changed → re-download.
+
+**Endpoints:**
+```
+GET https://api.scryfall.com/bulk-data
+→ { "data": [{ "type": "default_cards", "download_uri": "...jsonl.gz", "updated_at": "..." }] }
+
+GET {download_uri}
+→ gzipped JSON array or JSON Lines
+```
+
+**User-Agent:** `MtGCardTracker/1.0` (required — Scryfall returns 400 for generic okhttp UA).
+
+**Parsing:** `ScryfallBulkImport` handles gzip transparently. Auto-detects format (JSON array `[{...}]` vs JSON Lines `{...}\n{...}`). Maps each card to `ScryfallCardEntity`. Batches inserts (500 per batch). Always deletes downloaded file after import.
+
+**Image URLs:** Constructed deterministically from Scryfall UUID:
+```
+https://cards.scryfall.io/normal/front/{a}/{b}/{uuid}.jpg
+https://cards.scryfall.io/large/front/{a}/{b}/{uuid}.jpg
+https://cards.scryfall.io/art_crop/front/{a}/{b}/{uuid}.jpg
+```
+Where `{a}` = first char, `{b}` = second char of UUID.
+
+### 6.2 Moxfield API v3
+
+```
+GET https://api2.moxfield.com/v3/decks/all/{deckId}
+User-Agent: MtGCardTracker/1.0
+Accept: application/json
+```
+
+Response: `MoxfieldDeckResponse { data: MoxfieldDeckData { name, mainboard, sideboard, commanders, companions } }`
+Each entry: `{ quantity, card: { name, set } }`
+
+**URL extraction:** Regex `moxfield\.com/decks/([a-zA-Z0-9]+)`
+
+### 6.3 EDHREC Average Decks
+
+```
+GET https://json.edhrec.com/pages/average-decks/{commander-slug}.json
+User-Agent: MtGCardTracker/1.0
+Accept: application/json
+```
+
+Response: `EdhrecResponse { deck: { commander: [[name, qty], ...], cards: { Creature: [[name, qty], ...], ... } } }`
+
+**URL extraction:** Regex `edhrec\.com/average-decks/([a-z0-9\-]+)`
+
+### 6.4 Archidekt API
+
+```
+GET https://archidekt.com/api/decks/{deckId}/
+User-Agent: MtGCardTracker/1.0
+Accept: application/json
+```
+
+Response: `ArchidektResponse { name, cards: [{ quantity, card: { oracleCard: { name } } }] }`
+
+**URL extraction:** Regex `archidekt\.com/decks/(\d+)`
+
+### 6.5 mtgtop8.com (Jsoup scraping)
+
+**User-Agent:** Mozilla/5.0 with Accept, Accept-Language, Referer headers.
+
+**Format page:** `https://www.mtgtop8.com/format?f=XX`
+- Parse `div.hover_tr:has(div.S14 a[href*=archetype])` for archetype list.
+- Extract: name, thumbnail (`/metas_thumbs/`), meta %, archetype ID.
+
+**Archetype page:** `https://www.mtgtop8.com/archetype?aid=XX`
+- First deck link → event page.
+
+**Event page:** Parse `div[id^=md].deck_line` (mainboard) and `div[id^=sb].deck_line` (sideboard).
+- Format codes: ST (Standard), MO (Modern), PI (Pioneer), PAU (Pauper), LE (Legacy), VI (Vintage), PREM (Premodern), EDH (Commander).
+
+---
+
+## 7. Navigation
+
+**Type:** Manual backstack (`mutableListOf<Screen>()`), NOT Navigation Compose router.
+
+**State:**
+```kotlin
+var screen by remember { mutableStateOf<Screen>(Screen.Main) }
+val backStack = remember { mutableListOf<Screen>() }
+```
+
+**Routes:**
+```kotlin
+sealed interface Screen {
+    data object Main : Screen
+    data object Scan : Screen
+    data class ScanResults(val sessionId: Long) : Screen
+    data class Cards(val tag: String) : Screen
+    data class AddCard(val initialTag: String = "") : Screen
+    data object ManageTags : Screen
+    data object Settings : Screen
+    data object Meta : Screen
+    data class Decks(val format: String? = null) : Screen
+    data class DeckView(val deckId: Long) : Screen
+    data object UnifiedImport : Screen
+}
+```
+
+**Bottom nav items:**
+| Icon | Label | Route |
+|------|-------|-------|
+| `Octicons.Home24` | Collection | `Screen.Main` |
+| `Octicons.DeviceCamera16` | Scan | `Screen.Scan` |
+| `Octicons.Book24` | Decks | `Screen.Decks()` |
+| `Octicons.Tag24` | Tags | `Screen.ManageTags` |
+| `Octicons.Graph24` | Meta | `Screen.Meta` |
+| `Octicons.Gear24` | Settings | `Screen.Settings` |
+
+**Back handling:** Hardware back dismisses fullscreen overlays first, then pops stack. Bottom nav clears stack on selection.
+
+---
+
+## 8. UI Screens — Complete Behavior
+
+### 8.1 MainScreen (Collection)
+
+- **Top bar:** Title "Collection", search bar, filter icon.
+- **Tag list:** `LazyColumn` with `TagRow` per tag showing tag name, card count, total value.
+- **Multi-copy toggle:** Filter for cards with >4 copies across all tags.
+- **Advanced search:** `SearchFilterChips` for color (W/U/B/R/G), type (Creature/Instant/Sorcery/...), rarity.
+- **FAB:** Opens `Screen.AddCard()`.
+- **Tap tag:** Navigates to `Screen.Cards(tag)`.
+- **Tap card:** Opens fullscreen `FullscreenOverlay` with Scryfall image.
+
+### 8.2 CardListScreen (Tag Detail)
+
+- **Top bar:** Tag name, back button, export button (download icon).
+- **Export button:** Opens `AlertDialog` with "Copy to Clipboard" and "Save to File".
+  - Both output format: `"{quantity} {name}"` per line (e.g., "4 Golos, Tireless Pilgrim").
+  - Clipboard uses `ClipboardManager.setPrimaryClip()`.
+  - File writes to `Downloads/{tag}.txt`.
+- **Card list:** `LazyColumn` with `SwipeToDismissBox` per card.
+  - Each card: name (titleSmall), set name + rarity (bodySmall), `QuantityStepper`.
+  - Swipe left: delete with red "X Delete" background.
+- **Tap card:** Opens fullscreen image overlay.
+
+### 8.3 ManualAddScreen
+
+- **Autocomplete:** `OutlinedTextField` with debounced query → `ScryfallCardDao.autocomplete` → dropdown suggestions.
+- **Fields:** Name (autocomplete), Set, Collector Number, Rarity, Scryfall ID, Quantity, Foil toggle, Condition dropdown, Tag (autocomplete from existing tags).
+- **Save:** `CardRepository.addCard()`. Form resets after save for batch entry.
+- **Tag suggestions:** Shows existing tags as chips below tag field.
+
+### 8.4 SettingsScreen
+
+- **Sections (Card wrappers):**
+  1. **Appearance:** Theme dropdown (Catppuccin/Nord/Cobalt2/Shades of Purple), Font dropdown (Roboto/Comic Neue/Germania One).
+  2. **Card Scan:** Haptic feedback toggle.
+  3. **Backup & Restore:** Export JSON, Restore JSON, Import from 3rd-Party.
+  4. **Scryfall Reference Data:** Last update date, sync status.
+  5. **About:** App description.
+- **Import from 3rd-Party:** Opens `ImportDialog` with tag name field + file chooser (CSV/JSON/TXT).
+  - After CSV import: shows `ImportResultDialog` with imported/skipped counts.
+  - If skipped > 0: "View Skipped Cards" button opens scrollable list of `SkippedRow` entries with reasons.
+
+### 8.5 MetaScreen
+
+- **Format chips:** FilterChips for Standard/MO/PI/PAU/LE/VI/PREM/EDH. Standard auto-loaded.
+- **Deck grid:** 2-column `LazyVerticalGrid` of archetypes from mtgtop8.
+- **Tap deck:** Opens dialog with decklist + "Import to Decks" button.
+- **Import:** Creates deck from parsed cards, validates Commander color identity.
+
+### 8.6 DecksScreen
+
+- **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`).
+- **Long-press format:** Delete format (removes all decks with CASCADE).
+- **Tap format:** Shows that format's decks.
+- **Deck card:** Cover image (artCrop 5:3), name, format, card count. Long-press: clone/delete.
+- **FAB:** Create deck dialog (name + format dropdown).
+- **Top bar:** Import button (download icon) → `Screen.UnifiedImport`.
+
+### 8.7 DeckViewScreen
+
+- **Cards grouped by slot:** commander → companion → mainboard (grouped by `primaryType()`) → sideboard (flat list).
+- **Card row:** Mana cost, name, quantity controls (`QuantityStepper`), rarity/set info.
+- **Cover button:** Sets card as deck cover (hidden for sideboard cards).
+- **Top bar:** Export (`exportDeckToTxt` + `shareDeckFile` share intent), Add card button.
+- **AddCardToDeckDialog:** Scryfall autocomplete. For Commander: slot selection (mainboard/commander/companion), color identity validation against existing commander.
+- **TabRow:** Decklist tab + Statistics tab (`DeckStatisticsScreen`).
+
+### 8.8 DeckStatisticsScreen
+
+- **Stats:** Total value, mana value distribution (bar chart), type distribution (donut chart), color distribution, rarity distribution.
+- **Charts:** Custom Canvas composables (`BarChart`, `DonutChart`, `HorizontalBarChart`).
+
+### 8.9 UnifiedImportScreen
+
+- **Sources:** FilterChips for Moxfield, EDHREC, Archidekt, MTG Goldfish, TappedOut.
+- **URL-aware sources** (Moxfield, EDHREC, Archidekt): Detect URLs via regex, fetch via API clients.
+- **Paste/File sources** (MTG Goldfish, TappedOut): Text paste or file import (CSV/TXT).
+- **Flow:** Parse → Preview dialog (card list with quantity/slot) → Import → Navigate to DeckView.
+- **Format dropdown:** Defaults to Commander. Used for deck creation.
+- **importDeckCards():** Shared function resolves cards via `ScryfallRepository.lookupByNameResilient()`, enforces Commander color identity, adds to deck. Parallel Scryfall lookups.
+
+### 8.10 ScanCameraScreen
+
+- **CameraX preview** with capture button.
+- **Permission:** Runtime `CAMERA_EXTERNAL` request with graceful denied handling.
+- **Haptic:** Short vibration on capture via `Vibrator`/`VibratorManager`.
+
+### 8.11 ScanResultsScreen
+
+- **Card list:** Thumbnails, names, detected metadata.
+- **Actions:** Delete individual cards, "Add to Collection" with tag picker.
+- **Batch add:** `ScanRepository.addToCollection()`.
+
+### 8.12 OnboardingScreen
+
+- **3 pages** shown on first launch only.
+- **Completion:** `SettingsStore.setOnboardingComplete()`.
+
+---
+
+## 9. Reusable Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `ScryfallAsyncImage` | `AsyncImage.kt` | Coil image loader with custom User-Agent |
+| `FullscreenOverlay` | `FullscreenOverlay.kt` | Fullscreen card image dialog (uses `ScryfallImage.large()`) |
+| `QuantityStepper` | `QuantityStepper.kt` | +/- quantity controls |
+| `LoadingBox`, `ErrorBox`, `EmptyBox` | `LoadingBox.kt` | Loading/error/empty states |
+| `CameraPreview` | `CameraPreview.kt` | CameraX `PreviewView` composable |
+| `BarChart`, `DonutChart`, `HorizontalBarChart` | `DeckStatsCharts.kt` | Canvas chart composables |
+| `SearchFilterChips` | `SearchFilterChips.kt` | Color/type/rarity filter chips |
+| `FilledBottomNavigationBar` | `BottomNavigationBar.kt` | Icon-only bottom nav with filled selected background |
+
+---
+
+## 10. Domain Logic
+
+### primaryType()
+
+Extracts the primary type from a `type_line` string. Filters out supertypes (Legendary, Snow, World, Basic). Priority: Land > Creature > Planeswalker > Artifact > Battle > non-Tribal Enchantment > other.
+
+### FormatValidator
+
+```kotlin
+sealed interface ValidationResult {
+    data object Valid : ValidationResult
+    data class Invalid(val errors: List<String>) : ValidationResult
+}
+
+fun interface FormatRule {
+    fun validate(format: String, cards: List<DeckCardEntity>, legalitiesMap: Map<String, String>): List<String>
+}
+```
+
+**Registered rules:**
+| Format | Rules |
+|--------|-------|
+| Commander, Brawl | CommanderCountRule + ColorIdentityRule + LegalityRule |
+| All others | LegalityRule only |
+
+- **CommanderCountRule:** Exactly 1 card with `slot == "commander"`.
+- **ColorIdentityRule:** All non-commander/companion cards must have color identity ⊆ commander's.
+- **LegalityRule:** Each card's `legalities` JSON must contain `"legal"` or `"restricted"` for the deck's format.
+
+### Card Conditions
+
+`NM` (Near Mint), `LP` (Lightly Played), `MP` (Moderately Played), `HP` (Heavily Played), `DM` (Damaged).
+
+### Color Identity
+
+Stored as comma-separated sorted string (e.g., `"W,U,B"`). Parsed from Scryfall's `color_identity` JSON array. Denormalized onto both `scryfall_cards` and `deck_cards` for fast validation without joins.
+
+---
+
+## 11. Constants
+
+```kotlin
+ALL_FORMATS = ["Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage", "Premodern", "Commander"]
+DECK_FORMATS = ["All"] + ALL_FORMATS
+FORMATS = ["All", "Standard", "Modern", "Pioneer", "Pauper", "Legacy", "Vintage", "Premodern", "Commander"]
+SUPERTYPES = listOf("Legendary", "Snow", "World", "Basic")
+```
+
+---
+
+## 12. Theming
+
+**4 themes** (each in separate file with `lightColorScheme()` + `darkColorScheme()`):
+| ID | Label |
+|----|-------|
+| `catppuccin` | Catppuccin |
+| `nord` | Nord (default, dark) |
+| `shades_of_purple` | Shades of Purple |
+| `cobalt2` | Cobalt2 |
+
+**3 fonts:**
+| ID | Label | Source |
+|----|-------|--------|
+| `roboto` | Roboto | System default |
+| `comic_neue` | Comic Neue | `R.font.comic_neue` |
+| `germania_one` | Germania One | `R.font.germania_one` |
+
+Typography applies the selected font family to all 15 Material3 text styles.
+
+---
+
+## 13. MainActivity Wiring
+
+```kotlin
+val repository = CardRepository.create(this)
+val deckRepository = DeckRepository.create(this)
+val scryfall = ScryfallRepository.create(this)
+val scanRepository = ScanRepository.create(this)
+val settings = SettingsStore(this)
+val mainViewModel = MainViewModel(repository, settings)
+```
+
+On launch: `scryfall.syncIfNeeded()` runs on `Dispatchers.IO`, shows Toast with status.
+
+`setContent` observes `themeId`, `darkMode`, `fontId` from `MainViewModel` → applies `AppTheme` → renders `AppNavigation` (all repositories + settings passed as constructor params).
+
+---
+
+## 14. Build & Run
+
+```bash
+./gradlew assembleDebug    # Debug APK
+./gradlew assembleRelease  # Release APK
+./gradlew test             # Unit tests
+```
+
+---
+
+## 15. Git Conventions
+
+- Commit after every discrete change.
+- Never add `Co-Authored-By` trailers.
+- Follow conventional commits format: `type(scope): description`.

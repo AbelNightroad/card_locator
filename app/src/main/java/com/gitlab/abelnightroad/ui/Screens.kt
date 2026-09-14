@@ -137,7 +137,7 @@ fun AppNavigation(
             initialFormat = s.format,
             onBack = { goBack() },
             onDeckClick = { deckId, format -> navigate(Screen.DeckView(deckId)) },
-            onEdhPlayImport = { navigate(Screen.UnifiedImport) },
+            onImport = { navigate(Screen.UnifiedImport) },
             bottomBar = bottomBar
         )
         is Screen.DeckView -> DeckViewScreen(
@@ -147,22 +147,7 @@ fun AppNavigation(
             onBack = { goBack() },
             onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
         )
-        Screen.EdhPlayImport -> EdhPlayImportScreen(
-            deckRepository = deckRepository,
-            scryfall = scryfall,
-            onBack = { goBack() },
-            onNavigateToWebView = { url -> navigate(Screen.EdhPlayWebView(url)) },
-            onImportComplete = { deckId -> goBack(); navigate(Screen.DeckView(deckId)) }
-        )
         Screen.UnifiedImport -> UnifiedImportScreen(
-            onBack = { goBack() },
-            onImportComplete = { deckId -> goBack(); navigate(Screen.DeckView(deckId)) },
-            onNavigateToWebView = { url -> navigate(Screen.EdhPlayWebView(url)) }
-        )
-        is Screen.EdhPlayWebView -> EdhPlayWebViewScreen(
-            deckUrl = s.deckUrl,
-            deckRepository = deckRepository,
-            scryfall = scryfall,
             onBack = { goBack() },
             onImportComplete = { deckId -> goBack(); navigate(Screen.DeckView(deckId)) }
         )

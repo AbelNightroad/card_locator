@@ -3,7 +3,6 @@ package com.gitlab.abelnightroad.ui
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,16 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import compose.icons.Octicons
@@ -59,8 +53,7 @@ import compose.icons.octicons.*
 @Composable
 internal fun UnifiedImportScreen(
     onBack: () -> Unit,
-    onImportComplete: (Long) -> Unit,
-    onNavigateToWebView: (String) -> Unit = {}
+    onImportComplete: (Long) -> Unit
 ) {
     val vm: UnifiedImportViewModel = viewModel()
     val state by vm.state.collectAsState()
@@ -154,21 +147,32 @@ internal fun UnifiedImportScreen(
             Spacer(Modifier.height(16.dp))
 
             when (selectedSource) {
-                ImportSource.MOXFIELD -> MoxfieldImportSection(
+                ImportSource.MOXFIELD -> UrlImportSection(
                     inputText = inputText,
                     onInputChange = { inputText = it },
-                    onImport = { vm.parseMoxfieldUrl(inputText) },
-                    onImportText = { vm.parseText(inputText, selectedSource) },
-                    onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) }
+                    onFetchUrl = { vm.parseUrl(inputText, selectedSource) },
+                    onParseText = { vm.parseText(inputText, selectedSource) },
+                    onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) },
+                    urlPlaceholder = "https://moxfield.com/decks/...",
+                    textLabel = "Moxfield URL or decklist text"
                 )
-                ImportSource.EDH_PLAY -> EdhPlayImportSection(
+                ImportSource.EDHREC -> UrlImportSection(
                     inputText = inputText,
                     onInputChange = { inputText = it },
-                    onImport = { vm.parseText(inputText, selectedSource) },
-                    onWebView = {
-                        if (inputText.isNotBlank()) onNavigateToWebView(inputText)
-                    },
-                    onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) }
+                    onFetchUrl = { vm.parseUrl(inputText, selectedSource) },
+                    onParseText = { vm.parseText(inputText, selectedSource) },
+                    onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) },
+                    urlPlaceholder = "https://edhrec.com/average-decks/...",
+                    textLabel = "EDHREC URL or decklist text"
+                )
+                ImportSource.ARCHIDEKT -> UrlImportSection(
+                    inputText = inputText,
+                    onInputChange = { inputText = it },
+                    onFetchUrl = { vm.parseUrl(inputText, selectedSource) },
+                    onParseText = { vm.parseText(inputText, selectedSource) },
+                    onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) },
+                    urlPlaceholder = "https://archidekt.com/decks/...",
+                    textLabel = "Archidekt URL or decklist text"
                 )
                 else -> TextFileImportSection(
                     source = selectedSource,
@@ -203,67 +207,34 @@ internal fun UnifiedImportScreen(
 }
 
 @Composable
-private fun MoxfieldImportSection(
+private fun UrlImportSection(
     inputText: String,
     onInputChange: (String) -> Unit,
-    onImport: () -> Unit,
-    onImportText: () -> Unit,
-    onImportFile: () -> Unit
+    onFetchUrl: () -> Unit,
+    onParseText: () -> Unit,
+    onImportFile: () -> Unit,
+    urlPlaceholder: String,
+    textLabel: String
 ) {
     Column {
         OutlinedTextField(
             value = inputText,
             onValueChange = onInputChange,
-            label = { Text("Moxfield URL or decklist text") },
+            label = { Text(textLabel) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = false,
             minLines = 2,
-            placeholder = { Text("https://moxfield.com/decks/...\nor paste decklist") }
+            placeholder = { Text("Paste URL\nor decklist text") }
         )
         Spacer(Modifier.height(8.dp))
 
         val isUrl = inputText.isNotBlank() && Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(inputText)
         Button(
-            onClick = { if (isUrl) onImport() else onImportText() },
+            onClick = { if (isUrl) onFetchUrl() else onParseText() },
             modifier = Modifier.fillMaxWidth(),
             enabled = inputText.isNotBlank()
         ) {
-            Text(if (isUrl) "Fetch from Moxfield" else "Parse Decklist")
-        }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = onImportFile, modifier = Modifier.fillMaxWidth()) {
-            Text("Or choose file (CSV/TXT)")
-        }
-    }
-}
-
-@Composable
-private fun EdhPlayImportSection(
-    inputText: String,
-    onInputChange: (String) -> Unit,
-    onImport: () -> Unit,
-    onWebView: () -> Unit,
-    onImportFile: () -> Unit
-) {
-    Column {
-        OutlinedTextField(
-            value = inputText,
-            onValueChange = onInputChange,
-            label = { Text("Decklist or EDH Play URL") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = false,
-            minLines = 2,
-            placeholder = { Text("Paste decklist\nor https://edhplay.com/decks/...") }
-        )
-        Spacer(Modifier.height(8.dp))
-
-        val isUrl = inputText.isNotBlank() && Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(inputText)
-        Button(
-            onClick = { if (isUrl) onWebView() else onImport() },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = inputText.isNotBlank()
-        ) {
-            Text(if (isUrl) "Open in WebView" else "Parse Decklist")
+            Text(if (isUrl) "Fetch from URL" else "Parse Decklist")
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = onImportFile, modifier = Modifier.fillMaxWidth()) {
