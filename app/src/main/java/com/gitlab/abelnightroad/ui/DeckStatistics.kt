@@ -19,7 +19,7 @@ data class DeckStats(
     val creatureCount: Int = 0
 )
 
-private val pipRegex = Regex("\\{([WUBRG])}")
+private val pipRegex = Regex("\\{([WUBRG])\\}")
 private val numRegex = Regex("\\{(\\d+)\\}")
 
 /**
