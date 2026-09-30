@@ -42,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +58,7 @@ import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.ui.components.QuantityStepper
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,7 +72,7 @@ internal fun DeckViewScreen(
     val vm: DeckViewViewModel = viewModel { DeckViewViewModel(deckRepository, scryfall, deckId) }
     val deckWithCards by vm.deckWithCards.collectAsState()
     var showAddCardDialog by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val removedCard by vm.removedCard.collectAsState()
@@ -113,20 +115,20 @@ internal fun DeckViewScreen(
     ) { padding ->
         val cards = deckWithCards?.cards ?: emptyList()
         val pagerState = rememberPagerState(pageCount = { 2 })
-
-        LaunchedEffect(pagerState.currentPage) { selectedTab = pagerState.currentPage }
-        LaunchedEffect(selectedTab) {
-            if (pagerState.currentPage != selectedTab) {
-                pagerState.animateScrollToPage(selectedTab)
-            }
-        }
+        val selectedTab = pagerState.currentPage.coerceIn(0, 1)
 
         Column(Modifier.padding(padding)) {
-            TabRow(selectedTabIndex = pagerState.currentPage) {
-                Tab(selected = pagerState.currentPage == 0, onClick = {}) {
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(0) } }
+                ) {
                     Text("Decklist", modifier = Modifier.padding(12.dp))
                 }
-                Tab(selected = pagerState.currentPage == 1, onClick = {}) {
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(1) } }
+                ) {
                     Text("Statistics", modifier = Modifier.padding(12.dp))
                 }
             }

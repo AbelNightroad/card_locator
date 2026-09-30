@@ -284,7 +284,7 @@ private fun DeckGridCard(
         ),
         elevation = CardDefaults.cardElevation(1.dp)
     ) {
-        Column(Modifier.padding(8.dp)) {
+        Column {
             Box(
                 Modifier.fillMaxWidth().aspectRatio(5f / 3f),
                 contentAlignment = Alignment.Center
@@ -300,18 +300,20 @@ private fun DeckGridCard(
                         color = MaterialTheme.colorScheme.primary)
                 }
             }
-            Spacer(Modifier.height(6.dp))
-            Text(deck.name, style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold, maxLines = 2)
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(deck.format, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary)
-                Text("$cardCount cards", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
+                Spacer(Modifier.height(6.dp))
+                Text(deck.name, style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold, maxLines = 2)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(deck.format, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary)
+                    Text("$cardCount cards", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {

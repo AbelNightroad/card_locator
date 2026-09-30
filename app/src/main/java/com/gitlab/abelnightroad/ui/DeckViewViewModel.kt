@@ -108,7 +108,11 @@ class DeckViewViewModel(
 
     fun exportDeck(context: Context, deckName: String, cards: List<DeckCardEntity>) {
         val content = exportDeckToTxt(cards)
-        shareDeckFile(context, deckName, content)
+        try {
+            shareDeckFile(context, deckName, content)
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(context, "Could not export deck: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     fun autocomplete(query: String) = scryfall.autocomplete(query)

@@ -533,7 +533,7 @@ Settings → Tags → "Manage Tags" (pushed onto the stack, back returns to
 Settings). On screens that are not in `NAV_ITEMS` the bar renders with no
 item selected (`indexOfFirst` → -1).
 
-**Back handling:** Hardware back dismisses fullscreen overlays first, then pops stack. Bottom nav clears stack on selection.
+**Back handling:** Hardware back dismisses fullscreen overlays first, then pops stack. Bottom nav selection keeps a linear history: the current screen is pushed, and if the target screen already exists in history the stack truncates up to it (no back cycles), so back from a tab destination pops to the previous tab instead of exiting the app.
 
 ---
 
@@ -596,7 +596,7 @@ item selected (`indexOfFirst` → -1).
 - **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`).
 - **Long-press format:** Delete format (removes all decks with CASCADE).
 - **Tap format:** Shows that format's decks.
-- **Deck card:** Cover image (artCrop 5:3), name, format, card count. Long-press: clone/delete.
+- **Deck card:** Cover image (artCrop 5:3, flush to card edges), then a 8dp-padded text block with name, format, card count. Long-press: clone/delete.
 - **FAB:** Create deck dialog (name + format dropdown).
 - **Top bar:** Import button (download icon) → `Screen.UnifiedImport`.
 
@@ -605,9 +605,9 @@ item selected (`indexOfFirst` → -1).
 - **Cards grouped by slot:** commander → companion → mainboard (grouped by `primaryType()`) → sideboard (flat list).
 - **Card row:** Mana cost, name, quantity controls (`QuantityStepper`), rarity/set info.
 - **Cover button:** Sets card as deck cover (hidden for sideboard cards).
-- **Top bar:** Export (`exportDeckToTxt` + `shareDeckFile` share intent), Add card button.
+- **Top bar:** Export (`exportDeckToTxt` + `shareDeckFile` share intent; `FileProvider` authority `${applicationId}.fileprovider` with `res/xml/file_paths.xml` → `<cache-path name="decks">`; failures surface as a Toast instead of a crash), Add card button.
 - **AddCardToDeckDialog:** Scryfall autocomplete. For Commander: slot selection (mainboard/commander/companion), color identity validation against existing commander.
-- **TabRow:** Decklist tab + Statistics tab (`DeckStatisticsScreen`).
+- **TabRow + HorizontalPager:** Decklist tab + Statistics tab (`DeckStatisticsScreen`). Tab taps call `scope.launch { pagerState.animateScrollToPage(...) }`; the selected index is `pagerState.currentPage.coerceIn(0, 1)` (single source of truth, no sync effects).
 
 ### 8.8 DeckStatisticsScreen
 

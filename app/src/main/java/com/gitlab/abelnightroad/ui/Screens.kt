@@ -73,7 +73,17 @@ fun AppNavigation(
         FilledBottomNavigationBar(
             items = NAV_ITEMS,
             selectedIndex = selectedNavIndex,
-            onItemSelected = { index -> backStack.clear(); screen = NAV_ITEMS[index].screen }
+            onItemSelected = { index ->
+                val target = NAV_ITEMS[index].screen
+                if (target != screen) {
+                    val history = backStack.toMutableList().apply { add(screen) }
+                    val existing = history.indexOf(target)
+                    if (existing >= 0) history.subList(existing, history.size).clear()
+                    backStack.clear()
+                    backStack.addAll(history)
+                    screen = target
+                }
+            }
         )
     }
 
