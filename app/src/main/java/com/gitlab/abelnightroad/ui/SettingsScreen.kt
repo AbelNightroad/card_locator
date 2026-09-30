@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -33,7 +32,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,13 +45,14 @@ import compose.icons.octicons.*
 import com.gitlab.abelnightroad.data.BackupStore
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.CsvImport
+import com.gitlab.abelnightroad.ui.components.ImportResult
+import com.gitlab.abelnightroad.ui.components.ImportResultDialog
+import com.gitlab.abelnightroad.ui.components.SkippedEntry
 import com.gitlab.abelnightroad.ui.theme.FONTS
 import com.gitlab.abelnightroad.ui.theme.THEMES
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +60,7 @@ internal fun SettingsScreen(
     viewModel: MainViewModel,
     repository: CardRepository,
     onBack: () -> Unit,
+    onManageTags: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -75,11 +75,7 @@ internal fun SettingsScreen(
     var showImportDialog by remember { mutableStateOf(false) }
     var importTag by remember { mutableStateOf("MegaBox-01") }
     var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
-    var importResultImported by remember { mutableIntStateOf(0) }
-    var importResultSkipped by remember { mutableIntStateOf(0) }
-    var importResultSkippedRows by remember { mutableStateOf<List<CsvImport.SkippedRow>>(emptyList()) }
-    var showImportResultDialog by remember { mutableStateOf(false) }
-    var showSkippedCardsDialog by remember { mutableStateOf(false) }
+    var importResult by remember { mutableStateOf<ImportResult?>(null) }
 
     val importFileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -221,6 +217,19 @@ internal fun SettingsScreen(
 
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
+                    Text("Tags", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = onManageTags,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Manage Tags") }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
                     Text("Backup & Restore", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
                     Button(
@@ -278,19 +287,21 @@ internal fun SettingsScreen(
                                 val cards = BackupStore.decodeToTag(text, importTag)
                                 repository.insertAll(cards)
                                 withContext(Dispatchers.Main) {
-                                    importResultImported = cards.size
-                                    importResultSkipped = 0
-                                    importResultSkippedRows = emptyList()
-                                    showImportResultDialog = true
+                                    importResult = ImportResult(
+                                        imported = cards.size,
+                                        skippedRows = emptyList()
+                                    )
                                 }
                             } else {
                                 val result = CsvImport.parse(text, importTag)
                                 repository.insertAll(result.cards)
                                 withContext(Dispatchers.Main) {
-                                    importResultImported = result.cards.size
-                                    importResultSkipped = result.skipped
-                                    importResultSkippedRows = result.skippedRows
-                                    showImportResultDialog = true
+                                    importResult = ImportResult(
+                                        imported = result.cards.size,
+                                        skippedRows = result.skippedRows.map {
+                                            SkippedEntry(it.row, it.reason)
+                                        }
+                                    )
                                 }
                             }
                         } catch (e: Exception) {
@@ -310,56 +321,7 @@ internal fun SettingsScreen(
         )
     }
 
-    if (showImportResultDialog) {
-        AlertDialog(
-            onDismissRequest = { showImportResultDialog = false },
-            title = { Text("Import Complete") },
-            text = {
-                Column {
-                    Text("Imported $importResultImported cards, skipped $importResultSkipped")
-                    if (importResultSkipped > 0) {
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedButton(
-                            onClick = { showSkippedCardsDialog = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("View Skipped Cards ($importResultSkipped)")
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showImportResultDialog = false }) { Text("OK") }
-            }
-        )
-    }
-
-    if (showSkippedCardsDialog) {
-        AlertDialog(
-            onDismissRequest = { showSkippedCardsDialog = false },
-            title = { Text("Skipped Cards ($importResultSkipped)") },
-            text = {
-                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-                    items(importResultSkippedRows) { skipped ->
-                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                            Text(
-                                text = skipped.row.take(80).ifBlank { "(empty row)" },
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = skipped.reason,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showSkippedCardsDialog = false }) { Text("Close") }
-            }
-        )
-    }
+    importResult?.let { ImportResultDialog(result = it, onDismiss = { importResult = null }) }
 }
 
 @Composable

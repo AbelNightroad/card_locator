@@ -62,6 +62,28 @@ interface CardDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(cards: List<CardEntity>)
 
+    @Query("UPDATE cards SET quantity = quantity + :delta WHERE id = :id")
+    suspend fun addQuantity(id: Long, delta: Int)
+
+    /**
+     * Candidate rows for duplicate detection: same tag, name, set, collector
+     * number and finish. The caller compares the remaining fields, because two
+     * rows that differ anywhere else are different cards.
+     */
+    @Query(
+        "SELECT * FROM cards WHERE tag = :tag AND name = :name COLLATE NOCASE " +
+            "AND set_code = :setCode COLLATE NOCASE AND collector_number = :collectorNumber " +
+            "AND foil = :foil LIMIT 25"
+    )
+    suspend fun findByDuplicateKey(
+        tag: String,
+        name: String,
+        setCode: String,
+        collectorNumber: String,
+        foil: String
+    ): List<CardEntity>
+
+
     @Query("DELETE FROM cards")
     suspend fun clear()
 

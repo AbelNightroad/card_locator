@@ -72,7 +72,7 @@ fun AppNavigation(
     val bottomBar: @Composable () -> Unit = {
         FilledBottomNavigationBar(
             items = NAV_ITEMS,
-            selectedIndex = selectedNavIndex.coerceAtLeast(0),
+            selectedIndex = selectedNavIndex,
             onItemSelected = { index -> backStack.clear(); screen = NAV_ITEMS[index].screen }
         )
     }
@@ -123,6 +123,7 @@ fun AppNavigation(
             viewModel = mainViewModel,
             repository = repository,
             onBack = { goBack() },
+            onManageTags = { navigate(Screen.ManageTags) },
             bottomBar = bottomBar
         )
         Screen.Meta -> MetaScreen(

@@ -37,6 +37,20 @@ interface ScryfallCardDao {
     @Query("SELECT * FROM scryfall_cards WHERE name LIKE :name || '%' COLLATE NOCASE LIMIT 1")
     suspend fun byNamePrefix(name: String): ScryfallCardEntity?
 
+    /** Exact printing lookup (set codes are stored lowercase; compare case-insensitively). */
+    @Query(
+        "SELECT * FROM scryfall_cards WHERE set_code = :setCode COLLATE NOCASE " +
+            "AND collector_number = :collectorNumber LIMIT 1"
+    )
+    suspend fun bySetAndCollector(setCode: String, collectorNumber: String): ScryfallCardEntity?
+
+    /** Same set, any collector number — fallback when the exact printing is missing. */
+    @Query(
+        "SELECT * FROM scryfall_cards WHERE name = :name COLLATE NOCASE " +
+            "AND set_code = :setCode COLLATE NOCASE LIMIT 1"
+    )
+    suspend fun byNameAndSet(name: String, setCode: String): ScryfallCardEntity?
+
     @Query("SELECT id, legalities FROM scryfall_cards WHERE id IN (:ids)")
     suspend fun getLegalities(ids: List<String>): List<ScryfallCardLegality>
 }

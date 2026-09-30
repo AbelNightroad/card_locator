@@ -40,6 +40,37 @@ class CardRepository(private val dao: CardDao, private val tagDao: TagDao) {
     /** Bulk insert without clearing existing data (for 3rd-party imports). */
     suspend fun insertAll(cards: List<CardEntity>) = dao.insertAll(cards)
 
+    /**
+     * Inserts [cards] into their tags, merging duplicates: when a row with the
+     * same tag, name, set, collector number and finish already exists and every
+     * other field matches, the quantities are summed instead of adding a second
+     * row. Rows that differ anywhere else stay separate cards.
+     */
+    suspend fun insertMergingDuplicates(cards: List<CardEntity>) {
+        for (card in cards) {
+            val duplicate = dao.findByDuplicateKey(
+                card.tag, card.name, card.setCode, card.collectorNumber, card.foil
+            ).firstOrNull { sameCardInfo(it, card) }
+            if (duplicate != null) dao.addQuantity(duplicate.id, card.quantity)
+            else dao.insert(card)
+        }
+    }
+
+    /** True when both rows describe the same physical card apart from quantity/id/added. */
+    private fun sameCardInfo(a: CardEntity, b: CardEntity): Boolean =
+        a.name == b.name &&
+            a.setName == b.setName &&
+            a.rarity == b.rarity &&
+            a.manaBoxId == b.manaBoxId &&
+            a.scryfallId == b.scryfallId &&
+            a.purchasePrice == b.purchasePrice &&
+            a.misprint == b.misprint &&
+            a.altered == b.altered &&
+            a.condition == b.condition &&
+            a.language == b.language &&
+            a.purchasePriceCurrency == b.purchasePriceCurrency
+
+
     suspend fun incrementQuantity(id: Long) = dao.incrementQuantity(id)
 
     suspend fun decrementQuantity(id: Long) {

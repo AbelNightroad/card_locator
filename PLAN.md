@@ -194,12 +194,16 @@ Tests use simulated OCR text strings (no image files needed):
 
 ### Test Infrastructure
 
-- **Test runner:** `./gradlew :app:testDebugUnitTest` (JVM, no device needed)
-- **TextRecognitionProcessorTest:** 16 tests for `extractCardName()` — English, Portuguese, Japanese, Chinese, double-faced cards, watermark stripping, mana cost skipping, type line filtering
-- **ScryfallApiLookupTest:** 8 tests hitting Scryfall API — exact name lookup, color identity, price, special characters, fake card rejection, multi-result search, UUID format validation
+- **Test runner:** `./gradlew :app:testDebugUnitTest` (JVM, no device needed) — or `make test`
+- **TextRecognitionProcessorTest:** 17 tests for `extractCardName()`
+- **ScryfallApiLookupTest:** 7 tests hitting Scryfall API
+- **QtyListImportTest:** 17 tests for the 3rd-party list parser (finish markers, duplicate merging, malformed rows, CRLF, sample rows)
 - **Test class locations:**
   - `app/src/test/java/com/gitlab/abelnightroad/data/TextRecognitionProcessorTest.kt`
   - `app/src/test/java/com/gitlab/abelnightroad/data/ScryfallApiLookupTest.kt`
+  - `app/src/test/java/com/gitlab/abelnightroad/data/QtyListImportTest.kt`
+  - `app/src/test/java/com/gitlab/abelnightroad/data/ScryfallBulkClientTest.kt`
+  - `app/src/test/java/com/gitlab/abelnightroad/data/ScryfallBulkImportTest.kt`
 
 ## Implementation Notes
 
@@ -227,3 +231,73 @@ MTG cards have the card name as the first line of text at the top of the card. T
 - Korean model covers: hangul characters
 - Latin model covers: English, Portuguese, Spanish, French, German, Italian, etc.
 - `recognizeText()` runs the two most likely CJK models, picks the longer result, falls back to Korean then Latin
+
+---
+
+# Plan: Settings Tags + 3rd-Party Tag Import
+
+## Overview
+
+Move tag management into Settings, and let a Tag detail screen (from Home)
+import a 3rd-party scanner list directly into that tag — no tag prompt, as much
+card info preserved as possible, failures reported like every other import.
+
+### Input format (per line)
+
+```
+qty Name (SET) collector_number [*finish*]
+1 Jyoti, Moag Ancient (M3C) 8 *F*
+2 Many Partings (LTR) 176
+```
+
+- **Finish marker:** absent → `normal`, `F` → `foil`, `E` → `etched`,
+  `FE`/`EF` → `etched foil`; any other marker → skipped with reason.
+- **Collector number** identifies the printing (same-set art variants differ).
+- **Duplicates** = same Name + Set + Number + Finish → quantities are summed.
+  Rows differing in any of those stay separate (all other info identical
+  by construction in this format; a differing field anywhere else would too).
+- **No reference match** → row is imported with the parsed data and reported
+  as "imported without full details".
+
+## Task Checklist
+
+### A. Parser
+
+- [x] Create `data/QtyListImport.kt` with end-anchored line regex (name keeps commas, apostrophes, `//`)
+- [x] Map finish markers → `normal` / `foil` / `etched` / `etched foil`
+- [x] Merge duplicate rows by summing quantity (case-insensitive name+set+collector+finish)
+- [x] Report malformed rows as `SkippedRow(row, reason)`, ignore blank lines
+
+### B. Reference enrichment
+
+- [x] `ScryfallCardDao.bySetAndCollector(set, collector)` (case-insensitive)
+- [x] `ScryfallCardDao.byNameAndSet(name, set)` fallback within the same set
+- [x] `CardListViewModel.importIntoTag(tag, text)` — parse → enrich (`setName`, `rarity`, `scryfallId`) → insert
+- [x] Count unresolved rows (no reference match) for the result dialog
+
+### C. Duplicate merging on insert
+
+- [x] `CardDao.findByDuplicateKey(tag, name, set, collector, foil)` + `addQuantity(id, delta)`
+- [x] `CardRepository.insertMergingDuplicates()` — sums quantity when every
+      other field matches; any difference keeps the cards separate
+
+### D. Tag detail import UI
+
+- [x] Import icon (`Octicons.Upload24`) beside export in `CardListScreen` top bar
+- [x] "Import into \"<tag>\"" dialog with file chooser (`OpenDocument`, TXT/CSV), no tag field
+- [x] Result dialog: imported / skipped / imported-without-full-details + skipped list
+- [x] Extract shared `ui/components/ImportResultDialogs.kt` (`ImportResultDialog`, `SkippedRowsDialog`)
+
+### E. Move Manage Tags to Settings
+
+- [x] Remove Tags entry from `NAV_ITEMS` (bottom nav: Collection, Scan, Decks, Meta, Settings)
+- [x] Settings → new "Tags" card with "Manage Tags" button → `Screen.ManageTags`
+- [x] Pass `onManageTags` from `Screens.kt`
+- [x] Stop coercing `selectedNavIndex` so screens outside `NAV_ITEMS` show no selection
+
+### F. Tests & Docs
+
+- [x] `QtyListImportTest` — 17 tests (finish markers, merging, split cards, CRLF, malformed rows, sample rows)
+- [x] Full suite green: `make test` (45 tests)
+- [x] Update `ARCHITECTURE.md` (DAOs, import formats, navigation, §8.2, §8.4, components)
+- [x] Update this file

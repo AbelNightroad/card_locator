@@ -1,11 +1,15 @@
 package com.gitlab.abelnightroad.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -28,6 +33,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,7 +46,10 @@ import compose.icons.octicons.*
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.db.CardSearchResult
+import com.gitlab.abelnightroad.ui.components.ImportResult
+import com.gitlab.abelnightroad.ui.components.ImportResultDialog
 import com.gitlab.abelnightroad.ui.components.QuantityStepper
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,10 +60,83 @@ internal fun CardListScreen(
     onBack: () -> Unit,
     onCardClick: (CardSearchResult) -> Unit
 ) {
-    val vm: CardListViewModel = viewModel { CardListViewModel(repository) }
+    val vm: CardListViewModel = viewModel { CardListViewModel(repository, scryfall) }
     val cards by vm.cardsByTag(tag).collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showExportDialog by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var importResult by remember { mutableStateOf<ImportResult?>(null) }
+
+    val importFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        pendingImportUri = uri
+    }
+
+    if (showImportDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showImportDialog = false
+                pendingImportUri = null
+            },
+            title = { Text("Import into \"$tag\"") },
+            text = {
+                Column {
+                    Text("Cards from the chosen file are added to this tag.")
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            importFileLauncher.launch(
+                                arrayOf("text/plain", "text/csv", "*/*")
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            pendingImportUri?.lastPathSegment
+                                ?.let { "File: $it" } ?: "Choose file (TXT, CSV)"
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = pendingImportUri != null,
+                    onClick = {
+                        val uri = pendingImportUri
+                        showImportDialog = false
+                        pendingImportUri = null
+                        uri?.let { picked ->
+                            scope.launch {
+                                try {
+                                    val text = context.contentResolver.openInputStream(picked)
+                                        ?.use { it.bufferedReader(Charsets.UTF_8).readText() }
+                                        ?: throw Exception("Could not read file")
+                                    importResult = vm.importIntoTag(tag, text)
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Import failed: ${e.message}",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    }
+                ) { Text("Import") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showImportDialog = false
+                    pendingImportUri = null
+                }) { Text("Cancel") }
+            }
+        )
+    }
+
+    importResult?.let { ImportResultDialog(result = it, onDismiss = { importResult = null }) }
 
     if (showExportDialog) {
         AlertDialog(
@@ -84,6 +166,9 @@ internal fun CardListScreen(
                     IconButton(onClick = onBack) { Text("\u2039") }
                 },
                 actions = {
+                    IconButton(onClick = { showImportDialog = true }) {
+                        Icon(Octicons.Upload24, "Import into Tag")
+                    }
                     IconButton(onClick = { showExportDialog = true }) {
                         Icon(Octicons.Download24, "Export Cards")
                     }

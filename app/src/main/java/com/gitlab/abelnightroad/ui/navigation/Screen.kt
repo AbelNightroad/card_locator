@@ -7,7 +7,6 @@ import compose.icons.octicons.DeviceCamera16
 import compose.icons.octicons.Gear24
 import compose.icons.octicons.Graph24
 import compose.icons.octicons.Home24
-import compose.icons.octicons.Tag24
 
 sealed interface Screen {
     data object Main : Screen
@@ -33,7 +32,6 @@ val NAV_ITEMS = listOf(
     SwayNavItem(Octicons.Home24, "Collection", Screen.Main),
     SwayNavItem(Octicons.DeviceCamera16, "Scan", Screen.Scan),
     SwayNavItem(Octicons.Book24, "Decks", Screen.Decks()),
-    SwayNavItem(Octicons.Tag24, "Tags", Screen.ManageTags),
     SwayNavItem(Octicons.Graph24, "Meta", Screen.Meta),
     SwayNavItem(Octicons.Gear24, "Settings", Screen.Settings),
 )

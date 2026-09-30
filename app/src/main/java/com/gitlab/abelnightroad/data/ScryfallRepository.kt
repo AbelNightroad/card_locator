@@ -33,6 +33,15 @@ class ScryfallRepository(
 
     suspend fun lookupById(id: String): ScryfallCardEntity? = dao.byId(id)
 
+    /** Exact printing (set + collector number), used by the 3rd-party list import. */
+    suspend fun lookupBySetAndCollector(setCode: String, collectorNumber: String): ScryfallCardEntity? =
+        dao.bySetAndCollector(setCode, collectorNumber)
+
+    /** Same set by name — fallback when the exact collector number is unknown. */
+    suspend fun lookupByNameAndSet(name: String, setCode: String): ScryfallCardEntity? =
+        dao.byNameAndSet(name, setCode)
+
+
     suspend fun count(): Int = dao.count()
 
     suspend fun clear() = dao.clear()

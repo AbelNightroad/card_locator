@@ -21,6 +21,14 @@
 | **Gradle** | 9.5.1 |
 | **JDK** | 17 (system JDK, no toolchain pin) |
 
+### Feature Status
+
+| Feature | Status |
+|---------|--------|
+| Core collection / decks / tags / meta | **Stable** — shipped |
+| Card scan (CameraX + ML Kit OCR) | **Shipped** — see `PLAN.md` (10/10 phases) |
+| LLM + vector deck analysis | **On hold — not essential.** Design only in `LLM_DECK_ANALYSIS_PLAN.md`; blocked on a trained model. No deps or code exist. |
+
 ---
 
 ## 2. Build Configuration
@@ -249,6 +257,8 @@ data class MultiCopyCard(
 
 @Insert(onConflict = REPLACE) suspend fun insert(card: CardEntity)
 @Insert(onConflict = REPLACE) suspend fun insertAll(cards: List<CardEntity>)
+@Query("UPDATE cards SET quantity = quantity + :delta WHERE id = :id") suspend fun addQuantity(id: Long, delta: Int)
+@Query("SELECT * FROM cards WHERE tag = :tag AND name = :name COLLATE NOCASE AND set_code = :setCode COLLATE NOCASE AND collector_number = :collectorNumber AND foil = :foil LIMIT 25") suspend fun findByDuplicateKey(tag: String, name: String, setCode: String, collectorNumber: String, foil: String): List<CardEntity>
 @Query("UPDATE cards SET quantity = quantity + 1 WHERE id = :id") suspend fun incrementQuantity(id: Long)
 @Query("DELETE FROM cards WHERE id = :id AND quantity = 1") suspend fun deleteIfQuantityOne(id: Long)
 @Query("UPDATE cards SET quantity = quantity - 1 WHERE id = :id AND quantity > 1") suspend fun decrementQuantity(id: Long)
@@ -288,6 +298,8 @@ fun autocomplete(query: String, limit: Int = 50): Flow<List<ScryfallCardEntity>>
 @Query("SELECT * FROM scryfall_cards WHERE id = :id") suspend fun byId(id: String): ScryfallCardEntity?
 @Query("SELECT * FROM scryfall_cards WHERE name = :name LIMIT 1") suspend fun byName(name: String): ScryfallCardEntity?
 @Query("SELECT * FROM scryfall_cards WHERE name LIKE :name || '%' LIMIT 1") suspend fun byNamePrefix(name: String): ScryfallCardEntity?
+@Query("SELECT * FROM scryfall_cards WHERE set_code = :setCode COLLATE NOCASE AND collector_number = :collectorNumber LIMIT 1") suspend fun bySetAndCollector(setCode: String, collectorNumber: String): ScryfallCardEntity?
+@Query("SELECT * FROM scryfall_cards WHERE name = :name COLLATE NOCASE AND set_code = :setCode COLLATE NOCASE LIMIT 1") suspend fun byNameAndSet(name: String, setCode: String): ScryfallCardEntity?
 @Query("SELECT id, legalities FROM scryfall_cards WHERE id IN (:ids)") suspend fun getLegalities(ids: List<String>): List<ScryfallCardLegality>
 ```
 
@@ -353,9 +365,9 @@ data class DeckWithCards(
 
 | Repository | Created via | Dependencies | Purpose |
 |------------|-------------|--------------|---------|
-| `CardRepository` | `CardRepository.create(context)` | `CardDao`, `TagDao` | Collection CRUD, CSV import, tag management |
+| `CardRepository` | `CardRepository.create(context)` | `CardDao`, `TagDao` | Collection CRUD, CSV import, tag management, duplicate-merging import (`insertMergingDuplicates`) |
 | `DeckRepository` | `DeckRepository.create(context)` | `DeckDao`, `ScryfallCardDao` | Deck CRUD, validation, clone, color identity |
-| `ScryfallRepository` | `ScryfallRepository.create(context)` | `ScryfallCardDao`, `SettingsStore` | 15-day bulk sync, autocomplete, name lookup |
+| `ScryfallRepository` | `ScryfallRepository.create(context)` | `ScryfallCardDao`, `SettingsStore` | 15-day bulk sync, autocomplete, name lookup, set+collector lookup |
 | `ScanRepository` | `ScanRepository.create(context)` | `ScanSessionDao` | Scan sessions, add-to-collection |
 | `SettingsStore` | `SettingsStore(context)` | DataStore | Preferences |
 
@@ -376,6 +388,24 @@ Singleton pattern. Returns `AppDatabase` instance. Applies all migrations (3→9
 | `scryfall_last_check` | Long | `0L` | No |
 | `onboarding_complete` | Boolean | `false` | `onboardingComplete` |
 | `haptic_feedback` | Boolean | `true` | `hapticFeedback` |
+
+### Import Formats
+
+| Parser | File | Used by | Notes |
+|--------|------|---------|-------|
+| `CsvImport` | `data/CsvImport.kt` | Settings → Import from 3rd-Party | ManaBox 16-column CSV → `CardEntity` rows + skipped rows |
+| `BackupStore` | `data/BackupStore.kt` | Settings backup/restore | JSON encode/decode of the whole collection |
+| `QtyListImport` | `data/QtyListImport.kt` | Tag detail → Import into Tag | `qty Name (SET) collector [*finish*]` line format |
+
+`QtyListImport` keeps name/set/collector verbatim, maps the finish marker to
+`foil` (`normal` / `foil` / `etched` / `etched foil`; markers `F`, `E`, `FE`/`EF`),
+merges duplicate rows (same name + set + collector + finish → quantities summed)
+and reports malformed rows as skipped with a reason. `CardListViewModel.importIntoTag()`
+enriches each row from `scryfall_cards` (set name, rarity, image id — exact
+set+collector first, then same-set name fallback); rows with no reference match
+are still imported and counted as "imported without full details".
+`CardRepository.insertMergingDuplicates()` folds rows into existing identical
+cards in the same tag (any differing field keeps the cards separate).
 
 ---
 
@@ -495,9 +525,13 @@ sealed interface Screen {
 | `Octicons.Home24` | Collection | `Screen.Main` |
 | `Octicons.DeviceCamera16` | Scan | `Screen.Scan` |
 | `Octicons.Book24` | Decks | `Screen.Decks()` |
-| `Octicons.Tag24` | Tags | `Screen.ManageTags` |
 | `Octicons.Graph24` | Meta | `Screen.Meta` |
 | `Octicons.Gear24` | Settings | `Screen.Settings` |
+
+`Screen.ManageTags` is no longer a bottom-nav item: it is opened from
+Settings → Tags → "Manage Tags" (pushed onto the stack, back returns to
+Settings). On screens that are not in `NAV_ITEMS` the bar renders with no
+item selected (`indexOfFirst` → -1).
 
 **Back handling:** Hardware back dismisses fullscreen overlays first, then pops stack. Bottom nav clears stack on selection.
 
@@ -517,7 +551,10 @@ sealed interface Screen {
 
 ### 8.2 CardListScreen (Tag Detail)
 
-- **Top bar:** Tag name, back button, export button (download icon).
+- **Top bar:** Tag name, back button, import button (upload icon), export button (download icon).
+- **Import button:** Opens `AlertDialog` "Import into \"<tag>\"" with a file chooser (`OpenDocument`, TXT/CSV) and no tag field — cards always land in the open tag.
+  - Parses with `QtyListImport`, enriches via `CardListViewModel.importIntoTag()`, inserts with `CardRepository.insertMergingDuplicates()`.
+  - Shows the shared `ImportResultDialog` (imported/skipped/unresolved counts + skipped-row reasons).
 - **Export button:** Opens `AlertDialog` with "Copy to Clipboard" and "Save to File".
   - Both output format: `"{quantity} {name}"` per line (e.g., "4 Golos, Tireless Pilgrim").
   - Clipboard uses `ClipboardManager.setPrimaryClip()`.
@@ -539,12 +576,13 @@ sealed interface Screen {
 - **Sections (Card wrappers):**
   1. **Appearance:** Theme dropdown (Catppuccin/Nord/Cobalt2/Shades of Purple), Font dropdown (Roboto/Comic Neue/Germania One).
   2. **Card Scan:** Haptic feedback toggle.
-  3. **Backup & Restore:** Export JSON, Restore JSON, Import from 3rd-Party.
-  4. **Scryfall Reference Data:** Last update date, sync status.
-  5. **About:** App description.
+  3. **Tags:** "Manage Tags" button → `Screen.ManageTags` (pushed screen; back returns here).
+  4. **Backup & Restore:** Export JSON, Restore JSON, Import from 3rd-Party.
+  5. **Scryfall Reference Data:** Last update date, sync status.
+  6. **About:** App description.
 - **Import from 3rd-Party:** Opens `ImportDialog` with tag name field + file chooser (CSV/JSON/TXT).
-  - After CSV import: shows `ImportResultDialog` with imported/skipped counts.
-  - If skipped > 0: "View Skipped Cards" button opens scrollable list of `SkippedRow` entries with reasons.
+  - After import: shows the shared `ImportResultDialog` with imported/skipped counts.
+  - If skipped > 0: "View Skipped Cards" button opens scrollable list of skipped entries with reasons.
 
 ### 8.5 MetaScreen
 
@@ -616,6 +654,7 @@ sealed interface Screen {
 | `BarChart`, `DonutChart`, `HorizontalBarChart` | `DeckStatsCharts.kt` | Canvas chart composables |
 | `SearchFilterChips` | `SearchFilterChips.kt` | Color/type/rarity filter chips |
 | `FilledBottomNavigationBar` | `BottomNavigationBar.kt` | Icon-only bottom nav with filled selected background |
+| `ImportResultDialog`, `SkippedRowsDialog` | `ImportResultDialogs.kt` | Shared import result (imported/skipped/unresolved) + skipped-row list |
 
 ---
 
