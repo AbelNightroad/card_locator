@@ -38,8 +38,8 @@
 | Plugin | Version |
 |--------|---------|
 | `com.android.application` | 9.4.0 |
-| `org.jetbrains.kotlin.plugin.compose` | 2.3.21 |
-| `org.jetbrains.kotlin.plugin.serialization` | 2.3.21 |
+| `org.jetbrains.kotlin.plugin.compose` | 2.4.20 |
+| `org.jetbrains.kotlin.plugin.serialization` | 2.4.20 |
 | `com.google.devtools.ksp` | 2.3.12 |
 
 AGP 9 built-in Kotlin compiles all Kotlin sources; `org.jetbrains.kotlin.android`

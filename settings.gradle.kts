@@ -6,8 +6,8 @@ pluginManagement {
     }
     plugins {
         id("com.android.application") version "9.4.0"
-        id("org.jetbrains.kotlin.plugin.compose") version "2.3.21"
-        id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
+        id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
+        id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
         id("com.google.devtools.ksp") version "2.3.12"
     }
 }
