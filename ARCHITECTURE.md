@@ -37,11 +37,15 @@
 
 | Plugin | Version |
 |--------|---------|
-| `com.android.application` | 8.10.1 |
-| `org.jetbrains.kotlin.android` | 2.1.21 |
-| `org.jetbrains.kotlin.plugin.compose` | 2.1.21 |
-| `org.jetbrains.kotlin.plugin.serialization` | 2.1.21 |
-| `com.google.devtools.ksp` | 2.1.21-2.0.1 |
+| `com.android.application` | 9.4.0 |
+| `org.jetbrains.kotlin.plugin.compose` | 2.3.21 |
+| `org.jetbrains.kotlin.plugin.serialization` | 2.3.21 |
+| `com.google.devtools.ksp` | 2.3.12 |
+
+AGP 9 built-in Kotlin compiles all Kotlin sources; `org.jetbrains.kotlin.android`
+is intentionally NOT applied (it is incompatible with AGP 9's new DSL) and
+`jvmTarget` defaults to `compileOptions.targetCompatibility` (17). Gradle
+wrapper: 9.7.1. Builds on any JDK ≥ 17, verified on system JDK 26.
 
 ### Dependencies (exact versions)
 
@@ -536,7 +540,11 @@ sealed interface Screen {
 | `FontAwesomeIcons.Solid.Gear` | Settings | `Screen.Settings` |
 
 All icons are Font Awesome 7 Solid (`compose.icons.FontAwesomeIcons.Solid.*`);
-the Octicons library was removed.
+the Octicons library was removed. **Gotcha:** FA vectors are built with
+`defaultWidth/Height = 512.dp`, so `Icon()` without an explicit
+`Modifier.size(...)` renders at intrinsic size (huge). Every call site must
+pass a size — 24.dp everywhere except the bottom bar (22.dp via `iconSize`)
+and onboarding (56.dp).
 
 `Screen.ManageTags` is no longer a bottom-nav item: it is opened from
 Settings → Tags → "Manage Tags" (pushed onto the stack, back returns to
@@ -770,8 +778,8 @@ before delegating to the system handler. Then `scryfall.syncIfNeeded()` runs on
 ./gradlew test             # Unit tests
 ```
 
-Requires JDK ≤ 21 to run Gradle: AGP's `JdkImageTransform` (jlink) fails on
-JDK 26 with `cannot find the build signature in the java.base`.
+Requires JDK 17+ (AGP 9 minimum); verified on system JDK 26 with Gradle 9.7.1 —
+no JDK pin needed since the AGP 9 upgrade.
 
 ---
 
