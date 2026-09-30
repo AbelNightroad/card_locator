@@ -314,7 +314,8 @@ Three small UX improvements. No DB, API, or navigation-structure changes.
 2. Home FAB unfolds into two actions: **Card** (Add Card screen) and **Tag**
    (the existing "New Tag" dialog) — one tap less to create a tag.
 3. Tag import and Settings 3rd-party import show a progress indicator instead
-   of silently closing the dialog (currently the app looks idle for seconds).
+   of silently closing the dialog (currently the app looks idle for seconds),
+   including a `#processed / #total` card counter while rows are imported.
 
 ## Feature 1 — Onboarding: Tags explanation
 
@@ -371,33 +372,58 @@ result dialog or the error toast fires.
 ### A. Tag import (`CardListScreen.kt`)
 
 - [ ] Add `isImporting` state; set on Import tap, dialog stays open
+- [ ] Add `importProgress: Pair<Int, Int>?` state (processed, total)
 - [ ] Move file read + `vm.importIntoTag` into `Dispatchers.IO`
-- [ ] Confirm button shows spinner and `enabled = !isImporting`
+- [ ] Confirm button shows spinner, `enabled = !isImporting`, and
+      `"$processed / $total cards"` when `importProgress != null`
 - [ ] `onDismissRequest` becomes a no-op while importing (no orphan runs)
 - [ ] Success → close + existing `ImportResultDialog`; failure → close + the
-      existing Toast; both paths reset `isImporting`
+      existing Toast; both paths reset `isImporting` and `importProgress`
 
 ### B. Settings 3rd-party import (`SettingsScreen.kt` + private `ImportDialog` ~448)
 
-- [ ] Add `isImporting` state, pass `importing: Boolean` into `ImportDialog`
+- [ ] Add `isImporting` + `importProgress: Pair<Int, Int>?` state; pass both
+      into `ImportDialog`
 - [ ] Delete the immediate `showImportDialog = false` (line 322); close on completion
-- [ ] Import button: spinner while importing, otherwise label
+- [ ] Import button: spinner while importing, otherwise label; counter line
+      under/near the spinner when progress is known
 - [ ] Success (JSON + txt paths) → close + `ImportResultDialog`; failure →
-      close + existing `backupStatus` message; both reset `isImporting`
+      close + existing `backupStatus` message; both reset `isImporting` and
+      `importProgress`
+
+### C. Progress statistics (`data/ThirdPartyImport.kt`)
+
+- [ ] Add trailing parameter `onProgress: (processed: Int, total: Int) -> Unit = {}`
+      to `ThirdPartyImport.import(...)` — default no-op keeps the 2 existing
+      test suites (`ThirdPartyImportTest`, Settings callers) source-compatible
+- [ ] Quantity-list path (the slow one — per-row Scryfall enrichment): `total`
+      = `parsed.cards.size`, call `onProgress(i + 1, total)` after each card
+- [ ] ManaBox CSV path (fast bulk insert): `onProgress(0, n)` after parse and
+      `onProgress(n, n)` after insert — counter appears and completes instantly
+- [ ] `CardListViewModel.importIntoTag` forwards the callback to `import(...)`
+- [ ] Settings JSON path (`BackupStore.decodeToTag`) stays indeterminate
+      spinner only — it is one bulk decode + insert with no row loop
+- [ ] Callers assign the callback into Compose snapshot state directly
+      (safe from IO threads)
+- [ ] New test: callback receives monotonically increasing counts ending at
+      `total` (extend `ThirdPartyImportTest`)
 
 ### Notes
 
-- 2 call sites only → duplicate the small logic locally, no shared component
+- 2 UI call sites only → duplicate the small logic locally, no shared component
   yet (rule of three applies if a third importer appears)
-- Indeterminate spinner: no progress % exists (row-by-row enrichment)
+- Counter granularity: per enriched card (qty-list) — matches the actual slow
+  work; bulk paths (CSV insert, JSON decode) show start/end or stay
+  indeterminate
 
 ## Verification
 
 - [ ] `make test` — full suite stays green
 - [ ] `make build` — installable APK
 - [ ] Manual: onboarding shows the 4th Tags page; FAB Card → ManualAdd, Tag →
-      dialog → tag visible on Home; both imports show a spinner, then the
-      result dialog (or error), never a dead-looking app
+      dialog → tag visible on Home; both imports show a spinner with a live
+      `x / y cards` counter that reaches the total, then the result dialog
+      (or error), never a dead-looking app
 
 ## Commits
 
