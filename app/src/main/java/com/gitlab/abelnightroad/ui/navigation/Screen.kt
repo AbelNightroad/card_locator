@@ -1,12 +1,13 @@
 package com.gitlab.abelnightroad.ui.navigation
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import compose.icons.Octicons
-import compose.icons.octicons.Book24
-import compose.icons.octicons.DeviceCamera16
-import compose.icons.octicons.Gear24
-import compose.icons.octicons.Graph24
-import compose.icons.octicons.Home24
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.Book
+import compose.icons.fontawesomeicons.solid.Camera
+import compose.icons.fontawesomeicons.solid.ChartBar
+import compose.icons.fontawesomeicons.solid.Gear
+import compose.icons.fontawesomeicons.solid.House
 
 sealed interface Screen {
     data object Main : Screen
@@ -29,9 +30,9 @@ data class SwayNavItem(
 )
 
 val NAV_ITEMS = listOf(
-    SwayNavItem(Octicons.Home24, "Collection", Screen.Main),
-    SwayNavItem(Octicons.DeviceCamera16, "Scan", Screen.Scan),
-    SwayNavItem(Octicons.Book24, "Decks", Screen.Decks()),
-    SwayNavItem(Octicons.Graph24, "Meta", Screen.Meta),
-    SwayNavItem(Octicons.Gear24, "Settings", Screen.Settings),
+    SwayNavItem(FontAwesomeIcons.Solid.House, "Collection", Screen.Main),
+    SwayNavItem(FontAwesomeIcons.Solid.Book, "Decks", Screen.Decks()),
+    SwayNavItem(FontAwesomeIcons.Solid.ChartBar, "Meta", Screen.Meta),
+    SwayNavItem(FontAwesomeIcons.Solid.Camera, "Scan", Screen.Scan),
+    SwayNavItem(FontAwesomeIcons.Solid.Gear, "Settings", Screen.Settings),
 )

@@ -27,8 +27,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import compose.icons.Octicons
-import compose.icons.octicons.*
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.db.CardSearchResult
 import com.gitlab.abelnightroad.db.MultiCopyCard
 import com.gitlab.abelnightroad.db.TagCount
@@ -67,7 +68,7 @@ internal fun MainScreen(
                 actions = {
                     IconButton(onClick = { viewModel.setDarkMode(!dark) }) {
                         Icon(
-                            if (dark) Octicons.Sun24 else Octicons.Moon24,
+                            if (dark) FontAwesomeIcons.Solid.Sun else FontAwesomeIcons.Solid.Moon,
                             if (dark) "Light mode" else "Dark mode"
                         )
                     }
@@ -76,7 +77,7 @@ internal fun MainScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddCard) {
-                Icon(Octicons.Plus24, "Add Card")
+                Icon(FontAwesomeIcons.Solid.Plus, "Add Card")
             }
         }
     ) { padding ->
@@ -87,12 +88,12 @@ internal fun MainScreen(
                     onValueChange = viewModel::setSearch,
                     modifier = Modifier.weight(1f),
                     placeholder = { Text("Search cards by name") },
-                    leadingIcon = { Icon(Octicons.Search24, null) },
+                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null) },
                     singleLine = true
                 )
                 if (search.isNotBlank()) {
                     IconButton(onClick = viewModel::clearSearch) {
-                        Icon(Octicons.X24, "Clear search")
+                        Icon(FontAwesomeIcons.Solid.Xmark, "Clear search")
                     }
                 }
                 IconButton(
@@ -100,7 +101,7 @@ internal fun MainScreen(
                     modifier = Modifier.padding(start = 4.dp)
                 ) {
                     Icon(
-                        Octicons.Filter24,
+                        FontAwesomeIcons.Solid.Filter,
                         "More than 4 copies",
                         tint = if (multiOnly) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant

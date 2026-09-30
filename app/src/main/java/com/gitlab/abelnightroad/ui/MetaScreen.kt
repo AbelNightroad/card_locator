@@ -49,8 +49,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import compose.icons.Octicons
-import compose.icons.octicons.*
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.MetaDeckCard
 import com.gitlab.abelnightroad.data.MetaDecklistLoader
@@ -226,7 +227,7 @@ internal fun MetaScreen(
                             }
                         }
                     }) {
-                        Icon(Octicons.Download24, "Import to Decks")
+                        Icon(FontAwesomeIcons.Solid.Download, "Import to Decks")
                     }
                 }
             },

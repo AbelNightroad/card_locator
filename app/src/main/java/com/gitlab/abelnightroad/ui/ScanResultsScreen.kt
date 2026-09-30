@@ -42,8 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import compose.icons.Octicons
-import compose.icons.octicons.X24
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.Xmark
 import com.gitlab.abelnightroad.data.ScryfallImage
 import com.gitlab.abelnightroad.db.ScannedCardEntity
 import com.gitlab.abelnightroad.ui.components.ScryfallAsyncImage
@@ -77,7 +78,7 @@ internal fun ScanResultsScreen(
                 title = { Text("Scanned Cards") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Octicons.X24, contentDescription = "Close")
+                        Icon(FontAwesomeIcons.Solid.Xmark, contentDescription = "Close")
                     }
                 },
                 actions = {

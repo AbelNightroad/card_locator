@@ -45,8 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import compose.icons.Octicons
-import compose.icons.octicons.*
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.db.DeckEntity
 import com.gitlab.abelnightroad.ui.components.ScryfallAsyncImage
@@ -86,7 +87,7 @@ internal fun DecksScreen(
             },
             floatingActionButton = {
                 FloatingActionButton(onClick = { showCreateDialog = true }) {
-                    Icon(Octicons.Plus24, "New Deck")
+                    Icon(FontAwesomeIcons.Solid.Plus, "New Deck")
                 }
             }
         ) { padding ->
@@ -124,14 +125,14 @@ internal fun DecksScreen(
                     navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } },
                     actions = {
                         IconButton(onClick = onImport) {
-                            Icon(Octicons.Download24, "Import Deck")
+                            Icon(FontAwesomeIcons.Solid.Download, "Import Deck")
                         }
                     }
                 )
             },
             floatingActionButton = {
                 FloatingActionButton(onClick = { showCreateDialog = true }) {
-                    Icon(Octicons.Plus24, "New Deck")
+                    Icon(FontAwesomeIcons.Solid.Plus, "New Deck")
                 }
             }
         ) { padding ->
@@ -191,7 +192,7 @@ internal fun DecksScreen(
                                 DropdownMenuItem(
                                     text = { Text("Delete format", color = MaterialTheme.colorScheme.error) },
                                     onClick = { showFormatMenu = false; deleteTargetFormat = fc.format },
-                                    leadingIcon = { Icon(Octicons.Trash24, null, tint = MaterialTheme.colorScheme.error) }
+                                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Trash, null, tint = MaterialTheme.colorScheme.error) }
                                 )
                             }
                         }
@@ -320,12 +321,12 @@ private fun DeckGridCard(
             DropdownMenuItem(
                 text = { Text("Clone") },
                 onClick = { showMenu = false; onClone() },
-                leadingIcon = { Icon(Octicons.Copy24, null) }
+                leadingIcon = { Icon(FontAwesomeIcons.Solid.Copy, null) }
             )
             DropdownMenuItem(
                 text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                 onClick = { showMenu = false; onDelete() },
-                leadingIcon = { Icon(Octicons.Trash24, null, tint = MaterialTheme.colorScheme.error) }
+                leadingIcon = { Icon(FontAwesomeIcons.Solid.Trash, null, tint = MaterialTheme.colorScheme.error) }
             )
         }
     }

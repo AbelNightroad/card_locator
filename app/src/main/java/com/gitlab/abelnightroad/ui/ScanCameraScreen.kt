@@ -43,8 +43,9 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import compose.icons.Octicons
-import compose.icons.octicons.X24
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.Xmark
 import com.gitlab.abelnightroad.ui.components.CameraPreview
 import java.io.File
 import java.io.IOException
@@ -99,7 +100,7 @@ internal fun ScanCameraScreen(
                 title = { Text("Scan Card") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Octicons.X24, contentDescription = "Close")
+                        Icon(FontAwesomeIcons.Solid.Xmark, contentDescription = "Close")
                     }
                 }
             )

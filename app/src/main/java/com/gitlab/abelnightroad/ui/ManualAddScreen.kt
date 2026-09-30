@@ -29,8 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import compose.icons.Octicons
-import compose.icons.octicons.*
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 
@@ -82,7 +83,7 @@ internal fun ManualAddScreen(
                 label = { Text("Card name") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(Octicons.Search24, null) }
+                leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null) }
             )
             if (selected == null && query.length >= 2) {
                 LazyColumn(Modifier.fillMaxWidth().height(200.dp)) {

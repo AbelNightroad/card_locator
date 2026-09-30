@@ -33,8 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import compose.icons.Octicons
-import compose.icons.octicons.*
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.CardRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +63,7 @@ internal fun ManageTagsScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Octicons.Plus24, "New Tag")
+                Icon(FontAwesomeIcons.Solid.Plus, "New Tag")
             }
         }
     ) { padding ->
@@ -91,7 +92,7 @@ internal fun ManageTagsScreen(
                             onClick = { deleteTag = tagCount.tag },
                             modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(Octicons.Trash24, null,
+                            Icon(FontAwesomeIcons.Solid.Trash, null,
                                 tint = MaterialTheme.colorScheme.error)
                         }
                     }

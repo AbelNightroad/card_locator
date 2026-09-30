@@ -26,10 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import compose.icons.Octicons
-import compose.icons.octicons.Book24
-import compose.icons.octicons.Home24
-import compose.icons.octicons.Graph24
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.Book
+import compose.icons.fontawesomeicons.solid.ChartBar
+import compose.icons.fontawesomeicons.solid.House
 import kotlinx.coroutines.launch
 
 private data class OnboardingPage(
@@ -40,17 +41,17 @@ private data class OnboardingPage(
 
 private val pages = listOf(
     OnboardingPage(
-        icon = Octicons.Home24,
+        icon = FontAwesomeIcons.Solid.House,
         title = "Import your collection",
         description = "Import your card collection from ManaBox CSV files. Organize cards into tags and track your inventory."
     ),
     OnboardingPage(
-        icon = Octicons.Book24,
+        icon = FontAwesomeIcons.Solid.Book,
         title = "Build decks",
         description = "Create decks, import from Moxfield, MTG Goldfish, or TappedOut. Export your lists back to text files."
     ),
     OnboardingPage(
-        icon = Octicons.Graph24,
+        icon = FontAwesomeIcons.Solid.ChartBar,
         title = "Track your stats",
         description = "View mana curves, color distribution, and card type breakdowns for every deck."
     )

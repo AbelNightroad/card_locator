@@ -41,8 +41,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import compose.icons.Octicons
-import compose.icons.octicons.*
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.db.CardSearchResult
@@ -167,10 +168,10 @@ internal fun CardListScreen(
                 },
                 actions = {
                     IconButton(onClick = { showImportDialog = true }) {
-                        Icon(Octicons.Upload24, "Import into Tag")
+                        Icon(FontAwesomeIcons.Solid.Upload, "Import into Tag")
                     }
                     IconButton(onClick = { showExportDialog = true }) {
-                        Icon(Octicons.Download24, "Export Cards")
+                        Icon(FontAwesomeIcons.Solid.Download, "Export Cards")
                     }
                 }
             )
