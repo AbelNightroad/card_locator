@@ -132,6 +132,7 @@ fun AppNavigation(
         Screen.Settings -> SettingsScreen(
             viewModel = mainViewModel,
             repository = repository,
+            scryfall = scryfall,
             onBack = { goBack() },
             onManageTags = { navigate(Screen.ManageTags) },
             bottomBar = bottomBar
@@ -159,6 +160,8 @@ fun AppNavigation(
             onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
         )
         Screen.UnifiedImport -> UnifiedImportScreen(
+            deckRepository = deckRepository,
+            scryfall = scryfall,
             onBack = { goBack() },
             onImportComplete = { deckId -> goBack(); navigate(Screen.DeckView(deckId)) }
         )

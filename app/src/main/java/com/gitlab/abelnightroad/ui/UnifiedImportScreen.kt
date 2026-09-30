@@ -1,5 +1,6 @@
 package com.gitlab.abelnightroad.ui
 
+import android.app.Application
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,20 +47,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import compose.icons.Octicons
-import compose.icons.octicons.*
+import com.gitlab.abelnightroad.data.DeckRepository
+import com.gitlab.abelnightroad.data.ScryfallRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun UnifiedImportScreen(
+    deckRepository: DeckRepository,
+    scryfall: ScryfallRepository,
     onBack: () -> Unit,
     onImportComplete: (Long) -> Unit
 ) {
-    val vm: UnifiedImportViewModel = viewModel()
+    val context = LocalContext.current
+    val vm: UnifiedImportViewModel = viewModel {
+        UnifiedImportViewModel(
+            context.applicationContext as Application,
+            deckRepository,
+            scryfall
+        )
+    }
     val state by vm.state.collectAsState()
     val deckName by vm.deckName.collectAsState()
     val format by vm.format.collectAsState()
-    val context = LocalContext.current
 
     var selectedSource by remember { mutableStateOf(ImportSource.MOXFIELD) }
     var inputText by remember { mutableStateOf("") }

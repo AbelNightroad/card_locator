@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.gitlab.abelnightroad.data.CardRepository
+import com.gitlab.abelnightroad.data.CrashLog
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.ScanRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
@@ -26,6 +27,7 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashLog.install(this)
         enableEdgeToEdge()
         val repository = CardRepository.create(this)
         val deckRepository = DeckRepository.create(this)

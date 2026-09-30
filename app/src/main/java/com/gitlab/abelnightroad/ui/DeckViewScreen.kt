@@ -52,8 +52,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import compose.icons.Octicons
-import compose.icons.octicons.*
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.ui.components.QuantityStepper
@@ -69,7 +70,9 @@ internal fun DeckViewScreen(
     onBack: () -> Unit,
     onCardClick: (String) -> Unit
 ) {
-    val vm: DeckViewViewModel = viewModel { DeckViewViewModel(deckRepository, scryfall, deckId) }
+    val vm: DeckViewViewModel = viewModel(key = "deck-$deckId") {
+        DeckViewViewModel(deckRepository, scryfall, deckId)
+    }
     val deckWithCards by vm.deckWithCards.collectAsState()
     var showAddCardDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -104,10 +107,10 @@ internal fun DeckViewScreen(
                         val name = deckWithCards?.deck?.name ?: "deck"
                         if (!cards.isNullOrEmpty()) vm.exportDeck(context, name, cards)
                     }) {
-                        Icon(Octicons.Share24, "Export Deck")
+                        Icon(FontAwesomeIcons.Solid.ShareNodes, "Export Deck")
                     }
                     IconButton(onClick = { showAddCardDialog = true }) {
-                        Icon(Octicons.Plus24, "Add Card to Deck")
+                        Icon(FontAwesomeIcons.Solid.Plus, "Add Card to Deck")
                     }
                 }
             )
@@ -262,7 +265,7 @@ private fun AddCardToDeckDialog(
                     label = { Text("Search card name") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    leadingIcon = { Icon(Octicons.Search24, null) }
+                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null) }
                 )
                 if (selectedCard == null && query.length >= 2) {
                     LazyColumn(Modifier.fillMaxWidth().height(200.dp)) {

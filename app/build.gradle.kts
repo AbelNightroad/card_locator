@@ -22,8 +22,8 @@ android {
         applicationId = "com.gitlab.abelnightroad"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -63,6 +63,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -88,6 +89,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
     implementation("androidx.navigation:navigation-compose:2.9.0")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("com.github.joaocsousa:font-awesome:2.0.0")
     implementation("br.com.devsrsouza.compose.icons:octicons:1.1.1")
     implementation("androidx.datastore:datastore-preferences:1.1.4")
 
