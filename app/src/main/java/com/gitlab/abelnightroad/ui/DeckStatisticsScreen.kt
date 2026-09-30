@@ -48,7 +48,7 @@ private fun StatItem(label: String, value: String) {
 internal fun DeckStatisticsScreen(deckId: Long, vm: DeckViewViewModel) {
     val deckWithCards by vm.deckWithCards.collectAsState()
     val cards = deckWithCards?.cards ?: emptyList()
-    val stats = remember(cards) { DeckStatisticsViewModel().computeStats(cards) }
+    val stats = remember(cards) { computeDeckStats(cards) }
     val totalValue = remember(cards) { cards.sumOf { it.priceUsd * it.quantity } }
 
     if (cards.isEmpty()) {

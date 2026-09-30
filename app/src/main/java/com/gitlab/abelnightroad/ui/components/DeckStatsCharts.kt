@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gitlab.abelnightroad.ui.CmcStat
@@ -52,15 +53,15 @@ internal fun BarChart(
     val textColor = MaterialTheme.colorScheme.onSurface
     Canvas(modifier.fillMaxWidth().height(200.dp)) {
         if (data.isEmpty()) return@Canvas
-        val maxCount = data.maxOfOrNull { it.count } ?: 1
-        val barWidth = size.width / data.size * 0.7f
+        val maxCount = (data.maxOfOrNull { it.count } ?: 1).coerceAtLeast(1)
+        val barWidth = (size.width / data.size * 0.7f).coerceAtLeast(0f)
         val spacing = size.width / data.size * 0.3f
         val bottomPadding = 30f
         val topPadding = 20f
-        val chartHeight = size.height - bottomPadding - topPadding
+        val chartHeight = (size.height - bottomPadding - topPadding).coerceAtLeast(0f)
 
         data.forEachIndexed { index, stat ->
-            val barHeight = if (maxCount > 0) (stat.count.toFloat() / maxCount) * chartHeight else 0f
+            val barHeight = (stat.count.toFloat() / maxCount) * chartHeight
             val x = index * (barWidth + spacing) + spacing / 2
             val y = size.height - bottomPadding - barHeight
 
@@ -72,7 +73,7 @@ internal fun BarChart(
 
             drawContext.canvas.nativeCanvas.apply {
                 val paint = android.graphics.Paint().apply {
-                    color = textColor.hashCode()
+                    color = textColor.toArgb()
                     textSize = 24f
                     textAlign = android.graphics.Paint.Align.CENTER
                     isAntiAlias = true
@@ -95,8 +96,9 @@ internal fun DonutChart(
     Canvas(modifier.fillMaxWidth().height(200.dp)) {
         if (data.isEmpty()) return@Canvas
         val total = data.sumOf { it.count }.toFloat()
+        if (total <= 0f || !total.isFinite()) return@Canvas
         val strokeWidth = 40f
-        val diameter = minOf(size.width, size.height) - strokeWidth * 2
+        val diameter = (minOf(size.width, size.height) - strokeWidth * 2).coerceAtLeast(0f)
         val topLeft = Offset(
             (size.width - diameter) / 2f,
             (size.height - diameter) / 2f
@@ -105,6 +107,7 @@ internal fun DonutChart(
 
         data.forEachIndexed { index, stat ->
             val sweep = (stat.count / total) * 360f
+            if (!sweep.isFinite() || sweep <= 0f) return@forEachIndexed
             val color = mtgColors[stat.color] ?: chartColors[index % chartColors.size]
             drawArc(
                 color = color,
@@ -123,7 +126,7 @@ internal fun DonutChart(
 
         drawContext.canvas.nativeCanvas.apply {
             val paint = android.graphics.Paint().apply {
-                this.color = textColor.hashCode()
+                this.color = textColor.toArgb()
                 textSize = 28f
                 textAlign = android.graphics.Paint.Align.CENTER
                 isAntiAlias = true
@@ -141,20 +144,20 @@ internal fun HorizontalBarChart(
 ) {
     val textColor = MaterialTheme.colorScheme.onSurface
     Canvas(modifier.fillMaxWidth().height((entries.size * 32 + 20).dp)) {
-        if (entries.isEmpty()) return@Canvas
-        val maxCount = entries.maxOfOrNull { it.second } ?: 1
+        if (entries.isEmpty() || colors.isEmpty()) return@Canvas
+        val maxCount = (entries.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
         val barHeight = 20f
         val spacing = 12f
         val labelWidth = 120f
-        val chartWidth = size.width - labelWidth - 60f
+        val chartWidth = (size.width - labelWidth - 60f).coerceAtLeast(0f)
 
         entries.forEachIndexed { index, (label, count) ->
             val y = index * (barHeight + spacing)
-            val barWidth = if (maxCount > 0) (count.toFloat() / maxCount) * chartWidth else 0f
+            val barWidth = (count.toFloat() / maxCount) * chartWidth
 
             drawContext.canvas.nativeCanvas.apply {
                 val paint = android.graphics.Paint().apply {
-                    color = textColor.hashCode()
+                    color = textColor.toArgb()
                     textSize = 22f
                     isAntiAlias = true
                 }
@@ -169,7 +172,7 @@ internal fun HorizontalBarChart(
 
             drawContext.canvas.nativeCanvas.apply {
                 val paint = android.graphics.Paint().apply {
-                    color = textColor.hashCode()
+                    color = textColor.toArgb()
                     textSize = 22f
                     isAntiAlias = true
                 }
