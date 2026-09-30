@@ -62,7 +62,7 @@
 | `io.coil-kt:coil-compose` | 2.7.0 |
 | `org.jetbrains.kotlinx:kotlinx-serialization-json` | 1.8.1 |
 | `org.jsoup:jsoup` | 1.18.1 |
-| `br.com.devsrsouza.compose.icons:octicons` | 1.1.1 |
+| `com.github.joaocsousa:font-awesome` | 2.0.0 (Font Awesome 7.3.x) |
 | `androidx.camera:camera-core` | 1.4.1 |
 | `androidx.camera:camera-camera2` | 1.4.1 |
 | `androidx.camera:camera-lifecycle` | 1.4.1 |
@@ -74,6 +74,12 @@
 | `com.google.android.gms:play-services-mlkit-text-recognition` | 19.0.1 |
 | `com.google.android.gms:play-services-tasks` | 18.1.0 |
 | `org.jetbrains.kotlinx:kotlinx-coroutines-play-services` | 1.10.2 |
+
+### App Version
+
+`versionCode = 2`, `versionName = "1.1.0"` with `buildFeatures.buildConfig = true`;
+`BuildConfig.VERSION_NAME` is shown in Settings → About. Versioning policy: PATCH
+for fixes, MINOR for features, MAJOR for breaking changes (see §15).
 
 ### Gradle Properties
 
@@ -393,9 +399,10 @@ Singleton pattern. Returns `AppDatabase` instance. Applies all migrations (3→9
 
 | Parser | File | Used by | Notes |
 |--------|------|---------|-------|
-| `CsvImport` | `data/CsvImport.kt` | Settings → Import from 3rd-Party | ManaBox 16-column CSV → `CardEntity` rows + skipped rows |
+| `ThirdPartyImport` | `data/ThirdPartyImport.kt` | Settings → Import from 3rd-Party | Detects format: JSON → `BackupStore`, 16-column CSV → `CsvImport`, else `QtyListImport`; delegates to the same enrich + `insertMergingDuplicates` flow |
+| `CsvImport` | `data/CsvImport.kt` | via `ThirdPartyImport` | ManaBox 16-column CSV → `CardEntity` rows + skipped rows |
 | `BackupStore` | `data/BackupStore.kt` | Settings backup/restore | JSON encode/decode of the whole collection |
-| `QtyListImport` | `data/QtyListImport.kt` | Tag detail → Import into Tag | `qty Name (SET) collector [*finish*]` line format |
+| `QtyListImport` | `data/QtyListImport.kt` | Tag detail → Import into Tag; Settings (non-CSV) | `qty Name (SET) collector [*finish*]` line format |
 
 `QtyListImport` keeps name/set/collector verbatim, maps the finish marker to
 `foil` (`normal` / `foil` / `etched` / `etched foil`; markers `F`, `E`, `FE`/`EF`),
@@ -522,11 +529,14 @@ sealed interface Screen {
 **Bottom nav items:**
 | Icon | Label | Route |
 |------|-------|-------|
-| `Octicons.Home24` | Collection | `Screen.Main` |
-| `Octicons.DeviceCamera16` | Scan | `Screen.Scan` |
-| `Octicons.Book24` | Decks | `Screen.Decks()` |
-| `Octicons.Graph24` | Meta | `Screen.Meta` |
-| `Octicons.Gear24` | Settings | `Screen.Settings` |
+| `FontAwesomeIcons.Solid.House` | Collection | `Screen.Main` |
+| `FontAwesomeIcons.Solid.Book` | Decks | `Screen.Decks()` |
+| `FontAwesomeIcons.Solid.ChartBar` | Meta | `Screen.Meta` |
+| `FontAwesomeIcons.Solid.Camera` | Scan | `Screen.Scan` |
+| `FontAwesomeIcons.Solid.Gear` | Settings | `Screen.Settings` |
+
+All icons are Font Awesome 7 Solid (`compose.icons.FontAwesomeIcons.Solid.*`);
+the Octicons library was removed.
 
 `Screen.ManageTags` is no longer a bottom-nav item: it is opened from
 Settings → Tags → "Manage Tags" (pushed onto the stack, back returns to
@@ -579,10 +589,12 @@ item selected (`indexOfFirst` → -1).
   3. **Tags:** "Manage Tags" button → `Screen.ManageTags` (pushed screen; back returns here).
   4. **Backup & Restore:** Export JSON, Restore JSON, Import from 3rd-Party.
   5. **Scryfall Reference Data:** Last update date, sync status.
-  6. **About:** App description.
+  6. **About:** App description, `Version ${BuildConfig.VERSION_NAME}`, "Crash logs" button.
 - **Import from 3rd-Party:** Opens `ImportDialog` with tag name field + file chooser (CSV/JSON/TXT).
+  - Format detection happens in `ThirdPartyImport.import()` (JSON → backup restore, ManaBox CSV → `CsvImport`, anything else → `QtyListImport`), so pasted txt lists no longer fail with CSV column errors.
   - After import: shows the shared `ImportResultDialog` with imported/skipped counts.
   - If skipped > 0: "View Skipped Cards" button opens scrollable list of skipped entries with reasons.
+- **Crash logs dialog:** Shows `filesDir/crash.log` (written by `CrashLog`), with Copy (clipboard + Toast), Clear, and Close actions; empty state shows "No crashes recorded yet."
 
 ### 8.5 MetaScreen
 
@@ -612,7 +624,8 @@ item selected (`indexOfFirst` → -1).
 ### 8.8 DeckStatisticsScreen
 
 - **Stats:** Total value, mana value distribution (bar chart), type distribution (donut chart), color distribution, rarity distribution.
-- **Charts:** Custom Canvas composables (`BarChart`, `DonutChart`, `HorizontalBarChart`).
+- **Computation:** Pure top-level `computeDeckStats(cards)` in `ui/DeckStatistics.kt` (unit-tested; guards divide-by-zero, non-finite totals, cmc > 10 bucketing).
+- **Charts:** Custom Canvas composables (`BarChart`, `DonutChart`, `HorizontalBarChart`) in `ui/components/DeckStatsCharts.kt`; paint colors via `Color.toArgb()` (never `hashCode()`), all dimensions coerced ≥ 0.
 
 ### 8.9 UnifiedImportScreen
 
@@ -740,7 +753,10 @@ val settings = SettingsStore(this)
 val mainViewModel = MainViewModel(repository, settings)
 ```
 
-On launch: `scryfall.syncIfNeeded()` runs on `Dispatchers.IO`, shows Toast with status.
+On launch: `CrashLog.install(this)` chains an uncaught-exception handler that
+persists the stack trace to `filesDir/crash.log` (trimmed to 64K, newest first)
+before delegating to the system handler. Then `scryfall.syncIfNeeded()` runs on
+`Dispatchers.IO`, shows Toast with status.
 
 `setContent` observes `themeId`, `darkMode`, `fontId` from `MainViewModel` → applies `AppTheme` → renders `AppNavigation` (all repositories + settings passed as constructor params).
 
@@ -754,6 +770,9 @@ On launch: `scryfall.syncIfNeeded()` runs on `Dispatchers.IO`, shows Toast with 
 ./gradlew test             # Unit tests
 ```
 
+Requires JDK ≤ 21 to run Gradle: AGP's `JdkImageTransform` (jlink) fails on
+JDK 26 with `cannot find the build signature in the java.base`.
+
 ---
 
 ## 15. Git Conventions
@@ -761,3 +780,4 @@ On launch: `scryfall.syncIfNeeded()` runs on `Dispatchers.IO`, shows Toast with 
 - Commit after every discrete change.
 - Never add `Co-Authored-By` trailers.
 - Follow conventional commits format: `type(scope): description`.
+- Versioning: bump `versionName`/`versionCode` in `app/build.gradle.kts` per release — PATCH for fixes, MINOR for features, MAJOR for breaking changes.
