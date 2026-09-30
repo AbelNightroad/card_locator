@@ -125,9 +125,9 @@ internal fun UnifiedImportScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
             HorizontalDivider()
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = deckName,
