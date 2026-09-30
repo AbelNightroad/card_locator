@@ -18,7 +18,7 @@
 | **Serialization** | kotlinx.serialization |
 | **Min SDK** | 26 |
 | **Target/Compile SDK** | 35 |
-| **Gradle** | 9.5.1 |
+| **Gradle** | 9.7.1 |
 | **JDK** | 17 (system JDK, no toolchain pin) |
 
 ### Feature Status
