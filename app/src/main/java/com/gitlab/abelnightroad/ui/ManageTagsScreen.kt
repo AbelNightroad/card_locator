@@ -63,7 +63,7 @@ internal fun ManageTagsScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(FontAwesomeIcons.Solid.Plus, "New Tag")
+                Icon(FontAwesomeIcons.Solid.Plus, "New Tag", Modifier.size(24.dp))
             }
         }
     ) { padding ->
@@ -93,6 +93,7 @@ internal fun ManageTagsScreen(
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(FontAwesomeIcons.Solid.Trash, null,
+                                modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.error)
                         }
                     }

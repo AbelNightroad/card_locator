@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -83,7 +84,7 @@ internal fun ManualAddScreen(
                 label = { Text("Card name") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null) }
+                leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null, modifier = Modifier.size(24.dp)) }
             )
             if (selected == null && query.length >= 2) {
                 LazyColumn(Modifier.fillMaxWidth().height(200.dp)) {

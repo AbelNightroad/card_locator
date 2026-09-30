@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
@@ -69,7 +70,8 @@ internal fun MainScreen(
                     IconButton(onClick = { viewModel.setDarkMode(!dark) }) {
                         Icon(
                             if (dark) FontAwesomeIcons.Solid.Sun else FontAwesomeIcons.Solid.Moon,
-                            if (dark) "Light mode" else "Dark mode"
+                            if (dark) "Light mode" else "Dark mode",
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
@@ -77,7 +79,7 @@ internal fun MainScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddCard) {
-                Icon(FontAwesomeIcons.Solid.Plus, "Add Card")
+                Icon(FontAwesomeIcons.Solid.Plus, "Add Card", Modifier.size(24.dp))
             }
         }
     ) { padding ->
@@ -88,12 +90,12 @@ internal fun MainScreen(
                     onValueChange = viewModel::setSearch,
                     modifier = Modifier.weight(1f),
                     placeholder = { Text("Search cards by name") },
-                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null) },
+                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null, Modifier.size(24.dp)) },
                     singleLine = true
                 )
                 if (search.isNotBlank()) {
                     IconButton(onClick = viewModel::clearSearch) {
-                        Icon(FontAwesomeIcons.Solid.Xmark, "Clear search")
+                        Icon(FontAwesomeIcons.Solid.Xmark, "Clear search", Modifier.size(24.dp))
                     }
                 }
                 IconButton(
@@ -103,6 +105,7 @@ internal fun MainScreen(
                     Icon(
                         FontAwesomeIcons.Solid.Filter,
                         "More than 4 copies",
+                        modifier = Modifier.size(24.dp),
                         tint = if (multiOnly) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -78,7 +78,7 @@ internal fun ScanResultsScreen(
                 title = { Text("Scanned Cards") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(FontAwesomeIcons.Solid.Xmark, contentDescription = "Close")
+                        Icon(FontAwesomeIcons.Solid.Xmark, contentDescription = "Close", modifier = Modifier.size(24.dp))
                     }
                 },
                 actions = {

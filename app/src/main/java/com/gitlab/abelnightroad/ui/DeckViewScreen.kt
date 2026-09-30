@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -107,10 +108,10 @@ internal fun DeckViewScreen(
                         val name = deckWithCards?.deck?.name ?: "deck"
                         if (!cards.isNullOrEmpty()) vm.exportDeck(context, name, cards)
                     }) {
-                        Icon(FontAwesomeIcons.Solid.ShareNodes, "Export Deck")
+                        Icon(FontAwesomeIcons.Solid.ShareNodes, "Export Deck", Modifier.size(24.dp))
                     }
                     IconButton(onClick = { showAddCardDialog = true }) {
-                        Icon(FontAwesomeIcons.Solid.Plus, "Add Card to Deck")
+                        Icon(FontAwesomeIcons.Solid.Plus, "Add Card to Deck", Modifier.size(24.dp))
                     }
                 }
             )
@@ -265,7 +266,7 @@ private fun AddCardToDeckDialog(
                     label = { Text("Search card name") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null) }
+                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Search, null, Modifier.size(24.dp)) }
                 )
                 if (selectedCard == null && query.length >= 2) {
                     LazyColumn(Modifier.fillMaxWidth().height(200.dp)) {

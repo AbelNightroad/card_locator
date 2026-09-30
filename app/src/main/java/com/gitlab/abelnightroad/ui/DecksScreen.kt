@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -87,7 +88,7 @@ internal fun DecksScreen(
             },
             floatingActionButton = {
                 FloatingActionButton(onClick = { showCreateDialog = true }) {
-                    Icon(FontAwesomeIcons.Solid.Plus, "New Deck")
+                    Icon(FontAwesomeIcons.Solid.Plus, "New Deck", Modifier.size(24.dp))
                 }
             }
         ) { padding ->
@@ -125,14 +126,14 @@ internal fun DecksScreen(
                     navigationIcon = { IconButton(onClick = onBack) { Text("\u2039") } },
                     actions = {
                         IconButton(onClick = onImport) {
-                            Icon(FontAwesomeIcons.Solid.Download, "Import Deck")
+                            Icon(FontAwesomeIcons.Solid.Download, "Import Deck", Modifier.size(24.dp))
                         }
                     }
                 )
             },
             floatingActionButton = {
                 FloatingActionButton(onClick = { showCreateDialog = true }) {
-                    Icon(FontAwesomeIcons.Solid.Plus, "New Deck")
+                    Icon(FontAwesomeIcons.Solid.Plus, "New Deck", Modifier.size(24.dp))
                 }
             }
         ) { padding ->
@@ -192,7 +193,7 @@ internal fun DecksScreen(
                                 DropdownMenuItem(
                                     text = { Text("Delete format", color = MaterialTheme.colorScheme.error) },
                                     onClick = { showFormatMenu = false; deleteTargetFormat = fc.format },
-                                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Trash, null, tint = MaterialTheme.colorScheme.error) }
+                                    leadingIcon = { Icon(FontAwesomeIcons.Solid.Trash, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.error) }
                                 )
                             }
                         }
@@ -321,12 +322,12 @@ private fun DeckGridCard(
             DropdownMenuItem(
                 text = { Text("Clone") },
                 onClick = { showMenu = false; onClone() },
-                leadingIcon = { Icon(FontAwesomeIcons.Solid.Copy, null) }
+                leadingIcon = { Icon(FontAwesomeIcons.Solid.Copy, null, Modifier.size(24.dp)) }
             )
             DropdownMenuItem(
                 text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                 onClick = { showMenu = false; onDelete() },
-                leadingIcon = { Icon(FontAwesomeIcons.Solid.Trash, null, tint = MaterialTheme.colorScheme.error) }
+                leadingIcon = { Icon(FontAwesomeIcons.Solid.Trash, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.error) }
             )
         }
     }

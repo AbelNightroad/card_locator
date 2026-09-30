@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -168,10 +169,10 @@ internal fun CardListScreen(
                 },
                 actions = {
                     IconButton(onClick = { showImportDialog = true }) {
-                        Icon(FontAwesomeIcons.Solid.Upload, "Import into Tag")
+                        Icon(FontAwesomeIcons.Solid.Upload, "Import into Tag", Modifier.size(24.dp))
                     }
                     IconButton(onClick = { showExportDialog = true }) {
-                        Icon(FontAwesomeIcons.Solid.Download, "Export Cards")
+                        Icon(FontAwesomeIcons.Solid.Download, "Export Cards", Modifier.size(24.dp))
                     }
                 }
             )
