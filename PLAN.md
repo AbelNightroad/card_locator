@@ -301,3 +301,107 @@ qty Name (SET) collector_number [*finish*]
 - [x] Full suite green: `make test` (45 tests)
 - [x] Update `ARCHITECTURE.md` (DAOs, import formats, navigation, §8.2, §8.4, components)
 - [x] Update this file
+
+---
+
+# Plan: UX Polish — Onboarding Tags, FAB Speed Dial, Import Progress
+
+## Overview
+
+Three small UX improvements. No DB, API, or navigation-structure changes.
+
+1. Onboarding explains what Tags are.
+2. Home FAB unfolds into two actions: **Card** (Add Card screen) and **Tag**
+   (the existing "New Tag" dialog) — one tap less to create a tag.
+3. Tag import and Settings 3rd-party import show a progress indicator instead
+   of silently closing the dialog (currently the app looks idle for seconds).
+
+## Feature 1 — Onboarding: Tags explanation
+
+File: `ui/OnboardingScreen.kt` (page list at line 42, pager uses `pages.size`).
+
+- [ ] Add a 4th `OnboardingPage` after "Track your stats":
+  - icon: `FontAwesomeIcons.Solid.Tag`
+  - title: `Organize with tags`
+  - description: `Tags are the physical location where cards are stored — a
+    binder, a box, a deck, or any custom group you create.`
+- [ ] Nothing else — page count, dots, and "Skip/Next" adapt from `pages.size`
+
+## Feature 2 — Home FAB unfolds (Card / Tag)
+
+Files: `ui/MainScreen.kt`, `ui/MainViewModel.kt`, `ui/components/CreateTagDialog.kt`
+(new), `ui/ManageTagsScreen.kt`. `Screens.kt` needs no signature change.
+
+### Behavior
+
+- [ ] `fabExpanded: Boolean` state in `MainScreen` (`rememberSaveable`)
+- [ ] Main FAB: `Plus` collapsed → `Xmark` expanded, icon rotates via
+      `animateFloatAsState`
+- [ ] When expanded, two options appear above the FAB with
+      `AnimatedVisibility` (slide-up + fade), each a `Row(label, SmallFloatingActionButton)`:
+  - **Card** (icon `PenToSquare`) → `onAddCard()` (existing → `Screen.AddCard`)
+  - **Tag** (icon `Tag`) → open create-Tag dialog, collapse FAB
+- [ ] Collapse when: main FAB tapped again or an option chosen
+
+### Dialog reuse
+
+- [ ] Extract the "New Tag" `AlertDialog` from `ManageTagsScreen.kt` (lines
+      148–185) into `ui/components/CreateTagDialog.kt`:
+      `CreateTagDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit)` —
+      dialog owns its name state, label field, and "Random" button
+- [ ] `ManageTagsScreen` calls it with `onCreate = { vm.createTag(it) }`
+- [ ] `MainViewModel`: add `fun createTag(name: String)` delegating to
+      `repository.createTag(name)` — MainViewModel already holds the
+      repository, and the Home tag list updates reactively via `tagCounts`
+- [ ] `MainScreen` hosts `CreateTagDialog(onCreate = viewModel::createTag)`;
+      after create the new tag appears on Home with no navigation
+
+## Feature 3 — Import progress indicators
+
+Both flows close their dialog immediately and run the import asynchronously
+with zero feedback: Settings (`SettingsScreen.kt` 279–333, `scope.launch(Dispatchers.IO)`
+then `showImportDialog = false` right away) and Tag import (`CardListScreen.kt`
+105–141, `scope.launch` **without a dispatcher** — file read + enrichment on
+the main thread). Shared pattern:
+
+`importing: Boolean` state → keep dialog open → confirm button swaps to
+`CircularProgressIndicator(20.dp)` and disables → close dialog only when the
+result dialog or the error toast fires.
+
+### A. Tag import (`CardListScreen.kt`)
+
+- [ ] Add `isImporting` state; set on Import tap, dialog stays open
+- [ ] Move file read + `vm.importIntoTag` into `Dispatchers.IO`
+- [ ] Confirm button shows spinner and `enabled = !isImporting`
+- [ ] `onDismissRequest` becomes a no-op while importing (no orphan runs)
+- [ ] Success → close + existing `ImportResultDialog`; failure → close + the
+      existing Toast; both paths reset `isImporting`
+
+### B. Settings 3rd-party import (`SettingsScreen.kt` + private `ImportDialog` ~448)
+
+- [ ] Add `isImporting` state, pass `importing: Boolean` into `ImportDialog`
+- [ ] Delete the immediate `showImportDialog = false` (line 322); close on completion
+- [ ] Import button: spinner while importing, otherwise label
+- [ ] Success (JSON + txt paths) → close + `ImportResultDialog`; failure →
+      close + existing `backupStatus` message; both reset `isImporting`
+
+### Notes
+
+- 2 call sites only → duplicate the small logic locally, no shared component
+  yet (rule of three applies if a third importer appears)
+- Indeterminate spinner: no progress % exists (row-by-row enrichment)
+
+## Verification
+
+- [ ] `make test` — full suite stays green
+- [ ] `make build` — installable APK
+- [ ] Manual: onboarding shows the 4th Tags page; FAB Card → ManualAdd, Tag →
+      dialog → tag visible on Home; both imports show a spinner, then the
+      result dialog (or error), never a dead-looking app
+
+## Commits
+
+1. `feat: explain tags in onboarding`
+2. `feat: unfold home fab into card and tag actions`
+3. `feat: show progress during tag and settings imports`
+4. `docs: update architecture for onboarding, fab speed dial, import progress`
