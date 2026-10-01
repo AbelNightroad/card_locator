@@ -82,7 +82,7 @@ wrapper: 9.7.1. Builds on any JDK ≥ 17, verified on system JDK 26.
 
 ### App Version
 
-`versionCode = 4`, `versionName = "1.2.0"` with `buildFeatures.buildConfig = true`;
+`versionCode = 5`, `versionName = "1.3.0"` with `buildFeatures.buildConfig = true`;
 `BuildConfig.VERSION_NAME` is shown in Settings → About. Versioning policy: PATCH
 for fixes, MINOR for features, MAJOR for breaking changes (see §15).
 
