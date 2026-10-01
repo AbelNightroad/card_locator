@@ -666,3 +666,47 @@ File: `ui/DeckViewScreen.kt` (`DecklistTab`).
 3. `feat: rename deck from long press menu`
 4. `feat: restyle deck statistics charts`
 5. `docs: update architecture for rename and charts`
+
+---
+
+# Plan: URL Source Auto-Detection
+
+## Overview
+
+Make decklist URL import pick the parser automatically from the URL host —
+the user pastes a link and taps Fetch, no source chip needed. Chips stay for
+pasted text/files (parser format still matters: Goldfish CSV, TappedOut `.dck`,
+universal).
+
+## Tasks
+
+- [x] `ImportSource` gains `urlHost` + `companion detect(url)` — host-suffix
+      match, tolerant of scheme-less input, `www.`, subdomains, `#fragment`/
+      query, surrounding whitespace, any case (plain strings, JVM-testable —
+      no `android.net.Uri`)
+- [x] `parseUrl(url)` drops the `source` param: detect → dispatch; unknown
+      host → "Unsupported deck URL — paste the decklist text instead"
+- [x] TappedOut URLs: detected but not fetched — probed live, Cloudflare 403
+      ("Just a moment") for page and `?fmt=txt` → explicit error "TappedOut
+      URLs are blocked (Cloudflare) — copy the deck list and paste it instead"
+- [x] Screen: URL path ignores the selected chip; input field shows
+      "Detected: <site>" above the button while a recognized URL is typed;
+      scheme-less URLs now count as URLs for the button label
+- [x] Tests: `ImportSourceDetectTest` — the 4 URLs supplied for this batch
+      (archidekt, edhrec average-decks, tappedout, mtggoldfish `#paper`) +
+      the F4 links + scheme-less/uppercase/unknown/plain-text cases
+
+## Verification
+
+- [x] `make test` green (78 tests)
+- [x] `make build` → installable APK
+- [ ] Manual: paste the 4 test URLs → correct "Detected" label + successful
+      import (tappedout → paste guidance); unknown site → explicit error;
+      chips still drive text/file parsing
+
+## Commits
+
+1. `feat: auto detect decklist source from url`
+2. `docs: update architecture for url auto detection`
+3. `docs: record url auto detection batch in plan`
+4. `build: bump version to 1.3.0 (versionCode 5)`
