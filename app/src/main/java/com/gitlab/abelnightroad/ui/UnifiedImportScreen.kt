@@ -156,7 +156,7 @@ internal fun UnifiedImportScreen(
                 ImportSource.MOXFIELD -> UrlImportSection(
                     inputText = inputText,
                     onInputChange = { inputText = it },
-                    onFetchUrl = { vm.parseUrl(inputText, selectedSource) },
+                    onFetchUrl = { vm.parseUrl(inputText) },
                     onParseText = { vm.parseText(inputText, selectedSource) },
                     onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) },
                     urlPlaceholder = "https://moxfield.com/decks/...",
@@ -165,7 +165,7 @@ internal fun UnifiedImportScreen(
                 ImportSource.EDHREC -> UrlImportSection(
                     inputText = inputText,
                     onInputChange = { inputText = it },
-                    onFetchUrl = { vm.parseUrl(inputText, selectedSource) },
+                    onFetchUrl = { vm.parseUrl(inputText) },
                     onParseText = { vm.parseText(inputText, selectedSource) },
                     onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) },
                     urlPlaceholder = "https://edhrec.com/average-decks/...",
@@ -174,7 +174,7 @@ internal fun UnifiedImportScreen(
                 ImportSource.ARCHIDEKT -> UrlImportSection(
                     inputText = inputText,
                     onInputChange = { inputText = it },
-                    onFetchUrl = { vm.parseUrl(inputText, selectedSource) },
+                    onFetchUrl = { vm.parseUrl(inputText) },
                     onParseText = { vm.parseText(inputText, selectedSource) },
                     onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) },
                     urlPlaceholder = "https://archidekt.com/decks/...",
@@ -183,7 +183,7 @@ internal fun UnifiedImportScreen(
                 ImportSource.MTG_GOLDFISH -> UrlImportSection(
                     inputText = inputText,
                     onInputChange = { inputText = it },
-                    onFetchUrl = { vm.parseUrl(inputText, selectedSource) },
+                    onFetchUrl = { vm.parseUrl(inputText) },
                     onParseText = { vm.parseText(inputText, selectedSource) },
                     onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) },
                     urlPlaceholder = "https://www.mtggoldfish.com/deck/...",
@@ -243,7 +243,20 @@ private fun UrlImportSection(
         )
         Spacer(Modifier.height(8.dp))
 
-        val isUrl = inputText.isNotBlank() && Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(inputText)
+        val firstLine = inputText.trim().lineSequence().first()
+        val detectedSource = ImportSource.detect(firstLine)
+        val isUrl = firstLine.isNotBlank() && (
+            Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(firstLine) ||
+                detectedSource != null
+        )
+        detectedSource?.let { source ->
+            Text(
+                "Detected: ${source.label}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(4.dp))
+        }
         Button(
             onClick = { if (isUrl) onFetchUrl() else onParseText() },
             modifier = Modifier.fillMaxWidth(),

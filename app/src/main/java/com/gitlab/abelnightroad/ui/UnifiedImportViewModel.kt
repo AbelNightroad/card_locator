@@ -19,12 +19,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-enum class ImportSource(val label: String) {
-    MOXFIELD("Moxfield"),
-    EDHREC("EDHREC"),
-    ARCHIDEKT("Archidekt"),
-    MTG_GOLDFISH("MTG Goldfish"),
-    TAPPED_OUT("TappedOut")
+enum class ImportSource(val label: String, val urlHost: String) {
+    MOXFIELD("Moxfield", "moxfield.com"),
+    EDHREC("EDHREC", "edhrec.com"),
+    ARCHIDEKT("Archidekt", "archidekt.com"),
+    MTG_GOLDFISH("MTG Goldfish", "mtggoldfish.com"),
+    TAPPED_OUT("TappedOut", "tappedout.net");
+
+    companion object {
+        fun detect(url: String): ImportSource? {
+            val host = url.trim().lowercase()
+                .substringAfter("://")
+                .substringBefore("/")
+                .substringBefore("?")
+                .substringBefore("#")
+                .removePrefix("www.")
+            return entries.firstOrNull { host == it.urlHost || host.endsWith(".${it.urlHost}") }
+        }
+    }
 }
 
 sealed interface ImportState {
@@ -54,9 +66,20 @@ class UnifiedImportViewModel(
     fun setDeckName(name: String) { _deckName.value = name }
     fun setFormat(format: String) { _format.value = format }
 
-    fun parseUrl(url: String, source: ImportSource) {
+    fun parseUrl(url: String) {
         if (url.isBlank()) {
             _state.value = ImportState.Error("No URL provided")
+            return
+        }
+        val source = ImportSource.detect(url)
+            ?: run {
+                _state.value = ImportState.Error("Unsupported deck URL — paste the decklist text instead")
+                return
+            }
+        if (source == ImportSource.TAPPED_OUT) {
+            _state.value = ImportState.Error(
+                "TappedOut URLs are blocked (Cloudflare) — copy the deck list and paste it instead"
+            )
             return
         }
         _state.value = ImportState.Parsing
@@ -101,9 +124,7 @@ class UnifiedImportViewModel(
                         if (cards.isEmpty()) throw Exception("No cards found in MTG Goldfish deck")
                         _state.value = ImportState.Preview(cards, ImportSource.MTG_GOLDFISH)
                     }
-                    else -> {
-                        _state.value = ImportState.Error("URL import not supported for ${source.label}")
-                    }
+                    ImportSource.TAPPED_OUT -> {}
                 }
             } catch (e: Exception) {
                 _state.value = ImportState.Error("Failed to fetch deck: ${e.message}")
