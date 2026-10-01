@@ -80,6 +80,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
     implementation("androidx.navigation:navigation-compose:2.9.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.github.joaocsousa:font-awesome:2.0.0")
