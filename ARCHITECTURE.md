@@ -656,8 +656,9 @@ item selected (`indexOfFirst` → -1).
 
 ### 8.9 UnifiedImportScreen
 
-- **Sources:** FilterChips for Moxfield, EDHREC, Archidekt, MTG Goldfish, TappedOut.
-- **URL-aware sources** (Moxfield, EDHREC incl. deck previews, Archidekt, MTG Goldfish): Detect URLs via regex, fetch via API/scrape clients; invalid URLs report the expected format, HTTP failures report status + "may be private/deleted".
+- **Sources:** FilterChips for Moxfield, EDHREC, Archidekt, MTG Goldfish, TappedOut — chips select the parser only for **pasted text/files**; URLs ignore them.
+- **URL auto-detection** (`ImportSource.detect(url)` in `UnifiedImportViewModel.kt`): host-suffix match (tolerant of scheme-less input, `www.`, subdomains, `#fragment`/query) → picks the parser; the field shows a "Detected: <site>" label while a recognized URL is typed; unknown hosts error "Unsupported deck URL — paste the decklist text instead"; TappedOut URLs are detected but never fetched (probed Cloudflare 403) → explicit copy-paste guidance.
+- **URL-aware sources** (Moxfield, EDHREC incl. deck previews, Archidekt, MTG Goldfish): fetch via API/scrape clients; invalid URLs report the expected format, HTTP failures report status + "may be private/deleted".
 - **Paste/File sources** (TappedOut; also any URL-aware source): Text paste or file import (CSV/TXT).
 - **Flow:** Parse → Preview dialog (card list with quantity/slot) → Import → Navigate to DeckView.
 - **Format dropdown:** Defaults to Commander. Used for deck creation.
