@@ -604,3 +604,65 @@ the same").
 4. `fix: site url deck imports (moxfield, edhrec, mtggoldfish)`
 5. `fix: multi-copy filter groups cards by name`
 6. `docs: update architecture for testing fixes`
+
+---
+
+# Plan: Polish — Decklist Order, Deck Rename, Stats Charts, Lifecycle Owner
+
+## Overview
+
+Four small requests after the 1.2.0 batch: decklist group ordering like MTG
+sites, a Rename option on the deck long-press menu, statistics chart
+restyling, and following the `LocalLifecycleOwner` deprecation advice.
+
+## 1 — Decklist type group order
+
+File: `ui/DeckViewScreen.kt` (`DecklistTab`).
+
+- [x] Sort mainboard type groups by fixed `MAINBOARD_TYPE_ORDER`:
+      Creature → Instant → Sorcery → Artifact → Enchantment → Planeswalker →
+      Battle → Land → Other (unknown types last, stable order)
+- [x] Slots already ordered Commander → Companion → mainboard → Sideboard
+      (sideboard flat, always last) — no change needed
+
+## 2 — LocalLifecycleOwner deprecation
+
+- [x] `CameraPreview.kt`: import `androidx.lifecycle.compose.LocalLifecycleOwner`
+      (verified bytecode: the deprecated ui.platform getter delegates to the
+      same CompositionLocal — zero runtime change)
+- [x] `build.gradle.kts`: explicit `androidx.lifecycle:lifecycle-runtime-compose:2.9.0`
+      (was already on the classpath transitively)
+
+## 3 — Deck rename
+
+- [x] `DeckDao.renameDeck(deckId, name)` (`UPDATE decks SET name = …`)
+- [x] `DeckRepository.renameDeck` + `DecksViewModel.renameDeck`
+- [x] `DecksScreen`: "Rename" menu item between Clone and Delete
+      (`PenToSquare` icon) → `AlertDialog` with prefilled `OutlinedTextField`,
+      Rename disabled while blank, trims input
+
+## 4 — Statistics charts
+
+- [x] Mana Value: buckets `0…8` + single `9+` overflow — `CmcStat(cmc, count)`
+      → `CmcStat(label, count)`; `computeDeckStats` buckets `coerceIn(0, 9)`;
+      `DeckStatsTest` assertions updated
+- [x] Card Types: `HorizontalBarChart` (deleted — no other callers) →
+      `PieChartWithLegend` solid-slice pie + legend rows (color swatch,
+      `type: count`, %) using the shared `chartColors` palette
+- [x] Color Distribution: `DonutChart` 200dp → 160dp, center total removed
+
+## Verification
+
+- [x] `make test` — full suite green (updated `DeckStatsTest`)
+- [x] `make build` → `CardTracker-20bc350.apk`
+- [ ] Manual: decklist groups in site order; rename dialog renames and the
+      grid updates; stats tabs show 9+ bucket, pie + legend, smaller donut
+      without center total; camera preview still binds (import change)
+
+## Commits
+
+1. `feat: order decklist type groups by mtg convention`
+2. `refactor: follow lifecycle local lifecycle owner migration`
+3. `feat: rename deck from long press menu`
+4. `feat: restyle deck statistics charts`
+5. `docs: update architecture for rename and charts`
