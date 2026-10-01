@@ -640,7 +640,7 @@ item selected (`indexOfFirst` → -1).
 
 ### 8.7 DeckViewScreen
 
-- **Cards grouped by slot:** commander → companion → mainboard (grouped by `primaryType()`) → sideboard (flat list).
+- **Cards grouped by slot:** commander → companion → mainboard (grouped by `primaryType()` in fixed order: Creature → Instant → Sorcery → Artifact → Enchantment → Planeswalker → Battle → Land → Other, unknown types last) → sideboard (flat list, always last).
 - **Card row:** Mana cost, name, quantity controls (`QuantityStepper`), rarity/set info.
 - **Cover button:** Sets card as deck cover (hidden for sideboard cards).
 - **Top bar:** Export (`exportDeckToTxt` + `shareDeckFile` share intent; `FileProvider` authority `${applicationId}.fileprovider` with `res/xml/file_paths.xml` → `<cache-path name="decks">`; failures surface as a Toast instead of a crash), Add card button.

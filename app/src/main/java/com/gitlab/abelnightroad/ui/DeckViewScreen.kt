@@ -352,6 +352,11 @@ private fun AddCardToDeckDialog(
     )
 }
 
+private val MAINBOARD_TYPE_ORDER = listOf(
+    "Creature", "Instant", "Sorcery", "Artifact", "Enchantment",
+    "Planeswalker", "Battle", "Land", "Other"
+)
+
 @Composable
 private fun DecklistTab(
     cards: List<com.gitlab.abelnightroad.db.DeckCardEntity>,
@@ -368,6 +373,11 @@ private fun DecklistTab(
     }
     val typeGroupsBySlot = cards.groupBy { it.slot }.mapValues { (_, slotCards) ->
         slotCards.groupBy { com.gitlab.abelnightroad.data.primaryType(it.typeLine) }
+            .toList()
+            .sortedBy { (type, _) ->
+                MAINBOARD_TYPE_ORDER.indexOf(type).takeIf { it >= 0 } ?: MAINBOARD_TYPE_ORDER.size
+            }
+            .toMap()
     }
     val slotOrder = listOf("commander", "companion", "mainboard", "sideboard")
     LazyColumn(Modifier.padding(horizontal = 8.dp)) {
