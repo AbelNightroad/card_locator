@@ -53,6 +53,12 @@ class DecksViewModel(private val repository: DeckRepository) : ViewModel() {
         }
     }
 
+    fun renameDeck(deckId: Long, name: String) {
+        viewModelScope.launch {
+            repository.renameDeck(deckId, name)
+        }
+    }
+
     fun cloneDeck(deckId: Long, onCloned: (Long) -> Unit) {
         viewModelScope.launch {
             val newId = repository.cloneDeck(deckId)

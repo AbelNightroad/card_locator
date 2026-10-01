@@ -31,6 +31,8 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
 
     suspend fun deleteDeck(deck: DeckEntity) = dao.deleteDeck(deck)
 
+    suspend fun renameDeck(deckId: Long, name: String) = dao.renameDeck(deckId, name)
+
     suspend fun addCardToDeck(deckId: Long, scryfallId: String, cardName: String, setCode: String, setName: String, collectorNumber: String, rarity: String, quantity: Int = 1, manaCost: String = "", typeLine: String = "", slot: String = "mainboard", condition: String = "NM", priceUsd: Double = 0.0): Long {
         val ci = withContext(Dispatchers.IO) {
             scryfallDao.byId(scryfallId)?.colorIdentity ?: ""

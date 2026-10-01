@@ -52,6 +52,9 @@ interface DeckDao {
     @Query("UPDATE decks SET cover_scryfall_id = :scryfallId WHERE id = :deckId")
     suspend fun updateDeckCover(deckId: Long, scryfallId: String?)
 
+    @Query("UPDATE decks SET name = :name WHERE id = :deckId")
+    suspend fun renameDeck(deckId: Long, name: String)
+
     @Query("SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = :deckId")
     suspend fun cardCount(deckId: Long): Int
 

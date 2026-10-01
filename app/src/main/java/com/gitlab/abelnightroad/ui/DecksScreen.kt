@@ -73,6 +73,7 @@ internal fun DecksScreen(
     var selectedFormat by remember { mutableStateOf(initialFormat) }
     var deleteTargetDeck by remember { mutableStateOf<DeckEntity?>(null) }
     var cloneTargetDeck by remember { mutableStateOf<DeckEntity?>(null) }
+    var renameTargetDeck by remember { mutableStateOf<DeckEntity?>(null) }
     var deleteTargetFormat by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(initialFormat) {
         if (initialFormat != null) decksVm.selectFormat(initialFormat)
@@ -112,7 +113,8 @@ internal fun DecksScreen(
                             deckRepository = deckRepository,
                             onClick = { onDeckClick(deck.id, selectedFormat ?: deck.format) },
                             onDelete = { deleteTargetDeck = deck },
-                            onClone = { cloneTargetDeck = deck }
+                            onClone = { cloneTargetDeck = deck },
+                            onRename = { renameTargetDeck = deck }
                         )
                     }
                 }
@@ -239,6 +241,35 @@ internal fun DecksScreen(
         )
     }
 
+    renameTargetDeck?.let { deck ->
+        var newName by remember(deck.id) { mutableStateOf(deck.name) }
+        AlertDialog(
+            onDismissRequest = { renameTargetDeck = null },
+            title = { Text("Rename deck") },
+            text = {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("Deck name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        decksVm.renameDeck(deck.id, newName.trim())
+                        renameTargetDeck = null
+                    },
+                    enabled = newName.isNotBlank()
+                ) { Text("Rename") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameTargetDeck = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     deleteTargetFormat?.let { format ->
         AlertDialog(
             onDismissRequest = { deleteTargetFormat = null },
@@ -263,7 +294,8 @@ private fun DeckGridCard(
     deckRepository: DeckRepository,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    onClone: () -> Unit
+    onClone: () -> Unit,
+    onRename: () -> Unit
 ) {
     val cardCount by deckRepository.cardCountFlow(deck.id).collectAsState(initial = 0)
     var showMenu by remember { mutableStateOf(false) }
@@ -311,6 +343,11 @@ private fun DeckGridCard(
                 text = { Text("Clone") },
                 onClick = { showMenu = false; onClone() },
                 leadingIcon = { Icon(FontAwesomeIcons.Solid.Copy, null, Modifier.size(24.dp)) }
+            )
+            DropdownMenuItem(
+                text = { Text("Rename") },
+                onClick = { showMenu = false; onRename() },
+                leadingIcon = { Icon(FontAwesomeIcons.Solid.PenToSquare, null, Modifier.size(24.dp)) }
             )
             DropdownMenuItem(
                 text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
