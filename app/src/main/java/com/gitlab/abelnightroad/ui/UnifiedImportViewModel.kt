@@ -9,6 +9,7 @@ import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.EdhrecApiClient
 import com.gitlab.abelnightroad.data.MtgGoldfishCsvParser
 import com.gitlab.abelnightroad.data.MoxfieldApiClient
+import com.gitlab.abelnightroad.data.MtgGoldfishApiClient
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.data.TappedOutCsvParser
 import com.gitlab.abelnightroad.data.TappedOutDckParser
@@ -64,7 +65,9 @@ class UnifiedImportViewModel(
                 when (source) {
                     ImportSource.MOXFIELD -> {
                         val deckId = MoxfieldApiClient.extractDeckId(url)
-                            ?: throw Exception("Invalid Moxfield URL")
+                            ?: throw Exception(
+                                "Invalid Moxfield URL — expected: https://www.moxfield.com/decks/<id>"
+                            )
                         val deck = MoxfieldApiClient.fetchDeck(deckId)
                         val cards = MoxfieldApiClient.toMetaDeckCards(deck)
                         if (cards.isEmpty()) throw Exception("No cards found in Moxfield deck")
@@ -72,21 +75,31 @@ class UnifiedImportViewModel(
                         _state.value = ImportState.Preview(cards, ImportSource.MOXFIELD)
                     }
                     ImportSource.EDHREC -> {
-                        val slug = EdhrecApiClient.extractSlug(url)
-                            ?: throw Exception("Invalid EDHREC URL")
-                        val deck = EdhrecApiClient.fetchAverageDeck(slug)
+                        val deck = EdhrecApiClient.fetchFromUrl(url)
                         val cards = EdhrecApiClient.toMetaDeckCards(deck)
                         if (cards.isEmpty()) throw Exception("No cards found in EDHREC deck")
                         _state.value = ImportState.Preview(cards, ImportSource.EDHREC)
                     }
                     ImportSource.ARCHIDEKT -> {
                         val deckId = ArchidektApiClient.extractDeckId(url)
-                            ?: throw Exception("Invalid Archidekt URL")
+                            ?: throw Exception(
+                                "Invalid Archidekt URL — expected: https://archidekt.com/decks/<id>"
+                            )
                         val deck = ArchidektApiClient.fetchDeck(deckId)
                         val cards = ArchidektApiClient.toMetaDeckCards(deck)
                         if (cards.isEmpty()) throw Exception("No cards found in Archidekt deck")
                         _deckName.value = _deckName.value.ifBlank { deck.name }
                         _state.value = ImportState.Preview(cards, ImportSource.ARCHIDEKT)
+                    }
+                    ImportSource.MTG_GOLDFISH -> {
+                        val deckId = MtgGoldfishApiClient.extractDeckId(url)
+                            ?: throw Exception(
+                                "Invalid MTG Goldfish URL — expected: https://www.mtggoldfish.com/deck/<id>"
+                            )
+                        val text = MtgGoldfishApiClient.fetchDecklist(deckId)
+                        val cards = UniversalDecklistParser.parse(text)
+                        if (cards.isEmpty()) throw Exception("No cards found in MTG Goldfish deck")
+                        _state.value = ImportState.Preview(cards, ImportSource.MTG_GOLDFISH)
                     }
                     else -> {
                         _state.value = ImportState.Error("URL import not supported for ${source.label}")

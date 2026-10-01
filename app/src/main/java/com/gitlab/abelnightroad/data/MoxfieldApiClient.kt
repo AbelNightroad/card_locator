@@ -8,18 +8,23 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 @Serializable
-data class MoxfieldDeckResponse(
-    val data: MoxfieldDeckData? = null
-)
-
-@Serializable
 data class MoxfieldDeckData(
     val name: String = "",
     val format: String = "",
-    val mainboard: Map<String, MoxfieldEntry> = emptyMap(),
-    val sideboard: Map<String, MoxfieldEntry> = emptyMap(),
-    val commanders: Map<String, MoxfieldEntry> = emptyMap(),
-    val companions: Map<String, MoxfieldEntry> = emptyMap()
+    val boards: MoxfieldBoards = MoxfieldBoards()
+)
+
+@Serializable
+data class MoxfieldBoards(
+    val mainboard: MoxfieldBoard = MoxfieldBoard(),
+    val sideboard: MoxfieldBoard = MoxfieldBoard(),
+    val commanders: MoxfieldBoard = MoxfieldBoard(),
+    val companions: MoxfieldBoard = MoxfieldBoard()
+)
+
+@Serializable
+data class MoxfieldBoard(
+    val cards: Map<String, MoxfieldEntry> = emptyMap()
 )
 
 @Serializable
@@ -42,7 +47,7 @@ object MoxfieldApiClient {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun extractDeckId(url: String): String? {
-        val pattern = Regex("""moxfield\.com/decks/([a-zA-Z0-9]+)""", RegexOption.IGNORE_CASE)
+        val pattern = Regex("""moxfield\.com/decks/([a-zA-Z0-9_-]+)""", RegexOption.IGNORE_CASE)
         return pattern.find(url)?.groupValues?.get(1)
     }
 
@@ -60,11 +65,10 @@ object MoxfieldApiClient {
         try {
             val responseCode = conn.responseCode
             if (responseCode != 200) {
-                throw Exception("Moxfield API error: HTTP $responseCode")
+                throw Exception("Moxfield returned HTTP $responseCode — deck may be private/deleted")
             }
             val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val response = json.decodeFromString<MoxfieldDeckResponse>(body)
-            response.data ?: throw Exception("Empty response from Moxfield")
+            json.decodeFromString<MoxfieldDeckData>(body)
         } finally {
             conn.disconnect()
         }
@@ -73,25 +77,17 @@ object MoxfieldApiClient {
     fun toMetaDeckCards(deck: MoxfieldDeckData): List<MetaDeckCard> {
         val cards = mutableListOf<MetaDeckCard>()
 
-        for ((_, entry) in deck.commanders) {
-            val name = entry.card?.name ?: continue
-            cards.add(MetaDeckCard(entry.quantity, name, "commander"))
+        fun addBoard(board: MoxfieldBoard, slot: String) {
+            for ((_, entry) in board.cards) {
+                val name = entry.card?.name ?: continue
+                cards.add(MetaDeckCard(entry.quantity, name, slot))
+            }
         }
 
-        for ((_, entry) in deck.companions) {
-            val name = entry.card?.name ?: continue
-            cards.add(MetaDeckCard(entry.quantity, name, "companion"))
-        }
-
-        for ((_, entry) in deck.mainboard) {
-            val name = entry.card?.name ?: continue
-            cards.add(MetaDeckCard(entry.quantity, name, "mainboard"))
-        }
-
-        for ((_, entry) in deck.sideboard) {
-            val name = entry.card?.name ?: continue
-            cards.add(MetaDeckCard(entry.quantity, name, "sideboard"))
-        }
+        addBoard(deck.boards.commanders, "commander")
+        addBoard(deck.boards.companions, "companion")
+        addBoard(deck.boards.mainboard, "mainboard")
+        addBoard(deck.boards.sideboard, "sideboard")
 
         return cards
     }

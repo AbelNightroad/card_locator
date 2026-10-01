@@ -180,6 +180,15 @@ internal fun UnifiedImportScreen(
                     urlPlaceholder = "https://archidekt.com/decks/...",
                     textLabel = "Archidekt URL or decklist text"
                 )
+                ImportSource.MTG_GOLDFISH -> UrlImportSection(
+                    inputText = inputText,
+                    onInputChange = { inputText = it },
+                    onFetchUrl = { vm.parseUrl(inputText, selectedSource) },
+                    onParseText = { vm.parseText(inputText, selectedSource) },
+                    onImportFile = { fileLauncher.launch(arrayOf("text/csv", "text/plain", "*/*")) },
+                    urlPlaceholder = "https://www.mtggoldfish.com/deck/...",
+                    textLabel = "MTG Goldfish URL or decklist text"
+                )
                 else -> TextFileImportSection(
                     source = selectedSource,
                     inputText = inputText,
