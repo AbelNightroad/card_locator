@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,7 +55,6 @@ import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.db.DeckEntity
 import com.gitlab.abelnightroad.ui.components.ScryfallAsyncImage
 import com.gitlab.abelnightroad.data.ScryfallImage
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -150,23 +151,9 @@ internal fun DecksScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(formatCounts, key = { it.format }) { fc ->
+                    itemsIndexed(formatCounts, key = { _, it -> it.format }) { index, fc ->
                         var showFormatMenu by remember { mutableStateOf(false) }
-                        val pc = MaterialTheme.colorScheme.primaryContainer
-                        val sc = MaterialTheme.colorScheme.secondaryContainer
-                        val tc = MaterialTheme.colorScheme.tertiaryContainer
-                        val sv = MaterialTheme.colorScheme.surfaceVariant
-                        val bg = MaterialTheme.colorScheme.background
-                        val su = MaterialTheme.colorScheme.surface
-                        val cl = MaterialTheme.colorScheme.surfaceContainerLow
-                        val ch = MaterialTheme.colorScheme.surfaceContainerHigh
-                        val br = MaterialTheme.colorScheme.surfaceBright
-                        val formatColors = remember {
-                            listOf(pc, sc, tc, sv, bg, su, cl, ch, br)
-                        }
-                        val cardColor = remember(fc.format) {
-                            formatColors[abs(fc.format.hashCode()) % formatColors.size]
-                        }
+                        val formatColor = formatPalette[index % formatPalette.size]
                         Card(
                             Modifier.fillMaxWidth().combinedClickable(
                                 onClick = {
@@ -175,7 +162,7 @@ internal fun DecksScreen(
                                 },
                                 onLongClick = { showFormatMenu = true }
                             ),
-                            colors = CardDefaults.cardColors(containerColor = cardColor),
+                            colors = CardDefaults.cardColors(containerColor = formatColor.bg),
                             elevation = CardDefaults.cardElevation(2.dp)
                         ) {
                             Column(
@@ -183,11 +170,12 @@ internal fun DecksScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(fc.format, style = MaterialTheme.typography.titleMedium,
+                                    color = formatColor.fg,
                                     textAlign = TextAlign.Center)
                                 Spacer(Modifier.height(4.dp))
                                 Text("${fc.deckCount} decks",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    color = formatColor.fg.copy(alpha = 0.7f))
                             }
                             DropdownMenu(expanded = showFormatMenu, onDismissRequest = { showFormatMenu = false }) {
                                 DropdownMenuItem(
@@ -387,3 +375,20 @@ private fun CreateDeckDialog(
         }
     )
 }
+
+private data class FormatColor(val bg: Color, val fg: Color)
+
+private val formatPalette = listOf(
+    FormatColor(Color(0xFFD7B7A3), Color(0xFF3A2E26)),
+    FormatColor(Color(0xFFB7C9A8), Color(0xFF2C3A26)),
+    FormatColor(Color(0xFFA8C3C9), Color(0xFF26343A)),
+    FormatColor(Color(0xFFC3B7D7), Color(0xFF322A3A)),
+    FormatColor(Color(0xFFE3C9A3), Color(0xFF3A3026)),
+    FormatColor(Color(0xFFD7A8B7), Color(0xFF3A2630)),
+    FormatColor(Color(0xFFA3B7D7), Color(0xFF262E3A)),
+    FormatColor(Color(0xFFC9CBA3), Color(0xFF343626)),
+    FormatColor(Color(0xFFA3D7C3), Color(0xFF263A33)),
+    FormatColor(Color(0xFFD7C3A3), Color(0xFF3A3326)),
+    FormatColor(Color(0xFFB7A3D7), Color(0xFF2E263A)),
+    FormatColor(Color(0xFFC9A3A3), Color(0xFF3A2E2E))
+)
