@@ -57,6 +57,7 @@ wrapper: 9.7.1. Builds on any JDK ≥ 17, verified on system JDK 26.
 | `androidx.activity:activity-compose` | 1.10.1 |
 | `androidx.lifecycle:lifecycle-viewmodel-compose` | 2.9.0 |
 | `androidx.lifecycle:lifecycle-runtime-ktx` | 2.9.0 |
+| `androidx.lifecycle:lifecycle-runtime-compose` | 2.9.0 |
 | `androidx.navigation:navigation-compose` | 2.9.0 |
 | `androidx.datastore:datastore-preferences` | 1.1.4 |
 | `androidx.room:room-runtime` | 2.7.0 |
@@ -634,7 +635,7 @@ item selected (`indexOfFirst` → -1).
 - **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`); each format card uses a static 12-entry `FormatColor(bg, fg)` palette picked by list index (`DecksScreen.kt` bottom) — mid-tone bg + dark fg, never the theme's `background`/`surface`, so cards stay distinct and visible in both themes.
 - **Long-press format:** Delete format (removes all decks with CASCADE).
 - **Tap format:** Shows that format's decks.
-- **Deck card:** Cover image (artCrop 5:3, flush to card edges), then a 8dp-padded text block with name, format, card count. Long-press: clone/delete.
+- **Deck card:** Cover image (artCrop 5:3, flush to card edges), then a 8dp-padded text block with name, format, card count. Long-press: clone/rename/delete (rename = AlertDialog with `OutlinedTextField` prefilled, `DecksViewModel.renameDeck` → `DeckDao.renameDeck`).
 - **FAB:** Create deck dialog (name + format dropdown).
 - **Top bar:** Import button (download icon) → `Screen.UnifiedImport`.
 
@@ -649,9 +650,9 @@ item selected (`indexOfFirst` → -1).
 
 ### 8.8 DeckStatisticsScreen
 
-- **Stats:** Total value, mana value distribution (bar chart), type distribution (donut chart), color distribution, rarity distribution.
-- **Computation:** Pure top-level `computeDeckStats(cards)` in `ui/DeckStatistics.kt` (unit-tested; guards divide-by-zero, non-finite totals, cmc > 10 bucketing).
-- **Charts:** Custom Canvas composables (`BarChart`, `DonutChart`, `HorizontalBarChart`) in `ui/components/DeckStatsCharts.kt`; paint colors via `Color.toArgb()` (never `hashCode()`), all dimensions coerced ≥ 0.
+- **Stats:** Total value, mana value distribution (bar chart, buckets 0–8 + `9+` for everything higher), type distribution (colored pie chart + legend with color swatches), color distribution (slim donut, no center total), rarity distribution.
+- **Computation:** Pure top-level `computeDeckStats(cards)` in `ui/DeckStatistics.kt` (unit-tested; guards divide-by-zero, non-finite totals, cmc bucketed 0–8 with `9+` overflow).
+- **Charts:** Custom Canvas composables (`BarChart`, `DonutChart`, `PieChartWithLegend`) in `ui/components/DeckStatsCharts.kt`; paint colors via `Color.toArgb()` (never `hashCode()`), all dimensions coerced ≥ 0.
 
 ### 8.9 UnifiedImportScreen
 
@@ -691,7 +692,7 @@ item selected (`indexOfFirst` → -1).
 | `CreateTagDialog` | `CreateTagDialog.kt` | Shared "New Tag" dialog (name field + Random button) used by ManageTagsScreen and the Home FAB speed dial |
 | `LoadingBox`, `ErrorBox`, `EmptyBox` | `LoadingBox.kt` | Loading/error/empty states |
 | `CameraPreview` | `CameraPreview.kt` | CameraX `PreviewView` composable |
-| `BarChart`, `DonutChart`, `HorizontalBarChart` | `DeckStatsCharts.kt` | Canvas chart composables |
+| `BarChart`, `DonutChart`, `PieChartWithLegend` | `DeckStatsCharts.kt` | Canvas chart composables |
 | `SearchFilterChips` | `SearchFilterChips.kt` | Color/type/rarity filter chips |
 | `FilledBottomNavigationBar` | `BottomNavigationBar.kt` | Icon-only bottom nav with filled selected background |
 | `ImportResultDialog`, `SkippedRowsDialog` | `ImportResultDialogs.kt` | Shared import result (imported/skipped/unresolved) + skipped-row list |
