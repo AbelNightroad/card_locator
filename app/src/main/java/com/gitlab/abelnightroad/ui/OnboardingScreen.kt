@@ -31,6 +31,7 @@ import compose.icons.fontawesomeicons.Solid
 import compose.icons.fontawesomeicons.solid.Book
 import compose.icons.fontawesomeicons.solid.ChartBar
 import compose.icons.fontawesomeicons.solid.House
+import compose.icons.fontawesomeicons.solid.Tag
 import kotlinx.coroutines.launch
 
 private data class OnboardingPage(
@@ -54,6 +55,11 @@ private val pages = listOf(
         icon = FontAwesomeIcons.Solid.ChartBar,
         title = "Track your stats",
         description = "View mana curves, color distribution, and card type breakdowns for every deck."
+    ),
+    OnboardingPage(
+        icon = FontAwesomeIcons.Solid.Tag,
+        title = "Organize with tags",
+        description = "Tags are the physical location where cards are stored — a binder, a box, a deck, or any custom group you create."
     )
 )
 
