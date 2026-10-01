@@ -431,3 +431,137 @@ result dialog or the error toast fires.
 2. `feat: unfold home fab into card and tag actions`
 3. `feat: show progress during tag and settings imports`
 4. `docs: update architecture for onboarding, fab speed dial, import progress`
+
+---
+
+# Plan: Post-Testing Fixes — Camera, Colors, CSV Backup, URL Parsers, Multi-Copy
+
+## Overview
+
+Six findings from live testing (Xiaomi 12, HyperOS, Android 15):
+
+1. Scan capture fails: "Not bound to a valid camera" → **F1**
+2. Deck format cards need distinct, non-theme-clashing colors → **F2**
+3. Collection backup should be CSV-only (JSON import/export removed) → **F3**
+4. Camera capture crashes when haptic feedback is on → **F1**
+5. Site-URL decklist parsers broken (404 / invalid URL) → **F4**
+6. Multi-copy filter must group by card **name**, not name+set → **F5**
+
+## F1 — Scan capture "Not bound to a valid camera" + haptic crash
+
+### Root causes (confirmed)
+
+- **Two racing `bindToLifecycle` calls**, each doing `unbindAll()` on the same
+  `ProcessCameraProvider`:
+  - `CameraPreview.kt:35-51` — binding lives in the AndroidView **`update`
+    lambda**, which re-runs on *every recomposition*, rebinding preview-only
+    and wiping the `ImageCapture` bound by `ScanCameraScreen.kt:126-133`.
+    Result: preview looks fine, `takePicture()` → "Not bound to a valid camera".
+- **Haptic crash**: `AndroidManifest.xml` declares only `INTERNET` + `CAMERA` —
+  **`VIBRATE` is missing**, so `vibrator.vibrate()` throws `SecurityException`
+  exactly when `hapticFeedback` is on (that's why toggling it stops the crash).
+
+### Tasks
+
+- [ ] Add `<uses-permission android:name="android.permission.VIBRATE" />`
+- [ ] Wrap `performHapticFeedback` body in `try/catch` (OEM-defensive)
+- [ ] `CameraPreview`: accept `extraUseCases: List<UseCase> = emptyList()`;
+      single `LaunchedEffect(Unit)` binds preview + extras once (one
+      `unbindAll`); remove all provider work from `update` (factory-only view)
+- [ ] `ScanCameraScreen`: create `imageCapture` eagerly
+      (`remember { ImageCapture.Builder()…build() }`, non-null), pass it as
+      extra use case; delete its own competing bind block and nullable state
+- [ ] Manual: preview stays live, capture works first try, haptic on/off both
+      crash-free
+
+## F2 — Distinct format card colors (`DecksScreen.kt:155-169`)
+
+Current palette is 9 MaterialTheme colors (`background`, `surface`,
+`surfaceContainerLow/High`, `surfaceBright`, …) — nearly identical tones that
+"clash" (invisible differences) and shift with the theme.
+
+- [ ] Replace with a static `FormatColor(bg, fg)` palette: ~8 curated muted
+      tinted colors, each readable in **both** light and dark themes
+      (mid-tone bg + explicit near-black/white fg — no MaterialTheme refs)
+- [ ] Keep deterministic pick: `abs(format.hashCode()) % palette.size`
+- [ ] Card `containerColor = bg`; title `color = fg`; deck-count line uses `fg`
+      at reduced alpha instead of `onSurfaceVariant`
+- [ ] Manual: several formats side-by-side clearly distinct in dark + light
+
+## F3 — Collection backup: CSV only
+
+`BackupStore.kt` (JSON) is used only by SettingsScreen (export, restore,
+3rd-party `.json` branch) — safe to delete; kotlinx-serialization stays
+(Scryfall/API models).
+
+- [ ] New `data/CollectionCsv.kt`:
+  - `encode(cards: List<CardEntity>): String` — header row + every column
+    (`tag`, name, set, collector, quantity, foil, rarity, mana cost, type
+    line, prices, condition, language, …), RFC4180 quoting (names contain
+    commas/quotes), `\r\n`-tolerant `parse`
+  - `parse(text: String): List<CardEntity>` — round-trip inverse
+- [ ] Settings export: `CreateDocument("text/csv")`, filename
+      `card_tracker_collection.csv`, `CollectionCsv.encode`; button label
+      "Export collection as CSV"
+- [ ] Settings restore: `OpenDocument("text/csv")` → `CollectionCsv.parse` →
+      `repository.replaceAll` (same semantics as the JSON restore)
+- [ ] 3rd-party `ImportDialog`: mime `text/csv` + `text/plain` only; delete
+      the `.json` branch (`BackupStore.decodeToTag`) and JSON from the
+      "Choose file" label
+- [ ] Delete `data/BackupStore.kt`
+- [ ] Test: `CollectionCsvTest` — full-field round-trip, names with
+      commas/quotes/apostrophes, empty tag, CRLF input, header validation
+
+## F4 — Broken site-URL decklist parsers (live-probed 2026-10-01)
+
+| Source | Probe result | Root cause |
+|---|---|---|
+| **Moxfield** | `v3/decks/all/{publicId}` → 200 with the right id | (a) public deck URLs use `publicId` containing `_`/`-` (e.g. `uBRlSwI_ZEagD_ha_iH6zw`) — `extractDeckId` regex `[a-zA-Z0-9]+` **truncates at `_`** → wrong id → 404. (b) v3 returns the deck at the **root** (no `data` wrapper) → wrapper model decodes `data = null` → "Empty response" |
+| **EDHREC** | real slug → 200, unknown slug → 403 (WAF) | response `commander` is `["Name"]` (list of **strings**) but model expects `[["Name", qty]]` pairs → decode fails. The pairs field is **`commander_v2`**. `cards` map already matches |
+| **Archidekt** | `/api/decks/1/` → 200, `cards[].card.oracleCard.name` present | appears healthy — re-verify with a real public deck URL during implementation before assuming |
+| UA | `MtGCardTracker/1.0` accepted by all three | no UA change needed |
+
+### Tasks
+
+- [ ] Moxfield: regex → `([a-zA-Z0-9_-]+)`; decode deck from response root
+      (drop/unwrap `MoxfieldDeckResponse`); keep the v3 route
+- [ ] EDHREC: map `commander_v2` into the pairs field
+      (`@SerialName("commander_v2")` or field + fallback); `cards` unchanged
+- [ ] Archidekt: verify with one real public deck URL; fix only if broken
+- [ ] Errors: distinguish "Invalid <Site> URL — expected:
+      https://www.moxfield.com/decks/<id>" from HTTP failures
+      ("<Site> returned 404 — deck may be private/deleted")
+- [ ] Tests: `extractDeckId`/`extractSlug` cases (publicId with `_`/`-`,
+      trailing deck name, `www.` prefix, query params); decode tests against
+      **recorded JSON fixtures** saved from the live responses
+- [ ] Manual: import one real public deck from each of the 3 sources
+
+## F5 — Multi-copy filter groups by name (`CardDao.kt:131-138`)
+
+Current: `GROUP BY name, set_code HAVING SUM(quantity) > 4` — same name in
+different sets/tags/finishes counts separately ("only counts cards exactly
+the same").
+
+- [ ] `GROUP BY name HAVING SUM(quantity) > 4`; make display columns
+      deterministic with aggregates (`MIN(set_code)`, `MIN(set_name)` as
+      representative printing; total = sum across **all** sets/tags/finishes)
+- [ ] Keep `ORDER BY total_quantity DESC, name COLLATE NOCASE ASC`
+- [ ] `MainScreen` synthetic-row mapping (line 128-135) unchanged
+- [ ] Manual: 5 copies across 2 sets/tags → listed once with total 5;
+      4 copies anywhere → not listed
+
+## Verification
+
+- [ ] `make test` green (+ new `CollectionCsvTest`, Moxfield/EDHREC fixture tests)
+- [ ] `make build` → installable APK
+- [ ] Device pass: capture with haptic on, format card colors (both themes),
+      CSV export→reimport round-trip, 3 URL imports, multi-copy filter
+
+## Commits
+
+1. `fix: bind camera preview and capture together, add vibrate permission`
+2. `fix: use distinct palette for deck format cards`
+3. `feat: replace json collection backup with csv`
+4. `fix: moxfield and edhrec deck url imports`
+5. `fix: multi-copy filter groups cards by name`
+6. `docs: update architecture for testing fixes`
