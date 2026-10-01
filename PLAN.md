@@ -476,17 +476,32 @@ Six findings from live testing (Xiaomi 12, HyperOS, Android 15):
 
 ## F2 — Distinct format card colors (`DecksScreen.kt:155-169`)
 
-Current palette is 9 MaterialTheme colors (`background`, `surface`,
-`surfaceContainerLow/High`, `surfaceBright`, …) — nearly identical tones that
-"clash" (invisible differences) and shift with the theme.
+Two confirmed defects:
 
-- [ ] Replace with a static `FormatColor(bg, fg)` palette: ~8 curated muted
-      tinted colors, each readable in **both** light and dark themes
-      (mid-tone bg + explicit near-black/white fg — no MaterialTheme refs)
-- [ ] Keep deterministic pick: `abs(format.hashCode()) % palette.size`
-- [ ] Card `containerColor = bg`; title `color = fg`; deck-count line uses `fg`
-      at reduced alpha instead of `onSurfaceVariant`
-- [ ] Manual: several formats side-by-side clearly distinct in dark + light
+- **Repeats**: `abs(format.hashCode()) % palette.size` collides — different
+  formats get the same index (and several palette entries are near-identical
+  theme tones anyway).
+- **Invisible cards**: palette includes `background`, `surface`,
+  `surfaceBright`, … — the card renders in the same color as the screen it
+  sits on, so the widget disappears (no contrast against its background).
+
+Current palette is 9 MaterialTheme colors — all of them theme-dependent and
+several mutually indistinguishable.
+
+### Tasks
+
+- [ ] Replace with a static `FormatColor(bg, fg)` palette: ~12 curated muted
+      tinted colors, **each guaranteed to contrast against the screen
+      background in both light and dark themes** (mid-tone bg + explicit
+      near-black/white fg) — no MaterialTheme refs, never `background`/
+      `surface`
+- [ ] Guarantee uniqueness across visible formats: color by position in the
+      rendered `formatCounts` list (`index % palette.size`) instead of
+      hashCode — repeats only possible with more formats than palette entries
+- [ ] Card `containerColor = bg`; title `color = fg`; deck-count line uses
+      `fg` at reduced alpha instead of `onSurfaceVariant`
+- [ ] Manual: every format card visibly distinct and distinct from the
+      screen background, in dark + light themes
 
 ## F3 — Collection backup: CSV only
 
