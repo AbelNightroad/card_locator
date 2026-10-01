@@ -403,7 +403,7 @@ Singleton pattern. Returns `AppDatabase` instance. Applies all migrations (3→9
 
 | Parser | File | Used by | Notes |
 |--------|------|---------|-------|
-| `ThirdPartyImport` | `data/ThirdPartyImport.kt` | Settings → Import from 3rd-Party | Detects format: JSON → `BackupStore`, 16-column CSV → `CsvImport`, else `QtyListImport`; delegates to the same enrich + `insertMergingDuplicates` flow |
+| `ThirdPartyImport` | `data/ThirdPartyImport.kt` | Settings → Import from 3rd-Party; Tag detail import | Detects format: JSON → `BackupStore`, 16-column CSV → `CsvImport`, else `QtyListImport`; delegates to the same enrich + `insertMergingDuplicates` flow; reports progress via `onProgress(processed, total)` |
 | `CsvImport` | `data/CsvImport.kt` | via `ThirdPartyImport` | ManaBox 16-column CSV → `CardEntity` rows + skipped rows |
 | `BackupStore` | `data/BackupStore.kt` | Settings backup/restore | JSON encode/decode of the whole collection |
 | `QtyListImport` | `data/QtyListImport.kt` | Tag detail → Import into Tag; Settings (non-CSV) | `qty Name (SET) collector [*finish*]` line format |
@@ -563,7 +563,7 @@ item selected (`indexOfFirst` → -1).
 - **Tag list:** `LazyColumn` with `TagRow` per tag showing tag name, card count, total value.
 - **Multi-copy toggle:** Filter for cards with >4 copies across all tags.
 - **Advanced search:** `SearchFilterChips` for color (W/U/B/R/G), type (Creature/Instant/Sorcery/...), rarity.
-- **FAB:** Opens `Screen.AddCard()`.
+- **FAB speed dial:** Tap unfolds two options — **Card** (`PenToSquare`) → `Screen.AddCard()`, **Tag** (`Tag`) → shared `CreateTagDialog`; tapping again or choosing an option collapses it (main FAB icon rotates 45°).
 - **Tap tag:** Navigates to `Screen.Cards(tag)`.
 - **Tap card:** Opens fullscreen `FullscreenOverlay` with Scryfall image.
 
@@ -572,7 +572,7 @@ item selected (`indexOfFirst` → -1).
 - **Top bar:** Tag name, back button, import button (upload icon), export button (download icon).
 - **Import button:** Opens `AlertDialog` "Import into \"<tag>\"" with a file chooser (`OpenDocument`, TXT/CSV) and no tag field — cards always land in the open tag.
   - Parses with `QtyListImport`, enriches via `CardListViewModel.importIntoTag()`, inserts with `CardRepository.insertMergingDuplicates()`.
-  - Shows the shared `ImportResultDialog` (imported/skipped/unresolved counts + skipped-row reasons).
+  - While importing the dialog stays open with a spinner and a live `x / y cards` counter (`ThirdPartyImport.import(onProgress)`); file read runs on `Dispatchers.IO`. Success → close + shared `ImportResultDialog`; failure → close + Toast.
 - **Export button:** Opens `AlertDialog` with "Copy to Clipboard" and "Save to File".
   - Both output format: `"{quantity} {name}"` per line (e.g., "4 Golos, Tireless Pilgrim").
   - Clipboard uses `ClipboardManager.setPrimaryClip()`.
@@ -600,6 +600,7 @@ item selected (`indexOfFirst` → -1).
   6. **About:** App description, `Version ${BuildConfig.VERSION_NAME}`, "Crash logs" button.
 - **Import from 3rd-Party:** Opens `ImportDialog` with tag name field + file chooser (CSV/JSON/TXT).
   - Format detection happens in `ThirdPartyImport.import()` (JSON → backup restore, ManaBox CSV → `CsvImport`, anything else → `QtyListImport`), so pasted txt lists no longer fail with CSV column errors.
+  - The dialog stays open with a spinner while importing (plus an `x / y cards` counter for txt/CSV rows; JSON restore is one bulk insert → indeterminate spinner); closes on completion.
   - After import: shows the shared `ImportResultDialog` with imported/skipped counts.
   - If skipped > 0: "View Skipped Cards" button opens scrollable list of skipped entries with reasons.
 - **Crash logs dialog:** Shows `filesDir/crash.log` (written by `CrashLog`), with Copy (clipboard + Toast), Clear, and Close actions; empty state shows "No crashes recorded yet."
@@ -658,7 +659,7 @@ item selected (`indexOfFirst` → -1).
 
 ### 8.12 OnboardingScreen
 
-- **3 pages** shown on first launch only.
+- **4 pages** shown on first launch only: Scan, Stats, Decks, Tags (Tags page explains that a tag = a physical storage location).
 - **Completion:** `SettingsStore.setOnboardingComplete()`.
 
 ---
@@ -670,6 +671,7 @@ item selected (`indexOfFirst` → -1).
 | `ScryfallAsyncImage` | `AsyncImage.kt` | Coil image loader with custom User-Agent |
 | `FullscreenOverlay` | `FullscreenOverlay.kt` | Fullscreen card image dialog (uses `ScryfallImage.large()`) |
 | `QuantityStepper` | `QuantityStepper.kt` | +/- quantity controls |
+| `CreateTagDialog` | `CreateTagDialog.kt` | Shared "New Tag" dialog (name field + Random button) used by ManageTagsScreen and the Home FAB speed dial |
 | `LoadingBox`, `ErrorBox`, `EmptyBox` | `LoadingBox.kt` | Loading/error/empty states |
 | `CameraPreview` | `CameraPreview.kt` | CameraX `PreviewView` composable |
 | `BarChart`, `DonutChart`, `HorizontalBarChart` | `DeckStatsCharts.kt` | Canvas chart composables |

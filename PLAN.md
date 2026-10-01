@@ -321,12 +321,12 @@ Three small UX improvements. No DB, API, or navigation-structure changes.
 
 File: `ui/OnboardingScreen.kt` (page list at line 42, pager uses `pages.size`).
 
-- [ ] Add a 4th `OnboardingPage` after "Track your stats":
+- [x] Add a 4th `OnboardingPage` after "Track your stats":
   - icon: `FontAwesomeIcons.Solid.Tag`
   - title: `Organize with tags`
   - description: `Tags are the physical location where cards are stored — a
     binder, a box, a deck, or any custom group you create.`
-- [ ] Nothing else — page count, dots, and "Skip/Next" adapt from `pages.size`
+- [x] Nothing else — page count, dots, and "Skip/Next" adapt from `pages.size`
 
 ## Feature 2 — Home FAB unfolds (Card / Tag)
 
@@ -335,26 +335,26 @@ Files: `ui/MainScreen.kt`, `ui/MainViewModel.kt`, `ui/components/CreateTagDialog
 
 ### Behavior
 
-- [ ] `fabExpanded: Boolean` state in `MainScreen` (`rememberSaveable`)
-- [ ] Main FAB: `Plus` collapsed → `Xmark` expanded, icon rotates via
+- [x] `fabExpanded: Boolean` state in `MainScreen` (`rememberSaveable`)
+- [x] Main FAB: `Plus` icon rotates 45° when expanded (reads as an X) via
       `animateFloatAsState`
-- [ ] When expanded, two options appear above the FAB with
+- [x] When expanded, two options appear above the FAB with
       `AnimatedVisibility` (slide-up + fade), each a `Row(label, SmallFloatingActionButton)`:
   - **Card** (icon `PenToSquare`) → `onAddCard()` (existing → `Screen.AddCard`)
   - **Tag** (icon `Tag`) → open create-Tag dialog, collapse FAB
-- [ ] Collapse when: main FAB tapped again or an option chosen
+- [x] Collapse when: main FAB tapped again or an option chosen
 
 ### Dialog reuse
 
-- [ ] Extract the "New Tag" `AlertDialog` from `ManageTagsScreen.kt` (lines
+- [x] Extract the "New Tag" `AlertDialog` from `ManageTagsScreen.kt` (lines
       148–185) into `ui/components/CreateTagDialog.kt`:
       `CreateTagDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit)` —
       dialog owns its name state, label field, and "Random" button
-- [ ] `ManageTagsScreen` calls it with `onCreate = { vm.createTag(it) }`
-- [ ] `MainViewModel`: add `fun createTag(name: String)` delegating to
+- [x] `ManageTagsScreen` calls it with `onCreate = { vm.createTag(it) }`
+- [x] `MainViewModel`: add `fun createTag(name: String)` delegating to
       `repository.createTag(name)` — MainViewModel already holds the
       repository, and the Home tag list updates reactively via `tagCounts`
-- [ ] `MainScreen` hosts `CreateTagDialog(onCreate = viewModel::createTag)`;
+- [x] `MainScreen` hosts `CreateTagDialog(onCreate = viewModel::createTag)`;
       after create the new tag appears on Home with no navigation
 
 ## Feature 3 — Import progress indicators
@@ -371,41 +371,41 @@ result dialog or the error toast fires.
 
 ### A. Tag import (`CardListScreen.kt`)
 
-- [ ] Add `isImporting` state; set on Import tap, dialog stays open
-- [ ] Add `importProgress: Pair<Int, Int>?` state (processed, total)
-- [ ] Move file read + `vm.importIntoTag` into `Dispatchers.IO`
-- [ ] Confirm button shows spinner, `enabled = !isImporting`, and
+- [x] Add `isImporting` state; set on Import tap, dialog stays open
+- [x] Add `importProgress: Pair<Int, Int>?` state (processed, total)
+- [x] Move file read + `vm.importIntoTag` into `Dispatchers.IO`
+- [x] Confirm button shows spinner, `enabled = !isImporting`, and
       `"$processed / $total cards"` when `importProgress != null`
-- [ ] `onDismissRequest` becomes a no-op while importing (no orphan runs)
-- [ ] Success → close + existing `ImportResultDialog`; failure → close + the
+- [x] `onDismissRequest` becomes a no-op while importing (no orphan runs)
+- [x] Success → close + existing `ImportResultDialog`; failure → close + the
       existing Toast; both paths reset `isImporting` and `importProgress`
 
 ### B. Settings 3rd-party import (`SettingsScreen.kt` + private `ImportDialog` ~448)
 
-- [ ] Add `isImporting` + `importProgress: Pair<Int, Int>?` state; pass both
+- [x] Add `isImporting` + `importProgress: Pair<Int, Int>?` state; pass both
       into `ImportDialog`
-- [ ] Delete the immediate `showImportDialog = false` (line 322); close on completion
-- [ ] Import button: spinner while importing, otherwise label; counter line
+- [x] Delete the immediate `showImportDialog = false` (line 322); close on completion
+- [x] Import button: spinner while importing, otherwise label; counter line
       under/near the spinner when progress is known
-- [ ] Success (JSON + txt paths) → close + `ImportResultDialog`; failure →
+- [x] Success (JSON + txt paths) → close + `ImportResultDialog`; failure →
       close + existing `backupStatus` message; both reset `isImporting` and
       `importProgress`
 
 ### C. Progress statistics (`data/ThirdPartyImport.kt`)
 
-- [ ] Add trailing parameter `onProgress: (processed: Int, total: Int) -> Unit = {}`
+- [x] Add trailing parameter `onProgress: (processed: Int, total: Int) -> Unit = { _, _ -> }`
       to `ThirdPartyImport.import(...)` — default no-op keeps the 2 existing
       test suites (`ThirdPartyImportTest`, Settings callers) source-compatible
-- [ ] Quantity-list path (the slow one — per-row Scryfall enrichment): `total`
+- [x] Quantity-list path (the slow one — per-row Scryfall enrichment): `total`
       = `parsed.cards.size`, call `onProgress(i + 1, total)` after each card
-- [ ] ManaBox CSV path (fast bulk insert): `onProgress(0, n)` after parse and
+- [x] ManaBox CSV path (fast bulk insert): `onProgress(0, n)` after parse and
       `onProgress(n, n)` after insert — counter appears and completes instantly
-- [ ] `CardListViewModel.importIntoTag` forwards the callback to `import(...)`
-- [ ] Settings JSON path (`BackupStore.decodeToTag`) stays indeterminate
+- [x] `CardListViewModel.importIntoTag` forwards the callback to `import(...)`
+- [x] Settings JSON path (`BackupStore.decodeToTag`) stays indeterminate
       spinner only — it is one bulk decode + insert with no row loop
-- [ ] Callers assign the callback into Compose snapshot state directly
+- [x] Callers assign the callback into Compose snapshot state directly
       (safe from IO threads)
-- [ ] New test: callback receives monotonically increasing counts ending at
+- [x] New test: callback receives monotonically increasing counts ending at
       `total` (extend `ThirdPartyImportTest`)
 
 ### Notes
