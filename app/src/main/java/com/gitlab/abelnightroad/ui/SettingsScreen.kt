@@ -50,7 +50,7 @@ import compose.icons.FontAwesomeIcons
 import compose.icons.fontawesomeicons.Solid
 import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.BuildConfig
-import com.gitlab.abelnightroad.data.BackupStore
+import com.gitlab.abelnightroad.data.CollectionCsv
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.CrashLog
 import com.gitlab.abelnightroad.data.ScryfallRepository
@@ -97,15 +97,15 @@ internal fun SettingsScreen(
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("text/csv")
     ) { uri ->
         uri?.let {
             scope.launch(Dispatchers.IO) {
                 try {
                     val cards = repository.getAllCards()
-                    val json = BackupStore.encode(cards)
+                    val csv = CollectionCsv.encode(cards)
                     context.contentResolver.openOutputStream(it)?.use { out ->
-                        out.write(json.toByteArray(Charsets.UTF_8))
+                        out.write(csv.toByteArray(Charsets.UTF_8))
                     }
                     withContext(Dispatchers.Main) {
                         backupStatus = "Exported ${cards.size} cards"
@@ -128,7 +128,7 @@ internal fun SettingsScreen(
                     val text = context.contentResolver.openInputStream(it)?.use { input ->
                         input.bufferedReader(Charsets.UTF_8).readText()
                     } ?: throw Exception("Could not read file")
-                    val cards = BackupStore.decode(text)
+                    val cards = CollectionCsv.parse(text)
                     repository.replaceAll(cards)
                     withContext(Dispatchers.Main) {
                         backupStatus = "Restored ${cards.size} cards"
@@ -246,17 +246,17 @@ internal fun SettingsScreen(
                     Text("Backup & Restore", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = { exportLauncher.launch("card_tracker_backup.json") },
+                        onClick = { exportLauncher.launch("card_tracker_collection.csv") },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Export collection as JSON")
+                        Text("Export collection as CSV")
                     }
                     Spacer(Modifier.height(4.dp))
                     Button(
-                        onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                        onClick = { importLauncher.launch(arrayOf("text/csv", "*/*")) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Restore collection from JSON")
+                        Text("Restore collection from CSV")
                     }
                     Spacer(Modifier.height(8.dp))
                     Button(
@@ -285,7 +285,7 @@ internal fun SettingsScreen(
             importTag = importTag,
             onTagChange = { importTag = it },
             onChooseFile = {
-                importFileLauncher.launch(arrayOf("text/csv", "application/json", "text/plain"))
+                importFileLauncher.launch(arrayOf("text/csv", "text/plain"))
             },
             selectedFileName = pendingImportUri?.lastPathSegment,
             isImporting = isImporting,
@@ -295,31 +295,21 @@ internal fun SettingsScreen(
                     isImporting = true
                     scope.launch(Dispatchers.IO) {
                         try {
-                            val path = uri.lastPathSegment?.lowercase() ?: ""
                             val input = context.contentResolver.openInputStream(uri)
                                 ?: throw Exception("Could not read file")
                             val text = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                            if (path.endsWith(".json")) {
-                                val cards = BackupStore.decodeToTag(text, importTag)
-                                repository.insertAll(cards)
-                                importResult = ImportResult(
-                                    imported = cards.size,
-                                    skippedRows = emptyList()
-                                )
-                            } else {
-                                val result = ThirdPartyImport.import(
-                                    text, importTag, repository, scryfall
-                                ) { processed, total ->
-                                    importProgress = processed to total
-                                }
-                                importResult = ImportResult(
-                                    imported = result.imported,
-                                    skippedRows = result.skippedRows.map {
-                                        SkippedEntry(it.row, it.reason)
-                                    },
-                                    unresolved = result.unresolved
-                                )
+                            val result = ThirdPartyImport.import(
+                                text, importTag, repository, scryfall
+                            ) { processed, total ->
+                                importProgress = processed to total
                             }
+                            importResult = ImportResult(
+                                imported = result.imported,
+                                skippedRows = result.skippedRows.map {
+                                    SkippedEntry(it.row, it.reason)
+                                },
+                                unresolved = result.unresolved
+                            )
                         } catch (e: Exception) {
                             backupStatus = "Import failed: ${e.message}"
                         } finally {
@@ -481,7 +471,7 @@ private fun ImportDialog(
                     enabled = !isImporting,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (selectedFileName != null) "File: $selectedFileName" else "Choose file (CSV, JSON, TXT)")
+                    Text(if (selectedFileName != null) "File: $selectedFileName" else "Choose file (CSV, TXT)")
                 }
             }
         },
