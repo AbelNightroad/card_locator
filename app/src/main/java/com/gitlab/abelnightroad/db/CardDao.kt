@@ -130,9 +130,10 @@ interface CardDao {
 
     @Transaction
     @Query(
-        "SELECT name, set_code, set_name, scryfall_id, " +
+        "SELECT name, MIN(set_code) AS set_code, MIN(set_name) AS set_name, " +
+            "MIN(scryfall_id) AS scryfall_id, " +
             "SUM(quantity) AS total_quantity FROM cards " +
-            "GROUP BY name, set_code HAVING SUM(quantity) > 4 " +
+            "GROUP BY name HAVING SUM(quantity) > 4 " +
             "ORDER BY total_quantity DESC, name COLLATE NOCASE ASC"
     )
     fun multiCopyCards(): Flow<List<MultiCopyCard>>
