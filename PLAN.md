@@ -514,27 +514,45 @@ Current palette is 9 MaterialTheme colors (`background`, `surface`,
 
 ## F4 — Broken site-URL decklist parsers (live-probed 2026-10-01)
 
-| Source | Probe result | Root cause |
+User-tested links — all three must import after this fix:
+
+| Link (from site) | Current error | Root cause (probed) |
 |---|---|---|
-| **Moxfield** | `v3/decks/all/{publicId}` → 200 with the right id | (a) public deck URLs use `publicId` containing `_`/`-` (e.g. `uBRlSwI_ZEagD_ha_iH6zw`) — `extractDeckId` regex `[a-zA-Z0-9]+` **truncates at `_`** → wrong id → 404. (b) v3 returns the deck at the **root** (no `data` wrapper) → wrapper model decodes `data = null` → "Empty response" |
-| **EDHREC** | real slug → 200, unknown slug → 403 (WAF) | response `commander` is `["Name"]` (list of **strings**) but model expects `[["Name", qty]]` pairs → decode fails. The pairs field is **`commander_v2`**. `cards` map already matches |
-| **Archidekt** | `/api/decks/1/` → 200, `cards[].card.oracleCard.name` present | appears healthy — re-verify with a real public deck URL during implementation before assuming |
-| UA | `MtGCardTracker/1.0` accepted by all three | no UA change needed |
+| `https://www.moxfield.com/decks/aSGf97rAHkKrxR_5OfihbA` | `Moxfield API error: HTTP 404` | publicId contains `_`/`-`; `extractDeckId` regex `[a-zA-Z0-9]+` truncates at `_` → fetches `aSGf97rAHkKrxR` → 404 (verified: full id → 200, truncated → 404). Bonus bug: v3 returns the deck **at the root**, wrapper model decodes `data = null` → "Empty response" would follow |
+| `https://edhrec.com/deckpreview/4Rm5X7VN7c_H1V33ojqsAw` | `Invalid EDHREC URL` | `extractSlug` only matches `/average-decks/{slug}`. Probe: deckpreview HTML (200) embeds `<script id="__NEXT_DATA__">` → `props.pageProps.data.deck` = `{cards, commander, commander_v2}` — same shape as the average-decks JSON |
+| `https://www.mtggoldfish.com/deck/2016013` | `No cards found in MTG_GOLDFISH` | Goldfish has **no URL branch** — the URL falls through to `parseText` → no cards. Probe: every goldfish path returns Cloudflare "Just a moment" (403) to desktop curl; the app's Android `HttpURLConnection` uses OkHttp TLS fingerprint and may pass — must verify on device |
+
+Cross-cutting decode bug (both EDHREC forms): response `commander` is
+`["Name"]` (strings) but the model expects pairs → decode fails; the pairs
+field is **`commander_v2`**. `cards` map already matches.
+Archidekt probed healthy (`/api/decks/{id}/` 200, `cards[].card.oracleCard.name`
+present) — re-verify with one real public deck URL.
 
 ### Tasks
 
 - [ ] Moxfield: regex → `([a-zA-Z0-9_-]+)`; decode deck from response root
-      (drop/unwrap `MoxfieldDeckResponse`); keep the v3 route
-- [ ] EDHREC: map `commander_v2` into the pairs field
-      (`@SerialName("commander_v2")` or field + fallback); `cards` unchanged
+      (drop/unwrap `MoxfieldDeckResponse`); keep v3 route
+- [ ] EDHREC: accept both `/average-decks/{slug}` (existing JSON endpoint) and
+      `/deckpreview/{id}` (fetch HTML → extract `__NEXT_DATA__` →
+      `props.pageProps.data.deck` → existing `EdhrecDeck` model);
+      map `commander_v2` into the pairs field (`@SerialName("commander_v2")`
+      or field + fallback) for both
+- [ ] MTG Goldfish (new URL support): `extractDeckId` for `/deck/(\d+)` +
+      fetch deck page and extract the decklist (inspect real on-device HTML;
+      candidate: `#deck_input_deck` textarea or deck table) → feed through
+      `UniversalDecklistParser`; add `MTG_GOLDFISH` branch to
+      `parseUrl` and show the fetch button for Goldfish
+- [ ] Goldfish fallback: if Cloudflare still challenges on device, surface
+      "Goldfish blocked the request — copy the deck list and paste it instead"
+      (no silent failure)
 - [ ] Archidekt: verify with one real public deck URL; fix only if broken
 - [ ] Errors: distinguish "Invalid <Site> URL — expected:
       https://www.moxfield.com/decks/<id>" from HTTP failures
       ("<Site> returned 404 — deck may be private/deleted")
-- [ ] Tests: `extractDeckId`/`extractSlug` cases (publicId with `_`/`-`,
-      trailing deck name, `www.` prefix, query params); decode tests against
-      **recorded JSON fixtures** saved from the live responses
-- [ ] Manual: import one real public deck from each of the 3 sources
+- [ ] Tests: `extractDeckId`/`extractSlug` cases (user's exact 3 links, ids
+      with `_`/`-`, trailing deck name, `www.` prefix, query params); decode
+      tests against **recorded JSON/HTML fixtures** saved from live responses
+- [ ] Manual acceptance: the 3 links above import successfully
 
 ## F5 — Multi-copy filter groups by name (`CardDao.kt:131-138`)
 
@@ -562,6 +580,6 @@ the same").
 1. `fix: bind camera preview and capture together, add vibrate permission`
 2. `fix: use distinct palette for deck format cards`
 3. `feat: replace json collection backup with csv`
-4. `fix: moxfield and edhrec deck url imports`
+4. `fix: site url deck imports (moxfield, edhrec, mtggoldfish)`
 5. `fix: multi-copy filter groups cards by name`
 6. `docs: update architecture for testing fixes`
