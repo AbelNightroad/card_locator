@@ -6,7 +6,7 @@ import com.gitlab.abelnightroad.db.DeckCardEntity
 data class TypeStat(val type: String, val count: Int, val percentage: Float)
 data class RarityStat(val rarity: String, val count: Int, val percentage: Float)
 data class ColorStat(val color: String, val count: Int, val percentage: Float)
-data class CmcStat(val cmc: Int, val count: Int)
+data class CmcStat(val label: String, val count: Int)
 
 data class DeckStats(
     val totalCards: Int = 0,
@@ -64,7 +64,7 @@ internal fun computeDeckStats(cards: List<DeckCardEntity>): DeckStats {
         totalCmc += cmc * qty
         nonLandCards += qty
 
-        val cmcBucket = cmc.toInt().coerceIn(0, 10)
+        val cmcBucket = cmc.toInt().coerceIn(0, 9)
         cmcCounts[cmcBucket] = (cmcCounts[cmcBucket] ?: 0) + qty
 
         pipRegex.findAll(card.manaCost).forEach { match ->
@@ -90,7 +90,9 @@ internal fun computeDeckStats(cards: List<DeckCardEntity>): DeckStats {
         .sortedByDescending { it.value }
         .map { ColorStat(it.key, it.value, it.value * 100f / totalPips) }
 
-    val cmcDistribution = (0..10).map { i -> CmcStat(i, cmcCounts[i] ?: 0) }
+    val cmcDistribution = (0..9).map { i ->
+        CmcStat(if (i == 9) "9+" else i.toString(), cmcCounts[i] ?: 0)
+    }
 
     return DeckStats(
         totalCards = totalCards,

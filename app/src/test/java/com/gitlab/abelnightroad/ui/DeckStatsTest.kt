@@ -97,7 +97,10 @@ class DeckStatsTest {
         assertEquals(20, typeTotal)
         assertTrue(stats.typeStats.all { it.percentage in 0f..100f })
 
-        assertEquals(listOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), stats.cmcDistribution.map { it.cmc })
+        assertEquals(
+            listOf("0", "1", "2", "3", "4", "5", "6", "7", "8", "9+"),
+            stats.cmcDistribution.map { it.label }
+        )
         assertTrue(stats.colorStats.isNotEmpty())
     }
 
@@ -114,11 +117,12 @@ class DeckStatsTest {
     }
 
     @Test
-    fun `cmc above ten buckets into ten`() {
+    fun `cmc above eight buckets into nine plus`() {
         val stats = computeDeckStats(
             listOf(card("Emrakul", "Creature — Eldrazi", "{15}", quantity = 1))
         )
-        assertEquals(1, stats.cmcDistribution[10].count)
+        assertEquals(1, stats.cmcDistribution[9].count)
+        assertEquals("9+", stats.cmcDistribution[9].label)
         assertTrue(stats.allPercentages().all { it.isFinite() })
     }
 }

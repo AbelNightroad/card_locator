@@ -1,10 +1,21 @@
 package com.gitlab.abelnightroad.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -78,7 +89,7 @@ internal fun BarChart(
                     textAlign = android.graphics.Paint.Align.CENTER
                     isAntiAlias = true
                 }
-                drawText(stat.cmc.toString(), x + barWidth / 2, size.height - 5f, paint)
+                drawText(stat.label, x + barWidth / 2, size.height - 5f, paint)
                 if (stat.count > 0) {
                     drawText(stat.count.toString(), x + barWidth / 2, y - 5f, paint)
                 }
@@ -92,8 +103,7 @@ internal fun DonutChart(
     data: List<ColorStat>,
     modifier: Modifier = Modifier
 ) {
-    val textColor = MaterialTheme.colorScheme.onSurface
-    Canvas(modifier.fillMaxWidth().height(200.dp)) {
+    Canvas(modifier.fillMaxWidth().height(160.dp)) {
         if (data.isEmpty()) return@Canvas
         val total = data.sumOf { it.count }.toFloat()
         if (total <= 0f || !total.isFinite()) return@Canvas
@@ -123,60 +133,60 @@ internal fun DonutChart(
             )
             startAngle += sweep
         }
-
-        drawContext.canvas.nativeCanvas.apply {
-            val paint = android.graphics.Paint().apply {
-                this.color = textColor.toArgb()
-                textSize = 28f
-                textAlign = android.graphics.Paint.Align.CENTER
-                isAntiAlias = true
-            }
-            drawText(total.toInt().toString(), size.width / 2, size.height / 2 + 10f, paint)
-        }
     }
 }
 
 @Composable
-internal fun HorizontalBarChart(
+internal fun PieChartWithLegend(
     entries: List<Pair<String, Int>>,
-    colors: List<Color> = chartColors,
     modifier: Modifier = Modifier
 ) {
-    val textColor = MaterialTheme.colorScheme.onSurface
-    Canvas(modifier.fillMaxWidth().height((entries.size * 32 + 20).dp)) {
-        if (entries.isEmpty() || colors.isEmpty()) return@Canvas
-        val maxCount = (entries.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
-        val barHeight = 20f
-        val spacing = 12f
-        val labelWidth = 120f
-        val chartWidth = (size.width - labelWidth - 60f).coerceAtLeast(0f)
-
-        entries.forEachIndexed { index, (label, count) ->
-            val y = index * (barHeight + spacing)
-            val barWidth = (count.toFloat() / maxCount) * chartWidth
-
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = textColor.toArgb()
-                    textSize = 22f
-                    isAntiAlias = true
-                }
-                drawText(label, 0f, y + barHeight - 2f, paint)
+    val total = entries.sumOf { it.second }.coerceAtLeast(1)
+    Column(modifier.fillMaxWidth()) {
+        Canvas(Modifier.fillMaxWidth().height(200.dp)) {
+            if (entries.isEmpty()) return@Canvas
+            val sum = entries.sumOf { it.second }.toFloat()
+            if (sum <= 0f || !sum.isFinite()) return@Canvas
+            val diameter = minOf(size.width, size.height)
+            val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+            var startAngle = -90f
+            entries.forEachIndexed { index, (_, count) ->
+                val sweep = (count / sum) * 360f
+                if (!sweep.isFinite() || sweep <= 0f) return@forEachIndexed
+                drawArc(
+                    color = chartColors[index % chartColors.size],
+                    startAngle = startAngle,
+                    sweepAngle = sweep,
+                    useCenter = true,
+                    topLeft = topLeft,
+                    size = Size(diameter, diameter)
+                )
+                startAngle += sweep
             }
-
-            drawRect(
-                color = colors[index % colors.size],
-                topLeft = Offset(labelWidth, y),
-                size = Size(barWidth, barHeight)
-            )
-
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = textColor.toArgb()
-                    textSize = 22f
-                    isAntiAlias = true
+        }
+        Spacer(Modifier.height(8.dp))
+        entries.forEachIndexed { index, (label, count) ->
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier.size(10.dp).background(
+                            chartColors[index % chartColors.size],
+                            CircleShape
+                        )
+                    )
+                    Text("$label: $count", style = MaterialTheme.typography.bodyMedium)
                 }
-                drawText(count.toString(), labelWidth + barWidth + 8f, y + barHeight - 2f, paint)
+                Text(
+                    "%.0f%%".format(count * 100f / total),
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
     }

@@ -26,7 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gitlab.abelnightroad.ui.components.BarChart
 import com.gitlab.abelnightroad.ui.components.DonutChart
-import com.gitlab.abelnightroad.ui.components.HorizontalBarChart
+import com.gitlab.abelnightroad.ui.components.PieChartWithLegend
 import androidx.compose.ui.graphics.Color
 
 private val rarityColorMap = mapOf(
@@ -116,7 +116,7 @@ internal fun DeckStatisticsScreen(deckId: Long, vm: DeckViewViewModel) {
                 Column(Modifier.padding(16.dp)) {
                     Text("Card Types", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
-                    HorizontalBarChart(entries = stats.typeStats.map { it.type to it.count })
+                    PieChartWithLegend(entries = stats.typeStats.map { it.type to it.count })
                 }
             }
         }
