@@ -2,11 +2,9 @@ package com.gitlab.abelnightroad.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -16,7 +14,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -37,6 +34,7 @@ import compose.icons.FontAwesomeIcons
 import compose.icons.fontawesomeicons.Solid
 import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.CardRepository
+import com.gitlab.abelnightroad.ui.components.CreateTagDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +48,6 @@ internal fun ManageTagsScreen(
     var deleteTag by remember { mutableStateOf<String?>(null) }
     var renameTag by remember { mutableStateOf<String?>(null) }
     var newTagName by remember { mutableStateOf("") }
-    var addTagName by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -146,41 +143,9 @@ internal fun ManageTagsScreen(
     }
 
     if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            title = { Text("New Tag") },
-            text = {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = addTagName,
-                            onValueChange = { addTagName = it },
-                            label = { Text("Tag name") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        OutlinedButton(onClick = {
-                            val letter = ('A'..'Z').random()
-                            val digit = ('0'..'9').random()
-                            addTagName = "Box-$letter$digit"
-                        }) {
-                            Text("Random")
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (addTagName.isNotBlank()) {
-                        vm.createTag(addTagName)
-                    }
-                    showAddDialog = false
-                }) { Text("Create") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) { Text("Cancel") }
-            }
+        CreateTagDialog(
+            onDismiss = { showAddDialog = false },
+            onCreate = { vm.createTag(it) }
         )
     }
 }

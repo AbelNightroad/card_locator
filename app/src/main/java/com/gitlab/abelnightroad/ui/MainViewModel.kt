@@ -84,4 +84,8 @@ class MainViewModel(
     fun setHapticFeedback(enabled: Boolean) {
         viewModelScope.launch { settings.setHapticFeedback(enabled) }
     }
+
+    fun createTag(name: String) {
+        viewModelScope.launch { repository.createTag(name) }
+    }
 }

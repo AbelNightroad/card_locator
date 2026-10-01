@@ -1,14 +1,23 @@
 package com.gitlab.abelnightroad.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
@@ -20,13 +29,20 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import compose.icons.FontAwesomeIcons
 import compose.icons.fontawesomeicons.Solid
@@ -34,6 +50,7 @@ import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.db.CardSearchResult
 import com.gitlab.abelnightroad.db.MultiCopyCard
 import com.gitlab.abelnightroad.db.TagCount
+import com.gitlab.abelnightroad.ui.components.CreateTagDialog
 import com.gitlab.abelnightroad.ui.components.SearchFilterChips
 import kotlinx.coroutines.flow.flowOf
 
@@ -54,6 +71,8 @@ internal fun MainScreen(
     val colorFilter by viewModel.colorFilter.collectAsState()
     val typeFilter by viewModel.typeFilter.collectAsState()
     val rarityFilter by viewModel.rarityFilter.collectAsState()
+    var fabExpanded by rememberSaveable { mutableStateOf(false) }
+    var showCreateTag by remember { mutableStateOf(false) }
 
     val searchResults: List<CardSearchResult> by if (search.isBlank()) {
         flowOf(emptyList<CardSearchResult>())
@@ -78,8 +97,46 @@ internal fun MainScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddCard) {
-                Icon(FontAwesomeIcons.Solid.Plus, "Add Card", Modifier.size(24.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                AnimatedVisibility(
+                    visible = fabExpanded,
+                    enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        SpeedDialOption(
+                            label = "Card",
+                            icon = FontAwesomeIcons.Solid.PenToSquare,
+                            contentDescription = "Add Card",
+                            onClick = {
+                                fabExpanded = false
+                                onAddCard()
+                            }
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        SpeedDialOption(
+                            label = "Tag",
+                            icon = FontAwesomeIcons.Solid.Tag,
+                            contentDescription = "New Tag",
+                            onClick = {
+                                fabExpanded = false
+                                showCreateTag = true
+                            }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                val rotation by animateFloatAsState(
+                    targetValue = if (fabExpanded) 45f else 0f,
+                    label = "fabRotation"
+                )
+                FloatingActionButton(onClick = { fabExpanded = !fabExpanded }) {
+                    Icon(
+                        FontAwesomeIcons.Solid.Plus,
+                        contentDescription = if (fabExpanded) "Close" else "Add",
+                        modifier = Modifier.size(24.dp).rotate(rotation)
+                    )
+                }
             }
         }
     ) { padding ->
@@ -135,6 +192,36 @@ internal fun MainScreen(
                 )
                 else -> TagList(tags, onTagClick)
             }
+        }
+    }
+
+    if (showCreateTag) {
+        CreateTagDialog(
+            onDismiss = { showCreateTag = false },
+            onCreate = viewModel::createTag
+        )
+    }
+}
+
+@Composable
+private fun SpeedDialOption(
+    label: String,
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(end = 12.dp)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.width(8.dp))
+        SmallFloatingActionButton(onClick = onClick) {
+            Icon(icon, contentDescription, Modifier.size(20.dp))
         }
     }
 }
