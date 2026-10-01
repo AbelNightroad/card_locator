@@ -418,8 +418,8 @@ result dialog or the error toast fires.
 
 ## Verification
 
-- [ ] `make test` — full suite stays green
-- [ ] `make build` — installable APK
+- [x] `make test` — full suite stays green
+- [x] `make build` — installable APK
 - [ ] Manual: onboarding shows the 4th Tags page; FAB Card → ManualAdd, Tag →
       dialog → tag visible on Home; both imports show a spinner with a live
       `x / y cards` counter that reaches the total, then the result dialog
@@ -463,12 +463,12 @@ Six findings from live testing (Xiaomi 12, HyperOS, Android 15):
 
 ### Tasks
 
-- [ ] Add `<uses-permission android:name="android.permission.VIBRATE" />`
-- [ ] Wrap `performHapticFeedback` body in `try/catch` (OEM-defensive)
-- [ ] `CameraPreview`: accept `extraUseCases: List<UseCase> = emptyList()`;
+- [x] Add `<uses-permission android:name="android.permission.VIBRATE" />`
+- [x] Wrap `performHapticFeedback` body in `try/catch` (OEM-defensive)
+- [x] `CameraPreview`: accept `extraUseCases: List<UseCase> = emptyList()`;
       single `LaunchedEffect(Unit)` binds preview + extras once (one
       `unbindAll`); remove all provider work from `update` (factory-only view)
-- [ ] `ScanCameraScreen`: create `imageCapture` eagerly
+- [x] `ScanCameraScreen`: create `imageCapture` eagerly
       (`remember { ImageCapture.Builder()…build() }`, non-null), pass it as
       extra use case; delete its own competing bind block and nullable state
 - [ ] Manual: preview stays live, capture works first try, haptic on/off both
@@ -490,15 +490,15 @@ several mutually indistinguishable.
 
 ### Tasks
 
-- [ ] Replace with a static `FormatColor(bg, fg)` palette: ~12 curated muted
+- [x] Replace with a static `FormatColor(bg, fg)` palette: ~12 curated muted
       tinted colors, **each guaranteed to contrast against the screen
       background in both light and dark themes** (mid-tone bg + explicit
       near-black/white fg) — no MaterialTheme refs, never `background`/
       `surface`
-- [ ] Guarantee uniqueness across visible formats: color by position in the
+- [x] Guarantee uniqueness across visible formats: color by position in the
       rendered `formatCounts` list (`index % palette.size`) instead of
       hashCode — repeats only possible with more formats than palette entries
-- [ ] Card `containerColor = bg`; title `color = fg`; deck-count line uses
+- [x] Card `containerColor = bg`; title `color = fg`; deck-count line uses
       `fg` at reduced alpha instead of `onSurfaceVariant`
 - [ ] Manual: every format card visibly distinct and distinct from the
       screen background, in dark + light themes
@@ -509,22 +509,22 @@ several mutually indistinguishable.
 3rd-party `.json` branch) — safe to delete; kotlinx-serialization stays
 (Scryfall/API models).
 
-- [ ] New `data/CollectionCsv.kt`:
+- [x] New `data/CollectionCsv.kt`:
   - `encode(cards: List<CardEntity>): String` — header row + every column
     (`tag`, name, set, collector, quantity, foil, rarity, mana cost, type
     line, prices, condition, language, …), RFC4180 quoting (names contain
     commas/quotes), `\r\n`-tolerant `parse`
   - `parse(text: String): List<CardEntity>` — round-trip inverse
-- [ ] Settings export: `CreateDocument("text/csv")`, filename
+- [x] Settings export: `CreateDocument("text/csv")`, filename
       `card_tracker_collection.csv`, `CollectionCsv.encode`; button label
       "Export collection as CSV"
-- [ ] Settings restore: `OpenDocument("text/csv")` → `CollectionCsv.parse` →
+- [x] Settings restore: `OpenDocument("text/csv")` → `CollectionCsv.parse` →
       `repository.replaceAll` (same semantics as the JSON restore)
-- [ ] 3rd-party `ImportDialog`: mime `text/csv` + `text/plain` only; delete
+- [x] 3rd-party `ImportDialog`: mime `text/csv` + `text/plain` only; delete
       the `.json` branch (`BackupStore.decodeToTag`) and JSON from the
       "Choose file" label
-- [ ] Delete `data/BackupStore.kt`
-- [ ] Test: `CollectionCsvTest` — full-field round-trip, names with
+- [x] Delete `data/BackupStore.kt`
+- [x] Test: `CollectionCsvTest` — full-field round-trip, names with
       commas/quotes/apostrophes, empty tag, CRLF input, header validation
 
 ## F4 — Broken site-URL decklist parsers (live-probed 2026-10-01)
@@ -545,28 +545,34 @@ present) — re-verify with one real public deck URL.
 
 ### Tasks
 
-- [ ] Moxfield: regex → `([a-zA-Z0-9_-]+)`; decode deck from response root
-      (drop/unwrap `MoxfieldDeckResponse`); keep v3 route
-- [ ] EDHREC: accept both `/average-decks/{slug}` (existing JSON endpoint) and
+- [x] Moxfield: regex → `([a-zA-Z0-9_-]+)`; decode deck from response root
+      (drop/unwrap `MoxfieldDeckResponse`); keep v3 route — **implemented as
+      root decode + nested `boards` map** (v3 returns card lists under
+      `boards.mainboard/sideboard/commanders/companions`, verified live)
+- [x] EDHREC: accept both `/average-decks/{slug}` (existing JSON endpoint) and
       `/deckpreview/{id}` (fetch HTML → extract `__NEXT_DATA__` →
       `props.pageProps.data.deck` → existing `EdhrecDeck` model);
       map `commander_v2` into the pairs field (`@SerialName("commander_v2")`
       or field + fallback) for both
-- [ ] MTG Goldfish (new URL support): `extractDeckId` for `/deck/(\d+)` +
+- [x] MTG Goldfish (new URL support): `extractDeckId` for `/deck/(\d+)` +
       fetch deck page and extract the decklist (inspect real on-device HTML;
       candidate: `#deck_input_deck` textarea or deck table) → feed through
       `UniversalDecklistParser`; add `MTG_GOLDFISH` branch to
       `parseUrl` and show the fetch button for Goldfish
-- [ ] Goldfish fallback: if Cloudflare still challenges on device, surface
+- [x] Goldfish fallback: if Cloudflare still challenges on device, surface
       "Goldfish blocked the request — copy the deck list and paste it instead"
       (no silent failure)
-- [ ] Archidekt: verify with one real public deck URL; fix only if broken
-- [ ] Errors: distinguish "Invalid <Site> URL — expected:
+- [x] Archidekt: verify with one real public deck URL; fix only if broken
+      (re-verified live 2026-10-01: `/api/decks/1/` 200, `oracleCard.name`
+      present — model matches, no fix needed)
+- [x] Errors: distinguish "Invalid <Site> URL — expected:
       https://www.moxfield.com/decks/<id>" from HTTP failures
       ("<Site> returned 404 — deck may be private/deleted")
-- [ ] Tests: `extractDeckId`/`extractSlug` cases (user's exact 3 links, ids
+- [x] Tests: `extractDeckId`/`extractSlug` cases (user's exact 3 links, ids
       with `_`/`-`, trailing deck name, `www.` prefix, query params); decode
       tests against **recorded JSON/HTML fixtures** saved from live responses
+      (`SiteUrlImportTest` + `fixtures/moxfield_deck.json`,
+      `fixtures/edhrec_deckpreview.html`, `fixtures/goldfish_blocked.html`)
 - [ ] Manual acceptance: the 3 links above import successfully
 
 ## F5 — Multi-copy filter groups by name (`CardDao.kt:131-138`)
@@ -575,18 +581,18 @@ Current: `GROUP BY name, set_code HAVING SUM(quantity) > 4` — same name in
 different sets/tags/finishes counts separately ("only counts cards exactly
 the same").
 
-- [ ] `GROUP BY name HAVING SUM(quantity) > 4`; make display columns
+- [x] `GROUP BY name HAVING SUM(quantity) > 4`; make display columns
       deterministic with aggregates (`MIN(set_code)`, `MIN(set_name)` as
       representative printing; total = sum across **all** sets/tags/finishes)
-- [ ] Keep `ORDER BY total_quantity DESC, name COLLATE NOCASE ASC`
-- [ ] `MainScreen` synthetic-row mapping (line 128-135) unchanged
+- [x] Keep `ORDER BY total_quantity DESC, name COLLATE NOCASE ASC`
+- [x] `MainScreen` synthetic-row mapping (line 128-135) unchanged
 - [ ] Manual: 5 copies across 2 sets/tags → listed once with total 5;
       4 copies anywhere → not listed
 
 ## Verification
 
-- [ ] `make test` green (+ new `CollectionCsvTest`, Moxfield/EDHREC fixture tests)
-- [ ] `make build` → installable APK
+- [x] `make test` green (+ new `CollectionCsvTest`, Moxfield/EDHREC fixture tests)
+- [x] `make build` → installable APK
 - [ ] Device pass: capture with haptic on, format card colors (both themes),
       CSV export→reimport round-trip, 3 URL imports, multi-copy filter
 

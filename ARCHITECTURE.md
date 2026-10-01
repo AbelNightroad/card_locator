@@ -403,9 +403,9 @@ Singleton pattern. Returns `AppDatabase` instance. Applies all migrations (3→9
 
 | Parser | File | Used by | Notes |
 |--------|------|---------|-------|
-| `ThirdPartyImport` | `data/ThirdPartyImport.kt` | Settings → Import from 3rd-Party; Tag detail import | Detects format: JSON → `BackupStore`, 16-column CSV → `CsvImport`, else `QtyListImport`; delegates to the same enrich + `insertMergingDuplicates` flow; reports progress via `onProgress(processed, total)` |
+| `ThirdPartyImport` | `data/ThirdPartyImport.kt` | Settings → Import from 3rd-Party; Tag detail import | Detects format: 16-column CSV → `CsvImport`, else `QtyListImport`; delegates to the same enrich + `insertMergingDuplicates` flow; reports progress via `onProgress(processed, total)` |
 | `CsvImport` | `data/CsvImport.kt` | via `ThirdPartyImport` | ManaBox 16-column CSV → `CardEntity` rows + skipped rows |
-| `BackupStore` | `data/BackupStore.kt` | Settings backup/restore | JSON encode/decode of the whole collection |
+| `CollectionCsv` | `data/CollectionCsv.kt` | Settings export/restore | RFC4180 CSV encode/parse of the whole collection (header validation; replaces the deleted JSON `BackupStore`) |
 | `QtyListImport` | `data/QtyListImport.kt` | Tag detail → Import into Tag; Settings (non-CSV) | `qty Name (SET) collector [*finish*]` line format |
 
 `QtyListImport` keeps name/set/collector verbatim, maps the finish marker to
@@ -458,22 +458,26 @@ User-Agent: MtGCardTracker/1.0
 Accept: application/json
 ```
 
-Response: `MoxfieldDeckResponse { data: MoxfieldDeckData { name, mainboard, sideboard, commanders, companions } }`
-Each entry: `{ quantity, card: { name, set } }`
+Response (decoded at the **response root**, no `data` wrapper):
+`MoxfieldDeckData { name, format, boards: { mainboard, sideboard, commanders, companions } }`
+where each board is `{ cards: { <entryId>: { quantity, card: { name, set } } } }`
 
-**URL extraction:** Regex `moxfield\.com/decks/([a-zA-Z0-9]+)`
+**URL extraction:** Regex `moxfield\.com/decks/([a-zA-Z0-9_-]+)`
 
-### 6.3 EDHREC Average Decks
+### 6.3 EDHREC Average Decks + Deck Previews
 
 ```
-GET https://json.edhrec.com/pages/average-decks/{commander-slug}.json
+GET https://json.edhrec.com/pages/average-decks/{commander-slug}.json   (JSON)
+GET https://edhrec.com/deckpreview/{deckId}                             (HTML)
 User-Agent: MtGCardTracker/1.0
-Accept: application/json
 ```
 
-Response: `EdhrecResponse { deck: { commander: [[name, qty], ...], cards: { Creature: [[name, qty], ...], ... } } }`
+Average-decks response: `EdhrecResponse { deck: { commander_v2: [[name, qty], ...], cards: { Creature: [[name, qty], ...], ... } } }`
+(the `commander` field is a plain string list — the pairs live in `commander_v2`, mapped via `@SerialName`)
 
-**URL extraction:** Regex `edhrec\.com/average-decks/([a-z0-9\-]+)`
+Deck preview: HTML embeds `<script id="__NEXT_DATA__">` → `props.pageProps.data.deck` (same shape), extracted by `EdhrecApiClient.parseNextDataDeck()`.
+
+**URL extraction:** `edhrec\.com/average-decks/([a-z0-9\-]+)` or `edhrec\.com/deckpreview/([a-zA-Z0-9\-_]+)`
 
 ### 6.4 Archidekt API
 
@@ -500,6 +504,19 @@ Response: `ArchidektResponse { name, cards: [{ quantity, card: { oracleCard: { n
 
 **Event page:** Parse `div[id^=md].deck_line` (mainboard) and `div[id^=sb].deck_line` (sideboard).
 - Format codes: ST (Standard), MO (Modern), PI (Pioneer), PAU (Pauper), LE (Legacy), VI (Vintage), PREM (Premodern), EDH (Commander).
+
+### 6.6 MTG Goldfish (HTML scraping)
+
+```
+GET https://www.mtggoldfish.com/deck/{deckId}
+User-Agent: MtGCardTracker/1.0
+Accept: text/html,application/xhtml+xml
+```
+
+- **URL extraction:** Regex `mtggoldfish\.com/deck/(\d+)`
+- **Decklist:** `<textarea id="deck_input_deck">` content (HTML-unescaped) → `UniversalDecklistParser`.
+- **Cloudflare:** HTTP 403 or a "Just a moment" / `challenge-platform` body → error
+  "Goldfish blocked the request — copy the deck list and paste it instead" (never silent).
 
 ---
 
@@ -561,7 +578,7 @@ item selected (`indexOfFirst` → -1).
 
 - **Top bar:** Title "Collection", search bar, filter icon.
 - **Tag list:** `LazyColumn` with `TagRow` per tag showing tag name, card count, total value.
-- **Multi-copy toggle:** Filter for cards with >4 copies across all tags.
+- **Multi-copy toggle:** Filter for cards with >4 copies, grouped by card **name** across all sets/tags/finishes (`GROUP BY name`, representative printing via `MIN(set_code)`).
 - **Advanced search:** `SearchFilterChips` for color (W/U/B/R/G), type (Creature/Instant/Sorcery/...), rarity.
 - **FAB speed dial:** Tap unfolds two options — **Card** (`PenToSquare`) → `Screen.AddCard()`, **Tag** (`Tag`) → shared `CreateTagDialog`; tapping again or choosing an option collapses it (main FAB icon rotates 45°).
 - **Tap tag:** Navigates to `Screen.Cards(tag)`.
@@ -595,12 +612,12 @@ item selected (`indexOfFirst` → -1).
   1. **Appearance:** Theme dropdown (Catppuccin/Nord/Cobalt2/Shades of Purple), Font dropdown (Roboto/Comic Neue/Germania One).
   2. **Card Scan:** Haptic feedback toggle.
   3. **Tags:** "Manage Tags" button → `Screen.ManageTags` (pushed screen; back returns here).
-  4. **Backup & Restore:** Export JSON, Restore JSON, Import from 3rd-Party.
+  4. **Backup & Restore:** Export CSV, Restore CSV, Import from 3rd-Party.
   5. **Scryfall Reference Data:** Last update date, sync status.
   6. **About:** App description, `Version ${BuildConfig.VERSION_NAME}`, "Crash logs" button.
-- **Import from 3rd-Party:** Opens `ImportDialog` with tag name field + file chooser (CSV/JSON/TXT).
-  - Format detection happens in `ThirdPartyImport.import()` (JSON → backup restore, ManaBox CSV → `CsvImport`, anything else → `QtyListImport`), so pasted txt lists no longer fail with CSV column errors.
-  - The dialog stays open with a spinner while importing (plus an `x / y cards` counter for txt/CSV rows; JSON restore is one bulk insert → indeterminate spinner); closes on completion.
+- **Import from 3rd-Party:** Opens `ImportDialog` with tag name field + file chooser (CSV/TXT).
+  - Format detection happens in `ThirdPartyImport.import()` (ManaBox CSV → `CsvImport`, anything else → `QtyListImport`), so pasted txt lists no longer fail with CSV column errors.
+  - The dialog stays open with a spinner while importing (plus an `x / y cards` counter for txt/CSV rows); closes on completion.
   - After import: shows the shared `ImportResultDialog` with imported/skipped counts.
   - If skipped > 0: "View Skipped Cards" button opens scrollable list of skipped entries with reasons.
 - **Crash logs dialog:** Shows `filesDir/crash.log` (written by `CrashLog`), with Copy (clipboard + Toast), Clear, and Close actions; empty state shows "No crashes recorded yet."
@@ -614,7 +631,7 @@ item selected (`indexOfFirst` → -1).
 
 ### 8.6 DecksScreen
 
-- **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`).
+- **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`); each format card uses a static 12-entry `FormatColor(bg, fg)` palette picked by list index (`DecksScreen.kt` bottom) — mid-tone bg + dark fg, never the theme's `background`/`surface`, so cards stay distinct and visible in both themes.
 - **Long-press format:** Delete format (removes all decks with CASCADE).
 - **Tap format:** Shows that format's decks.
 - **Deck card:** Cover image (artCrop 5:3, flush to card edges), then a 8dp-padded text block with name, format, card count. Long-press: clone/delete.
@@ -639,17 +656,17 @@ item selected (`indexOfFirst` → -1).
 ### 8.9 UnifiedImportScreen
 
 - **Sources:** FilterChips for Moxfield, EDHREC, Archidekt, MTG Goldfish, TappedOut.
-- **URL-aware sources** (Moxfield, EDHREC, Archidekt): Detect URLs via regex, fetch via API clients.
-- **Paste/File sources** (MTG Goldfish, TappedOut): Text paste or file import (CSV/TXT).
+- **URL-aware sources** (Moxfield, EDHREC incl. deck previews, Archidekt, MTG Goldfish): Detect URLs via regex, fetch via API/scrape clients; invalid URLs report the expected format, HTTP failures report status + "may be private/deleted".
+- **Paste/File sources** (TappedOut; also any URL-aware source): Text paste or file import (CSV/TXT).
 - **Flow:** Parse → Preview dialog (card list with quantity/slot) → Import → Navigate to DeckView.
 - **Format dropdown:** Defaults to Commander. Used for deck creation.
 - **importDeckCards():** Shared function resolves cards via `ScryfallRepository.lookupByNameResilient()`, enforces Commander color identity, adds to deck. Parallel Scryfall lookups.
 
 ### 8.10 ScanCameraScreen
 
-- **CameraX preview** with capture button.
-- **Permission:** Runtime `CAMERA_EXTERNAL` request with graceful denied handling.
-- **Haptic:** Short vibration on capture via `Vibrator`/`VibratorManager`.
+- **CameraX preview** with capture button; `CameraPreview` binds **preview + `ImageCapture` once** in a single `LaunchedEffect` (extras passed as `extraUseCases` — no competing rebinds, capture works first try).
+- **Permission:** Runtime `CAMERA` request with graceful denied handling; `VIBRATE` permission declared in the manifest.
+- **Haptic:** Short vibration on capture via `Vibrator`/`VibratorManager`, wrapped in try/catch (OEM-defensive).
 
 ### 8.11 ScanResultsScreen
 
