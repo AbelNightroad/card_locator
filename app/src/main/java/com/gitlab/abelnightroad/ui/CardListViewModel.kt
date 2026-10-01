@@ -61,8 +61,12 @@ class CardListViewModel(
      * quantity list), enriches rows from the local Scryfall reference data and
      * merges duplicates. Returns the outcome for the result dialog.
      */
-    suspend fun importIntoTag(tag: String, text: String): ImportResult {
-        val result = ThirdPartyImport.import(text, tag, repository, scryfall)
+    suspend fun importIntoTag(
+        tag: String,
+        text: String,
+        onProgress: (processed: Int, total: Int) -> Unit = { _, _ -> }
+    ): ImportResult {
+        val result = ThirdPartyImport.import(text, tag, repository, scryfall, onProgress)
         return ImportResult(
             imported = result.imported,
             skippedRows = result.skippedRows.map { SkippedEntry(it.row, it.reason) },

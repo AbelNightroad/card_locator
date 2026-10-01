@@ -1,5 +1,7 @@
 package com.gitlab.abelnightroad.data
 
+import com.gitlab.abelnightroad.db.CardEntity
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -50,5 +52,39 @@ class ThirdPartyImportTest {
         val result = QtyListImport.parse(text, "Test")
         assertEquals(0, result.skipped)
         assertEquals(listOf("Jyoti, Moag Ancient", "Omo, Queen of Vesuva"), result.cards.map { it.name })
+    }
+
+    @Test
+    fun `enrichment reports monotonically increasing progress ending at total`() = runBlocking {
+        val cards = (1..5).map { index ->
+            CardEntity(
+                name = "Card $index",
+                setCode = "SET",
+                setName = "",
+                collectorNumber = "$index",
+                foil = "",
+                rarity = "",
+                quantity = 1,
+                manaBoxId = "",
+                scryfallId = "",
+                purchasePrice = 0.0,
+                misprint = false,
+                altered = false,
+                condition = "",
+                language = "",
+                purchasePriceCurrency = "",
+                added = "",
+                tag = "Test"
+            )
+        }
+        val progress = mutableListOf<Pair<Int, Int>>()
+        val outcome = ThirdPartyImport.enrichWithProgress(
+            cards,
+            onProgress = { processed, total -> progress += processed to total },
+            lookup = { null }
+        )
+        assertEquals(5, outcome.unresolved)
+        assertEquals(cards.size, outcome.cards.size)
+        assertEquals((1..5).map { it to 5 }, progress)
     }
 }

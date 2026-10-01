@@ -1,5 +1,7 @@
 package com.gitlab.abelnightroad.data
 
+import com.gitlab.abelnightroad.db.CardEntity
+import com.gitlab.abelnightroad.db.ScryfallCardEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -39,34 +41,58 @@ object ThirdPartyImport {
         text: String,
         tag: String,
         repository: CardRepository,
-        scryfall: ScryfallRepository
+        scryfall: ScryfallRepository,
+        onProgress: (processed: Int, total: Int) -> Unit = { _, _ -> }
     ): Result = withContext(Dispatchers.IO) {
         if (looksLikeManaBoxCsv(text)) {
             val csv = CsvImport.parse(text, tag)
+            onProgress(0, csv.cards.size)
             repository.insertAll(csv.cards)
+            onProgress(csv.cards.size, csv.cards.size)
             Result(
                 imported = csv.cards.size,
                 skippedRows = csv.skippedRows.map { SkippedRow(it.row, it.reason) }
             )
         } else {
             val parsed = QtyListImport.parse(text, tag)
-            var unresolved = 0
-            val enriched = parsed.cards.map { card ->
-                val ref = scryfall.lookupBySetAndCollector(card.setCode, card.collectorNumber)
+            val enriched = enrichWithProgress(parsed.cards, onProgress) { card ->
+                scryfall.lookupBySetAndCollector(card.setCode, card.collectorNumber)
                     ?: scryfall.lookupByNameAndSet(card.name, card.setCode)
-                if (ref == null) {
-                    unresolved++
-                    card
-                } else {
-                    card.copy(setName = ref.setName, rarity = ref.rarity, scryfallId = ref.id)
-                }
             }
-            repository.insertMergingDuplicates(enriched)
+            repository.insertMergingDuplicates(enriched.cards)
             Result(
-                imported = enriched.size,
+                imported = enriched.cards.size,
                 skippedRows = parsed.skippedRows.map { SkippedRow(it.row, it.reason) },
-                unresolved = unresolved
+                unresolved = enriched.unresolved
             )
         }
+    }
+
+    internal class EnrichmentOutcome(
+        val cards: List<CardEntity>,
+        val unresolved: Int
+    )
+
+    internal suspend fun enrichWithProgress(
+        cards: List<CardEntity>,
+        onProgress: (processed: Int, total: Int) -> Unit,
+        lookup: suspend (CardEntity) -> ScryfallCardEntity?
+    ): EnrichmentOutcome {
+        var unresolved = 0
+        val total = cards.size
+        val enriched = ArrayList<CardEntity>(total)
+        for ((index, card) in cards.withIndex()) {
+            val ref = lookup(card)
+            if (ref == null) {
+                unresolved++
+                enriched.add(card)
+            } else {
+                enriched.add(
+                    card.copy(setName = ref.setName, rarity = ref.rarity, scryfallId = ref.id)
+                )
+            }
+            onProgress(index + 1, total)
+        }
+        return EnrichmentOutcome(enriched, unresolved)
     }
 }

@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,7 +53,9 @@ import com.gitlab.abelnightroad.db.CardSearchResult
 import com.gitlab.abelnightroad.ui.components.ImportResult
 import com.gitlab.abelnightroad.ui.components.ImportResultDialog
 import com.gitlab.abelnightroad.ui.components.QuantityStepper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +74,8 @@ internal fun CardListScreen(
     var showImportDialog by remember { mutableStateOf(false) }
     var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var importResult by remember { mutableStateOf<ImportResult?>(null) }
+    var isImporting by remember { mutableStateOf(false) }
+    var importProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     val importFileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -80,8 +86,10 @@ internal fun CardListScreen(
     if (showImportDialog) {
         AlertDialog(
             onDismissRequest = {
-                showImportDialog = false
-                pendingImportUri = null
+                if (!isImporting) {
+                    showImportDialog = false
+                    pendingImportUri = null
+                }
             },
             title = { Text("Import into \"$tag\"") },
             text = {
@@ -105,35 +113,63 @@ internal fun CardListScreen(
             },
             confirmButton = {
                 TextButton(
-                    enabled = pendingImportUri != null,
+                    enabled = pendingImportUri != null && !isImporting,
                     onClick = {
                         val uri = pendingImportUri
-                        showImportDialog = false
-                        pendingImportUri = null
-                        uri?.let { picked ->
+                        if (uri != null) {
+                            isImporting = true
                             scope.launch {
                                 try {
-                                    val text = context.contentResolver.openInputStream(picked)
-                                        ?.use { it.bufferedReader(Charsets.UTF_8).readText() }
-                                        ?: throw Exception("Could not read file")
-                                    importResult = vm.importIntoTag(tag, text)
+                                    val text = withContext(Dispatchers.IO) {
+                                        context.contentResolver.openInputStream(uri)
+                                            ?.use { it.bufferedReader(Charsets.UTF_8).readText() }
+                                            ?: throw Exception("Could not read file")
+                                    }
+                                    importResult = vm.importIntoTag(tag, text) { processed, total ->
+                                        importProgress = processed to total
+                                    }
+                                    showImportDialog = false
                                 } catch (e: Exception) {
                                     android.widget.Toast.makeText(
                                         context,
                                         "Import failed: ${e.message}",
                                         android.widget.Toast.LENGTH_SHORT
                                     ).show()
+                                    showImportDialog = false
+                                } finally {
+                                    isImporting = false
+                                    importProgress = null
+                                    pendingImportUri = null
                                 }
                             }
                         }
                     }
-                ) { Text("Import") }
+                ) {
+                    if (isImporting) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                importProgress?.let { "${it.first} / ${it.second} cards" }
+                                    ?: "Importing…"
+                            )
+                        }
+                    } else {
+                        Text("Import")
+                    }
+                }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showImportDialog = false
-                    pendingImportUri = null
-                }) { Text("Cancel") }
+                TextButton(
+                    enabled = !isImporting,
+                    onClick = {
+                        showImportDialog = false
+                        pendingImportUri = null
+                    }
+                ) { Text("Cancel") }
             }
         )
     }

@@ -13,12 +13,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -85,6 +87,8 @@ internal fun SettingsScreen(
     var importTag by remember { mutableStateOf("MegaBox-01") }
     var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var importResult by remember { mutableStateOf<ImportResult?>(null) }
+    var isImporting by remember { mutableStateOf(false) }
+    var importProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     val importFileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -284,8 +288,11 @@ internal fun SettingsScreen(
                 importFileLauncher.launch(arrayOf("text/csv", "application/json", "text/plain"))
             },
             selectedFileName = pendingImportUri?.lastPathSegment,
+            isImporting = isImporting,
+            importProgress = importProgress,
             onImport = {
                 pendingImportUri?.let { uri ->
+                    isImporting = true
                     scope.launch(Dispatchers.IO) {
                         try {
                             val path = uri.lastPathSegment?.lowercase() ?: ""
@@ -295,32 +302,33 @@ internal fun SettingsScreen(
                             if (path.endsWith(".json")) {
                                 val cards = BackupStore.decodeToTag(text, importTag)
                                 repository.insertAll(cards)
-                                withContext(Dispatchers.Main) {
-                                    importResult = ImportResult(
-                                        imported = cards.size,
-                                        skippedRows = emptyList()
-                                    )
-                                }
+                                importResult = ImportResult(
+                                    imported = cards.size,
+                                    skippedRows = emptyList()
+                                )
                             } else {
-                                val result = ThirdPartyImport.import(text, importTag, repository, scryfall)
-                                withContext(Dispatchers.Main) {
-                                    importResult = ImportResult(
-                                        imported = result.imported,
-                                        skippedRows = result.skippedRows.map {
-                                            SkippedEntry(it.row, it.reason)
-                                        },
-                                        unresolved = result.unresolved
-                                    )
+                                val result = ThirdPartyImport.import(
+                                    text, importTag, repository, scryfall
+                                ) { processed, total ->
+                                    importProgress = processed to total
                                 }
+                                importResult = ImportResult(
+                                    imported = result.imported,
+                                    skippedRows = result.skippedRows.map {
+                                        SkippedEntry(it.row, it.reason)
+                                    },
+                                    unresolved = result.unresolved
+                                )
                             }
                         } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                backupStatus = "Import failed: ${e.message}"
-                            }
+                            backupStatus = "Import failed: ${e.message}"
+                        } finally {
+                            showImportDialog = false
+                            pendingImportUri = null
+                            isImporting = false
+                            importProgress = null
                         }
                     }
-                    showImportDialog = false
-                    pendingImportUri = null
                 }
             },
             onDismiss = {
@@ -450,11 +458,13 @@ private fun ImportDialog(
     onTagChange: (String) -> Unit,
     onChooseFile: () -> Unit,
     selectedFileName: String?,
+    isImporting: Boolean,
+    importProgress: Pair<Int, Int>?,
     onImport: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isImporting) onDismiss() },
         title = { Text("Import from 3rd-Party") },
         text = {
             Column {
@@ -468,6 +478,7 @@ private fun ImportDialog(
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = onChooseFile,
+                    enabled = !isImporting,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (selectedFileName != null) "File: $selectedFileName" else "Choose file (CSV, JSON, TXT)")
@@ -477,11 +488,24 @@ private fun ImportDialog(
         confirmButton = {
             TextButton(
                 onClick = onImport,
-                enabled = selectedFileName != null
-            ) { Text("Import") }
+                enabled = selectedFileName != null && !isImporting
+            ) {
+                if (isImporting) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            importProgress?.let { "${it.first} / ${it.second} cards" }
+                                ?: "Importing…"
+                        )
+                    }
+                } else {
+                    Text("Import")
+                }
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isImporting) { Text("Cancel") }
         }
     )
 }
