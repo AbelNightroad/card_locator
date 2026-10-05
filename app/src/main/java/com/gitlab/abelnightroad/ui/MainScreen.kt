@@ -50,8 +50,8 @@ import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.db.CardSearchResult
 import com.gitlab.abelnightroad.db.MultiCopyCard
 import com.gitlab.abelnightroad.db.TagCount
+import com.gitlab.abelnightroad.ui.components.AdvancedFilterDialog
 import com.gitlab.abelnightroad.ui.components.CreateTagDialog
-import com.gitlab.abelnightroad.ui.components.SearchFilterChips
 import kotlinx.coroutines.flow.flowOf
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,8 +73,12 @@ internal fun MainScreen(
     val rarityFilter by viewModel.rarityFilter.collectAsState()
     var fabExpanded by rememberSaveable { mutableStateOf(false) }
     var showCreateTag by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
 
-    val searchResults: List<CardSearchResult> by if (search.isBlank()) {
+    val hasActiveFilters = colorFilter != null || typeFilter != null || rarityFilter != null
+    val showResults = search.isNotBlank() || hasActiveFilters
+
+    val searchResults: List<CardSearchResult> by if (!showResults) {
         flowOf(emptyList<CardSearchResult>())
     } else {
         viewModel.advancedSearchFlow(search, colorFilter, typeFilter, rarityFilter)
@@ -86,6 +90,15 @@ internal fun MainScreen(
             TopAppBar(
                 title = { Text("Card Tracker") },
                 actions = {
+                    IconButton(onClick = { showFilterDialog = true }) {
+                        Icon(
+                            FontAwesomeIcons.Solid.Search,
+                            "Advanced filters",
+                            modifier = Modifier.size(24.dp),
+                            tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(onClick = { viewModel.setDarkMode(!dark) }) {
                         Icon(
                             if (dark) FontAwesomeIcons.Solid.Sun else FontAwesomeIcons.Solid.Moon,
@@ -169,19 +182,8 @@ internal fun MainScreen(
                 }
             }
 
-            if (search.isNotBlank()) {
-                SearchFilterChips(
-                    colorFilter = colorFilter,
-                    typeFilter = typeFilter,
-                    rarityFilter = rarityFilter,
-                    onColorClick = viewModel::setColorFilter,
-                    onTypeClick = viewModel::setTypeFilter,
-                    onRarityClick = viewModel::setRarityFilter
-                )
-            }
-
             when {
-                search.isNotBlank() -> CardResultList(searchResults, onCardClick)
+                showResults -> CardResultList(searchResults, onCardClick)
                 multiOnly -> CardResultList(
                     multiCards.map {
                         CardSearchResult(
@@ -199,6 +201,19 @@ internal fun MainScreen(
         CreateTagDialog(
             onDismiss = { showCreateTag = false },
             onCreate = viewModel::createTag
+        )
+    }
+
+    if (showFilterDialog) {
+        AdvancedFilterDialog(
+            colorFilter = colorFilter,
+            typeFilter = typeFilter,
+            rarityFilter = rarityFilter,
+            onColorClick = viewModel::setColorFilter,
+            onTypeClick = viewModel::setTypeFilter,
+            onRarityClick = viewModel::setRarityFilter,
+            onClear = viewModel::clearFilters,
+            onDismiss = { showFilterDialog = false }
         )
     }
 }

@@ -48,6 +48,10 @@ class MainViewModel(
 
     fun clearSearch() {
         _search.value = ""
+        clearFilters()
+    }
+
+    fun clearFilters() {
         _colorFilter.value = null
         _typeFilter.value = null
         _rarityFilter.value = null
