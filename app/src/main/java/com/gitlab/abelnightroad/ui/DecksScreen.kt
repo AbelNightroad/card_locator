@@ -43,7 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -54,6 +53,7 @@ import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.db.DeckEntity
 import com.gitlab.abelnightroad.ui.components.ScryfallAsyncImage
+import com.gitlab.abelnightroad.ui.theme.DynamicColorGenerator
 import com.gitlab.abelnightroad.data.ScryfallImage
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -147,6 +147,10 @@ internal fun DecksScreen(
                         textAlign = TextAlign.Center)
                 }
             } else {
+                val baseThemeColor = MaterialTheme.colorScheme.primary
+                val formatColors = remember(baseThemeColor, formatCounts.size) {
+                    DynamicColorGenerator.generateComplementaryColors(baseThemeColor, formatCounts.size)
+                }
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     Modifier.padding(padding).padding(start = 16.dp, end = 16.dp, top = 8.dp),
@@ -155,7 +159,8 @@ internal fun DecksScreen(
                 ) {
                     itemsIndexed(formatCounts, key = { _, it -> it.format }) { index, fc ->
                         var showFormatMenu by remember { mutableStateOf(false) }
-                        val formatColor = formatPalette[index % formatPalette.size]
+                        val formatBg = formatColors[index % formatColors.size]
+                        val formatFg = DynamicColorGenerator.onColor(formatBg)
                         Card(
                             Modifier.fillMaxWidth().combinedClickable(
                                 onClick = {
@@ -164,7 +169,7 @@ internal fun DecksScreen(
                                 },
                                 onLongClick = { showFormatMenu = true }
                             ),
-                            colors = CardDefaults.cardColors(containerColor = formatColor.bg),
+                            colors = CardDefaults.cardColors(containerColor = formatBg),
                             elevation = CardDefaults.cardElevation(2.dp)
                         ) {
                             Column(
@@ -172,12 +177,12 @@ internal fun DecksScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(fc.format, style = MaterialTheme.typography.titleMedium,
-                                    color = formatColor.fg,
+                                    color = formatFg,
                                     textAlign = TextAlign.Center)
                                 Spacer(Modifier.height(4.dp))
                                 Text("${fc.deckCount} decks",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = formatColor.fg.copy(alpha = 0.7f))
+                                    color = formatFg.copy(alpha = 0.7f))
                             }
                             DropdownMenu(expanded = showFormatMenu, onDismissRequest = { showFormatMenu = false }) {
                                 DropdownMenuItem(
@@ -412,20 +417,3 @@ private fun CreateDeckDialog(
         }
     )
 }
-
-private data class FormatColor(val bg: Color, val fg: Color)
-
-private val formatPalette = listOf(
-    FormatColor(Color(0xFFD7B7A3), Color(0xFF3A2E26)),
-    FormatColor(Color(0xFFB7C9A8), Color(0xFF2C3A26)),
-    FormatColor(Color(0xFFA8C3C9), Color(0xFF26343A)),
-    FormatColor(Color(0xFFC3B7D7), Color(0xFF322A3A)),
-    FormatColor(Color(0xFFE3C9A3), Color(0xFF3A3026)),
-    FormatColor(Color(0xFFD7A8B7), Color(0xFF3A2630)),
-    FormatColor(Color(0xFFA3B7D7), Color(0xFF262E3A)),
-    FormatColor(Color(0xFFC9CBA3), Color(0xFF343626)),
-    FormatColor(Color(0xFFA3D7C3), Color(0xFF263A33)),
-    FormatColor(Color(0xFFD7C3A3), Color(0xFF3A3326)),
-    FormatColor(Color(0xFFB7A3D7), Color(0xFF2E263A)),
-    FormatColor(Color(0xFFC9A3A3), Color(0xFF3A2E2E))
-)
