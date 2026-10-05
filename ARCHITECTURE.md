@@ -577,10 +577,11 @@ item selected (`indexOfFirst` → -1).
 
 ### 8.1 MainScreen (Collection)
 
-- **Top bar:** Title "Collection", search bar, filter icon.
+- **Top bar:** Title "Card Tracker", magnifier icon (advanced filters), light/dark toggle. The magnifier tints to `primary` while any filter is active.
 - **Tag list:** `LazyColumn` with `TagRow` per tag showing tag name, card count, total value.
 - **Multi-copy toggle:** Filter for cards with >4 copies, grouped by card **name** across all sets/tags/finishes (`GROUP BY name`, representative printing via `MIN(set_code)`).
-- **Advanced search:** `SearchFilterChips` for color (W/U/B/R/G), type (Creature/Instant/Sorcery/...), rarity.
+- **Search field:** Live name filter (leading magnifier, clear "✕" while non-blank). Results show when the query is non-blank **or** an advanced filter is set; filter-only queries use `searchAdvanced("")` (name `LIKE '%%'` → filter the whole collection).
+- **Advanced filters:** Tapping the top-bar magnifier opens `AdvancedFilterDialog` (Color W/U/B/R/G, Type, Rarity chip groups + "Clear all"). Chips apply immediately via `MainViewModel.setColorFilter/setTypeFilter/setRarityFilter`; `clearFilters()` resets only filters, `clearSearch()` resets query + filters.
 - **FAB speed dial:** Tap unfolds two options — **Card** (`PenToSquare`) → `Screen.AddCard()`, **Tag** (`Tag`) → shared `CreateTagDialog`; tapping again or choosing an option collapses it (main FAB icon rotates 45°).
 - **Tap tag:** Navigates to `Screen.Cards(tag)`.
 - **Tap card:** Opens fullscreen `FullscreenOverlay` with Scryfall image.
@@ -632,7 +633,7 @@ item selected (`indexOfFirst` → -1).
 
 ### 8.6 DecksScreen
 
-- **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`); each format card uses a static 12-entry `FormatColor(bg, fg)` palette picked by list index (`DecksScreen.kt` bottom) — mid-tone bg + dark fg, never the theme's `background`/`surface`, so cards stay distinct and visible in both themes.
+- **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`); each format card gets a runtime-generated color: `DynamicColorGenerator.generateComplementaryColors(colorScheme.primary, count)` hue-shifts the active theme's primary around the color wheel (theme saturation, lightness clamped to 0.55–0.68 so cards stay mid-tone and readable in light and dark), `remember(baseColor, formatCounts.size)` keeps it stable across recompositions, `index % size` picks the color and `DynamicColorGenerator.onColor()` picks dark/light text by WCAG luminance. Never the theme's `background`/`surface`.
 - **Long-press format:** Delete format (removes all decks with CASCADE).
 - **Tap format:** Shows that format's decks.
 - **Deck card:** Cover image (artCrop 5:3, flush to card edges), then a 8dp-padded text block with name, format, card count. Long-press: clone/rename/delete (rename = AlertDialog with `OutlinedTextField` prefilled, `DecksViewModel.renameDeck` → `DeckDao.renameDeck`).
@@ -694,7 +695,7 @@ item selected (`indexOfFirst` → -1).
 | `LoadingBox`, `ErrorBox`, `EmptyBox` | `LoadingBox.kt` | Loading/error/empty states |
 | `CameraPreview` | `CameraPreview.kt` | CameraX `PreviewView` composable |
 | `BarChart`, `DonutChart`, `PieChartWithLegend` | `DeckStatsCharts.kt` | Canvas chart composables |
-| `SearchFilterChips` | `SearchFilterChips.kt` | Color/type/rarity filter chips |
+| `AdvancedFilterDialog` | `AdvancedFilterDialog.kt` | Home advanced filter dialog (color/type/rarity chips) |
 | `FilledBottomNavigationBar` | `BottomNavigationBar.kt` | Icon-only bottom nav with filled selected background |
 | `ImportResultDialog`, `SkippedRowsDialog` | `ImportResultDialogs.kt` | Shared import result (imported/skipped/unresolved) + skipped-row list |
 
@@ -768,6 +769,12 @@ SUPERTYPES = listOf("Legendary", "Snow", "World", "Basic")
 | `germania_one` | Germania One | `R.font.germania_one` |
 
 Typography applies the selected font family to all 15 Material3 text styles.
+
+**Dynamic accent colors:** `ui/theme/DynamicColorGenerator.kt` derives off-theme
+accent colors at runtime from a theme color (HSL hue rotation, theme saturation,
+lightness clamped to 0.55–0.68) plus `onColor()` WCAG-luminance text selection.
+Pure Kotlin (no `android.graphics`, so JVM-unit-testable); used by the Decks
+format grid and covered by `DynamicColorGeneratorTest`.
 
 ---
 
