@@ -289,12 +289,20 @@ fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
 @Query("SELECT id, name, set_code as setCode, set_name as setName, collector_number as collectorNumber, foil, rarity, quantity, scryfall_id as scryfallId, tag FROM cards WHERE name LIKE '%' || :query || '%' ORDER BY name")
 fun searchByName(query: String): Flow<List<CardSearchResult>>
 
-@Query("SELECT id, name, set_code as setCode, set_name as setName, collector_number as collectorNumber, foil, rarity, quantity, scryfall_id as scryfallId, tag FROM cards WHERE name LIKE '%' || :query || '%' AND (:color IS NULL OR tag IN (SELECT tag FROM cards WHERE tag = tag AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%' || :color || '%'))) AND (:type IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) AND (:rarity IS NULL OR rarity = :rarity) ORDER BY name")
-fun searchAdvanced(query: String, color: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
+@Query("SELECT id, name, set_code, set_name, collector_number, foil, rarity, quantity, scryfall_id, tag FROM cards WHERE name LIKE '%' || :query || '%' COLLATE NOCASE AND (:colors IS NULL OR (instr(:colors, 'W') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%W%')) OR (instr(:colors, 'U') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%U%')) OR (instr(:colors, 'B') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%B%')) OR (instr(:colors, 'R') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%R%')) OR (instr(:colors, 'G') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%G%')) OR (instr(:colors, 'C') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity = ''))) AND (:type IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) AND (:rarity IS NULL OR rarity = :rarity) ORDER BY name COLLATE NOCASE ASC")
+fun searchAdvanced(query: String, colors: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
 
 @Query("SELECT name, set_code as setCode, set_name as setName, scryfall_id as scryfallId, SUM(quantity) as totalQuantity FROM cards GROUP BY name, set_code HAVING SUM(quantity) > 4 ORDER BY name")
 fun multiCopyCards(): Flow<List<MultiCopyCard>>
 ```
+
+- `searchAdvanced.colors` is the selected color codes concatenated (`"WU"`, `"WC"`, `null` =
+  no color filter). Each of the six static clauses is skipped unless its code is present, so a
+  card matches **any** selected color (OR); `C` matches rows whose
+  `scryfall_cards.color_identity` is empty. Rows without a `scryfall_cards` row are excluded
+  while a color filter is active.
+- `CardRepository.searchAdvanced()` encodes the UI's `Set<String>` into `colors`
+  (`joinToString("")`, empty set → `null`).
 
 ### ScryfallCardDao
 
@@ -496,15 +504,22 @@ Response: `ArchidektResponse { name, cards: [{ quantity, card: { oracleCard: { n
 
 **User-Agent:** Mozilla/5.0 with Accept, Accept-Language, Referer headers.
 
-**Format page:** `https://www.mtgtop8.com/format?f=XX`
+**Format page:** `https://mtgtop8.com/format?f=XX` (Commander → `https://mtgtop8.com/format?f=cEDH&meta=300`)
 - Parse `div.hover_tr:has(div.S14 a[href*=archetype])` for archetype list.
 - Extract: name, thumbnail (`/metas_thumbs/`), meta %, archetype ID.
+- **XHR formats (cEDH / EDH):** the static page ships an empty deck container
+  `div[id$=_decks]` (e.g. `#cEDH_decks`) and fills it from its own script via
+  `RequestContent("cEDH_decks?f="+f+"&show="+show+"&cid="+color_id+"&meta="+meta+...)`.
+  When the static page yields no archetypes, `MetaDecklistLoader.xhrDecksUrl(pageHtml, code)`
+  reads the endpoint id and `meta=NNN;` from the script and POSTs to
+  `https://mtgtop8.com/<endpoint>?f=<code>&show=pop&cid=&meta=<meta>&gamerid1=&gamerid2=&cEDH_cp=1`;
+  the fragment is parsed with the same selector. Still empty → `IOException("No archetypes found for $format")`.
 
-**Archetype page:** `https://www.mtgtop8.com/archetype?aid=XX`
-- First deck link → event page.
+**Archetype page:** `https://mtgtop8.com/archetype?a=XX&meta=NN&f=XX`
+- First deck link (`tr.hover_tr a[href*='/event?']`) → event page.
 
-**Event page:** Parse `div[id^=md].deck_line` (mainboard) and `div[id^=sb].deck_line` (sideboard).
-- Format codes: ST (Standard), MO (Modern), PI (Pioneer), PAU (Pauper), LE (Legacy), VI (Vintage), PREM (Premodern), EDH (Commander).
+**Event page:** `MetaDecklistLoader.parseDecklist()` walks `div.O14` section headers together with `div[id^=md].deck_line` / `div[id^=sb].deck_line`: cards under a `COMMANDER` header → `slot = "commander"` (mtgtop8 marks them with `sb` ids), other `sb` ids → `sideboard`, `md` ids → `mainboard`. The list is stably ordered commander → mainboard → sideboard.
+- Format codes: ST (Standard), MO (Modern), PI (Pioneer), PAU (Pauper), LE (Legacy), VI (Vintage), PREM (Premodern), cEDH (Commander).
 
 ### 6.6 MTG Goldfish (HTML scraping)
 
@@ -581,7 +596,7 @@ item selected (`indexOfFirst` → -1).
 - **Tag list:** `LazyColumn` with `TagRow` per tag showing tag name, card count, total value.
 - **Multi-copy toggle:** Filter for cards with >4 copies, grouped by card **name** across all sets/tags/finishes (`GROUP BY name`, representative printing via `MIN(set_code)`).
 - **Search field:** Live name filter (leading magnifier, clear "✕" while non-blank). Results show when the query is non-blank **or** an advanced filter is set; filter-only queries use `searchAdvanced("")` (name `LIKE '%%'` → filter the whole collection).
-- **Advanced filters:** Tapping the top-bar magnifier opens `AdvancedFilterDialog` (Color W/U/B/R/G, Type, Rarity chip groups + "Clear all"). Chips apply immediately via `MainViewModel.setColorFilter/setTypeFilter/setRarityFilter`; `clearFilters()` resets only filters, `clearSearch()` resets query + filters.
+- **Advanced filters:** Tapping the top-bar magnifier opens `AdvancedFilterDialog` (Color W/U/B/R/G/**Colorless**, Type, Rarity chip groups + "Clear all"). Color chips are multi-select (`MainViewModel.toggleColorFilter` toggles a code in a `Set<String>`, any selected color matches); Type/Rarity stay single-select via `setTypeFilter/setRarityFilter`. Chips apply immediately; `clearFilters()` resets only filters, `clearSearch()` resets query + filters.
 - **FAB speed dial:** Tap unfolds two options — **Card** (`PenToSquare`) → `Screen.AddCard()`, **Tag** (`Tag`) → shared `CreateTagDialog`; tapping again or choosing an option collapses it (main FAB icon rotates 45°).
 - **Tap tag:** Navigates to `Screen.Cards(tag)`.
 - **Tap card:** Opens fullscreen `FullscreenOverlay` with Scryfall image.
@@ -626,10 +641,10 @@ item selected (`indexOfFirst` → -1).
 
 ### 8.5 MetaScreen
 
-- **Format chips:** FilterChips for Standard/MO/PI/PAU/LE/VI/PREM/EDH. Standard auto-loaded.
+- **Format chips:** FilterChips for Standard/MO/PI/PAU/LE/VI/PREM/Commander. Standard auto-loaded; Commander loads the cEDH metagame (`MetaDecklistLoader` XHR fallback — see §6.5).
 - **Deck grid:** 2-column `LazyVerticalGrid` of archetypes from mtgtop8.
 - **Tap deck:** Opens dialog with decklist + "Import to Decks" button.
-- **Import:** Creates deck from parsed cards, validates Commander color identity.
+- **Import:** Creates deck from parsed cards, validates Commander color identity (partner pair = 2 commanders, identity check uses their union).
 
 ### 8.6 DecksScreen
 
@@ -663,7 +678,7 @@ item selected (`indexOfFirst` → -1).
 - **Paste/File sources** (TappedOut; also any URL-aware source): Text paste or file import (CSV/TXT).
 - **Flow:** Parse → Preview dialog (card list with quantity/slot) → Import → Navigate to DeckView.
 - **Format dropdown:** Defaults to Commander. Used for deck creation.
-- **importDeckCards():** Shared function resolves cards via `ScryfallRepository.lookupByNameResilient()`, enforces Commander color identity, adds to deck. Parallel Scryfall lookups.
+- **importDeckCards():** Shared function resolves cards via `ScryfallRepository.lookupByNameResilient()` (parallel lookups) and adds them to the deck. Commander: a `commander` slot declared by the source wins; otherwise card 0 becomes the commander. The identity filter skips cards outside the **union** of every commander-slot card's identity (`DeckRepository.mergeColorIdentities`), so partner pairs keep the whole list.
 
 ### 8.10 ScanCameraScreen
 
@@ -726,8 +741,8 @@ fun interface FormatRule {
 | Commander, Brawl | CommanderCountRule + ColorIdentityRule + LegalityRule |
 | All others | LegalityRule only |
 
-- **CommanderCountRule:** Exactly 1 card with `slot == "commander"`.
-- **ColorIdentityRule:** All non-commander/companion cards must have color identity ⊆ commander's.
+- **CommanderCountRule:** 1–2 cards with `slot == "commander"` (partner pair allowed).
+- **ColorIdentityRule:** All non-commander/companion cards must have color identity ⊆ union of the commanders' identities (`DeckRepository.mergeColorIdentities`).
 - **LegalityRule:** Each card's `legalities` JSON must contain `"legal"` or `"restricted"` for the deck's format.
 
 ### Card Conditions
