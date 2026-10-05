@@ -50,8 +50,8 @@ private object CommanderCountRule : FormatRule {
     ): List<String> {
         val cmdCount = cards.count { it.slot == "commander" }
         return when {
-            cmdCount == 0 -> listOf("Missing commander — $format decks require exactly 1 commander")
-            cmdCount > 1 -> listOf("Too many commanders ($cmdCount) — $format decks require exactly 1 commander")
+            cmdCount == 0 -> listOf("Missing commander — $format decks require a commander")
+            cmdCount > 2 -> listOf("Too many commanders ($cmdCount) — $format decks allow up to 2 (partner pair)")
             else -> emptyList()
         }
     }
@@ -63,8 +63,11 @@ private object ColorIdentityRule : FormatRule {
         cards: List<DeckCardEntity>,
         legalitiesMap: Map<String, String>
     ): List<String> {
-        val commander = cards.find { it.slot == "commander" } ?: return emptyList()
-        val cmdColors = commander.colorIdentity
+        val cmdColors = cards
+            .filter { it.slot == "commander" }
+            .map { it.colorIdentity }
+            .filter { it.isNotBlank() }
+            .fold("") { acc, colors -> DeckRepository.mergeColorIdentities(acc, colors) }
         if (cmdColors.isBlank()) return emptyList()
         return cards
             .filter { it.slot != "commander" && it.slot != "companion" }

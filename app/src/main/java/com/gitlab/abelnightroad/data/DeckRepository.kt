@@ -106,5 +106,13 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
             val cmdSet = commanderColors.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
             return cardSet.all { it in cmdSet }
         }
+
+        fun mergeColorIdentities(a: String, b: String): String =
+            (a.split(",") + b.split(","))
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+                .joinToString(",")
     }
 }

@@ -37,18 +37,24 @@ internal suspend fun importDeckCards(
         }.awaitAll()
     }
 
-    var commanderColors = ""
-    var warningCount = 0
+    val declaredCommander = cards.any { it.slot == "commander" }
+    val slots = cards.mapIndexed { i, card ->
+        if (isCommanderFormat && !declaredCommander && i == 0) "commander" else card.slot
+    }
+
+    val commanderColors = if (!isCommanderFormat) "" else {
+        resolved.filterIndexed { i, _ -> slots[i] == "commander" }
+            .mapNotNull { it.second?.colorIdentity }
+            .filter { it.isNotBlank() }
+            .fold("") { acc, colors -> DeckRepository.mergeColorIdentities(acc, colors) }
+    }
+
     for ((i, pair) in resolved.withIndex()) {
         val (c, scryfallCard) = pair
-        val actualSlot = if (isCommanderFormat && i == 0) "commander" else c.slot
+        val slot = slots[i]
         if (scryfallCard != null) {
-            if (isCommanderFormat && i == 0) {
-                commanderColors = scryfallCard.colorIdentity
-            }
-            if (isCommanderFormat && i > 0 && commanderColors.isNotBlank()
+            if (isCommanderFormat && slot != "commander" && commanderColors.isNotBlank()
                 && !DeckRepository.isColorIdentityValid(scryfallCard.colorIdentity, commanderColors)) {
-                warningCount++
                 continue
             }
             deckRepository.addCardToDeck(
@@ -62,7 +68,7 @@ internal suspend fun importDeckCards(
                 quantity = c.quantity,
                 manaCost = scryfallCard.manaCost,
                 typeLine = scryfallCard.typeLine,
-                slot = actualSlot
+                slot = slot
             )
         } else {
             deckRepository.addCardToDeck(
@@ -71,7 +77,7 @@ internal suspend fun importDeckCards(
                 cardName = c.cardName,
                 setCode = "", setName = "",
                 collectorNumber = "", rarity = "",
-                quantity = c.quantity, slot = actualSlot
+                quantity = c.quantity, slot = slot
             )
         }
     }
