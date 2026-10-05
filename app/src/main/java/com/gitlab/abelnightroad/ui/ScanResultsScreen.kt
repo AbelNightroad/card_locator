@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,7 @@ internal fun ScanResultsScreen(
     sessionId: Long,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val cards by viewModel.getScannedCards(sessionId).collectAsState(initial = emptyList())
     val isProcessing by viewModel.isProcessing.collectAsState()
     val lastError by viewModel.lastError.collectAsState()
@@ -67,7 +69,7 @@ internal fun ScanResultsScreen(
 
     LaunchedEffect(lastError) {
         lastError?.let {
-            Toast.makeText(null, it, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             viewModel.clearError()
         }
     }
@@ -148,7 +150,7 @@ internal fun ScanResultsScreen(
             onTagInputChange = { tagInput = it },
             onConfirm = {
                 viewModel.addToCollection(tagInput)
-                Toast.makeText(null, "Added ${cards.size} cards to collection", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Added ${cards.size} cards to collection", Toast.LENGTH_SHORT).show()
                 showTagDialog = false
                 tagInput = ""
             },
