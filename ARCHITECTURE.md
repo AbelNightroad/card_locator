@@ -82,7 +82,7 @@ wrapper: 9.7.1. Builds on any JDK ≥ 17, verified on system JDK 26.
 
 ### App Version
 
-`versionCode = 5`, `versionName = "1.3.0"` with `buildFeatures.buildConfig = true`;
+ `versionCode = 6`, `versionName = "1.3.2"` with `buildFeatures.buildConfig = true`;
 `BuildConfig.VERSION_NAME` is shown in Settings → About. Versioning policy: PATCH
 for fixes, MINOR for features, MAJOR for breaking changes (see §15).
 
@@ -651,7 +651,7 @@ item selected (`indexOfFirst` → -1).
 - **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`); each format card gets a runtime-generated color: `DynamicColorGenerator.generateComplementaryColors(colorScheme.primary, count)` hue-shifts the active theme's primary around the color wheel (theme saturation, lightness clamped to 0.55–0.68 so cards stay mid-tone and readable in light and dark), `remember(baseColor, formatCounts.size)` keeps it stable across recompositions, `index % size` picks the color and `DynamicColorGenerator.onColor()` picks dark/light text by WCAG luminance. Never the theme's `background`/`surface`.
 - **Long-press format:** Delete format (removes all decks with CASCADE).
 - **Tap format:** Shows that format's decks.
-- **Deck card:** Cover image (artCrop 5:3, flush to card edges), then a 8dp-padded text block with name, format, card count. Long-press: clone/rename/delete (rename = AlertDialog with `OutlinedTextField` prefilled, `DecksViewModel.renameDeck` → `DeckDao.renameDeck`).
+- **Deck card:** Cover image (artCrop, `ContentScale.Crop` into a fixed 5:3 box so it always fills the card edges with no letterboxing), then a 8dp-padded text block with name, format, card count. Long-press: clone/rename/delete (rename = AlertDialog with `OutlinedTextField` prefilled, `DecksViewModel.renameDeck` → `DeckDao.renameDeck`).
 - **FAB:** Create deck dialog (name + format dropdown).
 - **Top bar:** Import button (download icon) → `Screen.UnifiedImport`.
 
