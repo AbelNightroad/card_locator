@@ -21,8 +21,8 @@ class CardRepository(private val dao: CardDao, private val tagDao: TagDao) {
 
     fun cardsByTag(tag: String): Flow<List<CardSearchResult>> = dao.cardsByTag(tag)
     fun searchByName(query: String): Flow<List<CardSearchResult>> = dao.searchByName(query)
-    fun searchAdvanced(query: String, color: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>> =
-        dao.searchAdvanced(query, color, type, rarity)
+    fun searchAdvanced(query: String, colors: Set<String>, type: String?, rarity: String?): Flow<List<CardSearchResult>> =
+        dao.searchAdvanced(query, colors.joinToString("").ifEmpty { null }, type, rarity)
 
     suspend fun isEmpty(): Boolean = dao.count() == 0
 

@@ -75,7 +75,7 @@ internal fun MainScreen(
     var showCreateTag by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
 
-    val hasActiveFilters = colorFilter != null || typeFilter != null || rarityFilter != null
+    val hasActiveFilters = colorFilter.isNotEmpty() || typeFilter != null || rarityFilter != null
     val showResults = search.isNotBlank() || hasActiveFilters
 
     val searchResults: List<CardSearchResult> by if (!showResults) {
@@ -209,7 +209,7 @@ internal fun MainScreen(
             colorFilter = colorFilter,
             typeFilter = typeFilter,
             rarityFilter = rarityFilter,
-            onColorClick = viewModel::setColorFilter,
+            onColorClick = viewModel::toggleColorFilter,
             onTypeClick = viewModel::setTypeFilter,
             onRarityClick = viewModel::setRarityFilter,
             onClear = viewModel::clearFilters,

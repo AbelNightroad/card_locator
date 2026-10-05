@@ -121,12 +121,18 @@ interface CardDao {
         "SELECT id, name, set_code, set_name, collector_number, foil, rarity, " +
             "quantity, scryfall_id, tag FROM cards " +
             "WHERE name LIKE '%' || :query || '%' COLLATE NOCASE " +
-            "AND (:color IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%' || :color || '%')) " +
+            "AND (:colors IS NULL OR " +
+            "(instr(:colors, 'W') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%W%')) " +
+            "OR (instr(:colors, 'U') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%U%')) " +
+            "OR (instr(:colors, 'B') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%B%')) " +
+            "OR (instr(:colors, 'R') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%R%')) " +
+            "OR (instr(:colors, 'G') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%G%')) " +
+            "OR (instr(:colors, 'C') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity = ''))) " +
             "AND (:type IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) " +
             "AND (:rarity IS NULL OR rarity = :rarity) " +
             "ORDER BY name COLLATE NOCASE ASC"
     )
-    fun searchAdvanced(query: String, color: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
+    fun searchAdvanced(query: String, colors: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
 
     @Transaction
     @Query(

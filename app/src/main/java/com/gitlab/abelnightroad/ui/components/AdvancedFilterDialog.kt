@@ -17,17 +17,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-private val colorOptions = listOf("W" to "White", "U" to "Blue", "B" to "Black", "R" to "Red", "G" to "Green")
+private val colorOptions = listOf(
+    "W" to "White", "U" to "Blue", "B" to "Black", "R" to "Red", "G" to "Green", "C" to "Colorless"
+)
 private val typeOptions = listOf("Creature", "Instant", "Sorcery", "Artifact", "Enchantment", "Planeswalker", "Land")
 private val rarityOptions = listOf("common" to "Common", "uncommon" to "Uncommon", "rare" to "Rare", "mythic" to "Mythic")
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AdvancedFilterDialog(
-    colorFilter: String?,
+    colorFilter: Set<String>,
     typeFilter: String?,
     rarityFilter: String?,
-    onColorClick: (String?) -> Unit,
+    onColorClick: (String) -> Unit,
     onTypeClick: (String?) -> Unit,
     onRarityClick: (String?) -> Unit,
     onClear: () -> Unit,
@@ -50,7 +52,7 @@ internal fun AdvancedFilterDialog(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     colorOptions.forEach { (code, label) ->
                         FilterChip(
-                            selected = colorFilter == code,
+                            selected = code in colorFilter,
                             onClick = { onColorClick(code) },
                             label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                         )

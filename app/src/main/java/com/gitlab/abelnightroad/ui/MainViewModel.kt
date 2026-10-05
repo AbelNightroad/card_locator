@@ -22,8 +22,8 @@ class MainViewModel(
     private val _multiCopyOnly = MutableStateFlow(false)
     val multiCopyOnly: StateFlow<Boolean> = _multiCopyOnly
 
-    private val _colorFilter = MutableStateFlow<String?>(null)
-    val colorFilter: StateFlow<String?> = _colorFilter
+    private val _colorFilter = MutableStateFlow<Set<String>>(emptySet())
+    val colorFilter: StateFlow<Set<String>> = _colorFilter
 
     private val _typeFilter = MutableStateFlow<String?>(null)
     val typeFilter: StateFlow<String?> = _typeFilter
@@ -39,8 +39,8 @@ class MainViewModel(
 
     fun searchFlow(query: String) = repository.searchByName(query)
 
-    fun advancedSearchFlow(query: String, color: String?, type: String?, rarity: String?) =
-        repository.searchAdvanced(query, color, type, rarity)
+    fun advancedSearchFlow(query: String, colors: Set<String>, type: String?, rarity: String?) =
+        repository.searchAdvanced(query, colors, type, rarity)
 
     fun setSearch(value: String) {
         _search.value = value
@@ -52,7 +52,7 @@ class MainViewModel(
     }
 
     fun clearFilters() {
-        _colorFilter.value = null
+        _colorFilter.value = emptySet()
         _typeFilter.value = null
         _rarityFilter.value = null
     }
@@ -61,8 +61,12 @@ class MainViewModel(
         _multiCopyOnly.value = !_multiCopyOnly.value
     }
 
-    fun setColorFilter(color: String?) {
-        _colorFilter.value = if (_colorFilter.value == color) null else color
+    fun toggleColorFilter(color: String) {
+        _colorFilter.value = if (color in _colorFilter.value) {
+            _colorFilter.value - color
+        } else {
+            _colorFilter.value + color
+        }
     }
 
     fun setTypeFilter(type: String?) {
