@@ -6,12 +6,17 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gitlab.abelnightroad.data.CardRepository
+import com.gitlab.abelnightroad.data.PrintingInfo
+import com.gitlab.abelnightroad.data.ScryfallPrintings
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.data.ThirdPartyImport
+import com.gitlab.abelnightroad.db.CardEntity
 import com.gitlab.abelnightroad.db.CardSearchResult
+import com.gitlab.abelnightroad.db.TagCount
 import com.gitlab.abelnightroad.ui.components.ImportResult
 import com.gitlab.abelnightroad.ui.components.SkippedEntry
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -23,6 +28,11 @@ class CardListViewModel(
     private val repository: CardRepository,
     private val scryfall: ScryfallRepository
 ) : ViewModel() {
+
+    val tagCounts: StateFlow<List<TagCount>> = repository.tagCounts
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun cardById(id: Long): Flow<CardEntity?> = repository.cardById(id)
 
     fun cardsByTag(tag: String): StateFlow<List<CardSearchResult>> =
         repository.cardsByTag(tag)
@@ -81,4 +91,28 @@ class CardListViewModel(
     fun decrementQuantity(cardId: Long) {
         viewModelScope.launch { repository.decrementQuantity(cardId) }
     }
+
+    fun moveCard(card: CardEntity, newTag: String) {
+        viewModelScope.launch { repository.moveCard(card, newTag) }
+    }
+
+    fun updateAttributes(cardId: Long, condition: String, foil: String) {
+        viewModelScope.launch { repository.updateCardAttributes(cardId, condition, foil) }
+    }
+
+    fun updatePrinting(cardId: Long, printing: PrintingInfo) {
+        viewModelScope.launch {
+            repository.updateCardPrinting(
+                cardId,
+                printing.setCode,
+                printing.setName,
+                printing.collectorNumber,
+                printing.id,
+                printing.rarity
+            )
+        }
+    }
+
+    suspend fun printings(name: String): List<PrintingInfo> =
+        withContext(Dispatchers.IO) { ScryfallPrintings.fetchPrintings(name) }
 }

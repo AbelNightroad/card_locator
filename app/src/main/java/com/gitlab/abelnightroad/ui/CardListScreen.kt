@@ -49,11 +49,12 @@ import compose.icons.fontawesomeicons.Solid
 import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
-import com.gitlab.abelnightroad.db.CardSearchResult
+import com.gitlab.abelnightroad.ui.components.CardBottomSheet
 import com.gitlab.abelnightroad.ui.components.ImportResult
 import com.gitlab.abelnightroad.ui.components.ImportResultDialog
 import com.gitlab.abelnightroad.ui.components.QuantityStepper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -63,11 +64,16 @@ internal fun CardListScreen(
     repository: CardRepository,
     scryfall: ScryfallRepository,
     tag: String,
-    onBack: () -> Unit,
-    onCardClick: (CardSearchResult) -> Unit
+    onBack: () -> Unit
 ) {
     val vm: CardListViewModel = viewModel { CardListViewModel(repository, scryfall) }
     val cards by vm.cardsByTag(tag).collectAsState()
+    val tagCounts by vm.tagCounts.collectAsState()
+    var selectedCardId by remember { mutableStateOf<Long?>(null) }
+    val selectedCardFlow = remember(selectedCardId) {
+        selectedCardId?.let { vm.cardById(it) } ?: flowOf(null)
+    }
+    val selectedCard by selectedCardFlow.collectAsState(initial = null)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showExportDialog by remember { mutableStateOf(false) }
@@ -251,7 +257,7 @@ internal fun CardListScreen(
                 ) {
                     Card(
                         Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                            .clickable { onCardClick(card) },
+                            .clickable { selectedCardId = card.id },
                         elevation = CardDefaults.cardElevation(2.dp)
                     ) {
                         Row(
@@ -275,5 +281,22 @@ internal fun CardListScreen(
                 }
             }
         }
+    }
+
+    selectedCard?.let { card ->
+        val otherTags = remember(tagCounts, card.tag) {
+            tagCounts.map { it.tag }.filter { it != card.tag && it.isNotBlank() }
+        }
+        CardBottomSheet(
+            card = card,
+            scryfall = scryfall,
+            otherTags = otherTags,
+            fetchPrintings = { vm.printings(it) },
+            onDismiss = { selectedCardId = null },
+            onMove = { destination -> vm.moveCard(card, destination) },
+            onSaveAttributes = { condition, foil -> vm.updateAttributes(card.id, condition, foil) },
+            onPickPrinting = { vm.updatePrinting(card.id, it) },
+            onDelete = { vm.deleteCard(card.id) }
+        )
     }
 }

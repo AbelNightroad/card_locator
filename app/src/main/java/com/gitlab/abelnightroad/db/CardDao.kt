@@ -41,6 +41,29 @@ interface CardDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(card: CardEntity)
 
+    @Query("SELECT * FROM cards WHERE id = :id")
+    fun byId(id: Long): Flow<CardEntity?>
+
+    @Query("UPDATE cards SET condition = :condition, foil = :foil WHERE id = :id")
+    suspend fun updateAttributes(id: Long, condition: String, foil: String)
+
+    @Query(
+        "UPDATE cards SET set_code = :setCode, set_name = :setName, " +
+            "collector_number = :collectorNumber, scryfall_id = :scryfallId, " +
+            "rarity = :rarity WHERE id = :id"
+    )
+    suspend fun updatePrinting(
+        id: Long,
+        setCode: String,
+        setName: String,
+        collectorNumber: String,
+        scryfallId: String,
+        rarity: String
+    )
+
+    @Query("UPDATE cards SET tag = :newTag WHERE id = :id")
+    suspend fun moveTag(id: Long, newTag: String)
+
     @Query("UPDATE cards SET quantity = quantity + 1 WHERE id = :id")
     suspend fun incrementQuantity(id: Long)
 

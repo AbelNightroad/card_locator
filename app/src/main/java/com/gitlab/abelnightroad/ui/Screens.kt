@@ -120,8 +120,7 @@ fun AppNavigation(
             repository = repository,
             scryfall = scryfall,
             tag = s.tag,
-            onBack = { goBack() },
-            onCardClick = { selectedCard = it }
+            onBack = { goBack() }
         )
         is Screen.AddCard -> ManualAddScreen(
             repository = repository,

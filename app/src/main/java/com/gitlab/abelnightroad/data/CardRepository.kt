@@ -80,6 +80,38 @@ class CardRepository(private val dao: CardDao, private val tagDao: TagDao) {
 
     suspend fun deleteCard(id: Long) = dao.deleteById(id)
 
+    fun cardById(id: Long): Flow<CardEntity?> = dao.byId(id)
+
+    /**
+     * Moves a card to [newTag]. When an identical row already exists in the
+     * destination (same duplicate key + same card info) the quantities are
+     * summed and the source row removed; any difference keeps them separate.
+     */
+    suspend fun moveCard(card: CardEntity, newTag: String) {
+        val duplicate = dao.findByDuplicateKey(
+            newTag, card.name, card.setCode, card.collectorNumber, card.foil
+        ).firstOrNull { it.id != card.id && sameCardInfo(it, card) }
+        if (duplicate != null) {
+            dao.addQuantity(duplicate.id, card.quantity)
+            dao.deleteById(card.id)
+        } else {
+            dao.moveTag(card.id, newTag)
+        }
+    }
+
+    suspend fun updateCardAttributes(id: Long, condition: String, foil: String) =
+        dao.updateAttributes(id, condition, foil)
+
+    suspend fun updateCardPrinting(
+        id: Long,
+        setCode: String,
+        setName: String,
+        collectorNumber: String,
+        scryfallId: String,
+        rarity: String
+    ) = dao.updatePrinting(id, setCode, setName, collectorNumber, scryfallId, rarity)
+
+
     suspend fun deleteByTag(tag: String) {
         tagDao.deleteCardsByTag(tag)
         tagDao.delete(tag)

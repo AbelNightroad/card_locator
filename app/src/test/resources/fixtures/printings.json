@@ -1,0 +1,44 @@
+{
+  "object": "list",
+  "has_more": false,
+  "next_page": null,
+  "total_count": 3,
+  "data": [
+    {
+      "object": "card",
+      "id": "9f0e1a2b-1111-2222-3333-444455556666",
+      "name": "Lightning Bolt",
+      "set": "mh2",
+      "set_name": "Modern Horizons 2",
+      "collector_number": "242",
+      "rarity": "common",
+      "released_at": "2021-06-11",
+      "layout": "normal",
+      "prices": { "usd": "0.25", "usd_foil": "1.50" }
+    },
+    {
+      "object": "card",
+      "id": "8e0d1a2b-5555-6666-7777-888899990000",
+      "name": "Lightning Bolt",
+      "set": "2x2",
+      "set_name": "Double Masters 2022",
+      "collector_number": "161",
+      "rarity": "common",
+      "released_at": "2022-06-24",
+      "layout": "normal",
+      "prices": { "usd": "0.30" }
+    },
+    {
+      "object": "card",
+      "id": "7d0c1a2b-9999-0000-1111-222233334444",
+      "name": "Lightning Bolt",
+      "set": "leb",
+      "set_name": "Limited Edition Beta",
+      "collector_number": "161",
+      "rarity": "common",
+      "released_at": "1993-10-04",
+      "layout": "normal",
+      "prices": null
+    }
+  ]
+}
