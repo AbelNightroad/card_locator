@@ -27,14 +27,16 @@ data class AppTheme(
     val id: String,
     val label: String,
     val light: androidx.compose.material3.ColorScheme,
-    val dark: androidx.compose.material3.ColorScheme
+    val dark: androidx.compose.material3.ColorScheme,
+    val dynamic: Boolean = false
 )
 
 val THEMES: List<AppTheme> = listOf(
     CatppuccinTheme,
     NordTheme,
     ShadesOfPurpleTheme,
-    Cobalt2Theme
+    Cobalt2Theme,
+    StandardTheme
 )
 
 fun themeById(id: String): AppTheme = THEMES.firstOrNull { it.id == id } ?: NordTheme

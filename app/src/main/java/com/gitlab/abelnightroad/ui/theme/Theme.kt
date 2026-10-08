@@ -1,9 +1,13 @@
 package com.gitlab.abelnightroad.ui.theme
 
+import android.os.Build
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import com.gitlab.abelnightroad.ui.theme.themeById
 
 @Composable
@@ -14,7 +18,14 @@ fun AppTheme(
     content: @Composable () -> Unit
 ) {
     val theme = remember(themeId) { themeById(themeId) }
-    val colorScheme = if (dark) theme.dark else theme.light
+    val context = LocalContext.current
+    val colorScheme = remember(themeId, dark) {
+        when {
+            theme.dynamic && Build.VERSION.SDK_INT >= 31 ->
+                if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            else -> if (dark) theme.dark else theme.light
+        }
+    }
     val typography = remember(fontId) {
         val fontFamily = fontFamilyFor(fontId)
         val base = Typography()
