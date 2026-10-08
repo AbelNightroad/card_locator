@@ -10,12 +10,26 @@ import com.gitlab.abelnightroad.data.TextRecognitionProcessor
 import com.gitlab.abelnightroad.db.ScannedCardEntity
 import com.google.mlkit.vision.common.InputImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
+sealed interface ScanOverlayState {
+    data object Scanning : ScanOverlayState
+    data class Found(val name: String) : ScanOverlayState
+    data class Error(val message: String) : ScanOverlayState
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class ScanViewModel(
     private val scanRepository: ScanRepository,
     private val cardRepository: CardRepository,
@@ -35,6 +49,17 @@ class ScanViewModel(
     private val _addedCount = MutableStateFlow(0)
     val addedCount: StateFlow<Int> = _addedCount.asStateFlow()
 
+    private val _lastScan = MutableStateFlow<ScanOverlayState?>(null)
+    val lastScan: StateFlow<ScanOverlayState?> = _lastScan.asStateFlow()
+
+    val scannedCount: StateFlow<Int> = _sessionId
+        .flatMapLatest { sid ->
+            if (sid == null) flowOf(emptyList<ScannedCardEntity>())
+            else scanRepository.getScannedCards(sid)
+        }
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     suspend fun ensureSession(): Long {
         _sessionId.value?.let { return it }
         val sid = scanRepository.createSession()
@@ -46,6 +71,7 @@ class ScanViewModel(
         viewModelScope.launch {
             _isProcessing.value = true
             _lastError.value = null
+            _lastScan.value = ScanOverlayState.Scanning
 
             try {
                 if (_sessionId.value == null) {
@@ -62,15 +88,13 @@ class ScanViewModel(
                 }
 
                 if (ocrText.isBlank()) {
-                    _lastError.value = "No text detected from image"
-                    _isProcessing.value = false
+                    fail("No text detected from image")
                     return@launch
                 }
 
                 val cardName = TextRecognitionProcessor.extractCardName(ocrText)
                 if (cardName == null) {
-                    _lastError.value = "Could not detect card name from image"
-                    _isProcessing.value = false
+                    fail("Could not detect card name from image")
                     return@launch
                 }
 
@@ -78,8 +102,7 @@ class ScanViewModel(
                     scryfall.lookupByNameResilient(cardName)
                 }
                 if (card == null) {
-                    _lastError.value = "Card not found: $cardName"
-                    _isProcessing.value = false
+                    fail("Card not found: $cardName")
                     return@launch
                 }
 
@@ -102,12 +125,19 @@ class ScanViewModel(
                     )
                 )
                 _addedCount.value = _addedCount.value + 1
+                _lastScan.value = ScanOverlayState.Found(card.name)
             } catch (e: Exception) {
-                _lastError.value = "Error: ${e.message}"
+                fail("Error: ${e.message}")
             } finally {
                 _isProcessing.value = false
+                File(filePath).delete()
             }
         }
+    }
+
+    private fun fail(message: String) {
+        _lastError.value = message
+        _lastScan.value = ScanOverlayState.Error(message)
     }
 
     fun getScannedCards(sessionId: Long) = scanRepository.getScannedCards(sessionId)

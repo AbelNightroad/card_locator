@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -19,7 +20,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,12 +41,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import compose.icons.FontAwesomeIcons
 import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.Camera
+import compose.icons.fontawesomeicons.solid.List
 import compose.icons.fontawesomeicons.solid.Xmark
 import com.gitlab.abelnightroad.ui.components.CameraPreview
 import java.io.File
@@ -71,7 +79,11 @@ private fun performHapticFeedback(context: Context) {
 internal fun ScanCameraScreen(
     onBack: () -> Unit,
     hapticFeedback: Boolean = true,
-    onImageCaptured: (filePath: String) -> Unit
+    isProcessing: Boolean = false,
+    scannedCount: Int = 0,
+    lastScan: ScanOverlayState? = null,
+    onImageCaptured: (filePath: String) -> Unit,
+    onOpenList: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -123,6 +135,64 @@ internal fun ScanCameraScreen(
                     extraUseCases = listOf(imageCapture)
                 )
 
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 16.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color.Black.copy(alpha = 0.55f)
+                ) {
+                    Column(
+                        Modifier
+                            .clickable { onOpenList() }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            FontAwesomeIcons.Solid.List,
+                            contentDescription = "Scanned cards",
+                            modifier = Modifier.size(20.dp),
+                            tint = Color.White
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "$scannedCount",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                val overlayText = when (val scan = lastScan) {
+                    is ScanOverlayState.Scanning -> "Scanning…"
+                    is ScanOverlayState.Found -> scan.name
+                    is ScanOverlayState.Error -> scan.message
+                    null -> null
+                }
+                if (overlayText != null) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 124.dp)
+                            .widthIn(max = 300.dp),
+                        shape = RoundedCornerShape(50),
+                        color = if (lastScan is ScanOverlayState.Error) {
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.9f)
+                        } else {
+                            Color.Black.copy(alpha = 0.55f)
+                        }
+                    ) {
+                        Text(
+                            overlayText,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                        )
+                    }
+                }
+
                 Button(
                     onClick = {
                         val capture = imageCapture
@@ -151,6 +221,7 @@ internal fun ScanCameraScreen(
                             }
                         )
                     },
+                    enabled = !isProcessing,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 32.dp)
@@ -160,7 +231,12 @@ internal fun ScanCameraScreen(
                         containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Text("\u25CF", style = MaterialTheme.typography.headlineLarge)
+                    Icon(
+                        FontAwesomeIcons.Solid.Camera,
+                        contentDescription = "Capture",
+                        modifier = Modifier.size(28.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
                 }
             }
         } else {

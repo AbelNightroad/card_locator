@@ -55,6 +55,9 @@ fun AppNavigation(
     val scanViewModel: ScanViewModel = remember {
         ScanViewModel(scanRepository, repository, scryfall, scanProcessor)
     }
+    val scanIsProcessing by scanViewModel.isProcessing.collectAsState()
+    val scanCount by scanViewModel.scannedCount.collectAsState()
+    val scanLast by scanViewModel.lastScan.collectAsState()
 
     fun navigate(s: Screen) {
         backStack.add(screen)
@@ -98,11 +101,13 @@ fun AppNavigation(
         Screen.Scan -> ScanCameraScreen(
             onBack = { goBack() },
             hapticFeedback = hapticFeedback,
-            onImageCaptured = { filePath ->
+            isProcessing = scanIsProcessing,
+            scannedCount = scanCount,
+            lastScan = scanLast,
+            onImageCaptured = { filePath -> scanViewModel.processImage(filePath) },
+            onOpenList = {
                 scope.launch {
-                    val sid = scanViewModel.ensureSession()
-                    scanViewModel.processImage(filePath)
-                    navigate(Screen.ScanResults(sid))
+                    navigate(Screen.ScanResults(scanViewModel.ensureSession()))
                 }
             }
         )
