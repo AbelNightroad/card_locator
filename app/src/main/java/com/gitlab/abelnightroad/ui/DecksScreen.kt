@@ -305,6 +305,13 @@ private fun DeckGridCard(
 ) {
     val cardCount by deckRepository.cardCountFlow(deck.id).collectAsState(initial = 0)
     var showMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(deck.id) {
+        if (deck.coverScryfallId == null) {
+            deckRepository.defaultCoverFor(deck.id)?.let {
+                deckRepository.updateDeckCover(deck.id, it)
+            }
+        }
+    }
     Card(
         Modifier.fillMaxWidth().combinedClickable(
             onClick = onClick,

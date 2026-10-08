@@ -58,6 +58,10 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
 
     suspend fun updateDeckCover(deckId: Long, scryfallId: String?) = dao.updateDeckCover(deckId, scryfallId)
 
+    suspend fun defaultCoverFor(deckId: Long): String? =
+        dao.firstCommander(deckId)?.scryfallId?.takeIf { it.isNotBlank() }
+            ?: dao.randomNonLandMain(deckId)?.scryfallId?.takeIf { it.isNotBlank() }
+
     suspend fun removeCard(cardId: Long) = dao.deleteCard(cardId)
 
     suspend fun updateCardQuantity(cardId: Long, quantity: Int) = dao.updateCardQuantity(cardId, quantity)

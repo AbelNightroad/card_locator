@@ -73,6 +73,12 @@ interface DeckDao {
     @Query("SELECT * FROM deck_cards WHERE deck_id = :deckId AND slot = :slot LIMIT 1")
     suspend fun findCardBySlot(deckId: Long, slot: String): DeckCardEntity?
 
+    @Query("SELECT * FROM deck_cards WHERE deck_id = :deckId AND slot = 'commander' ORDER BY id LIMIT 1")
+    suspend fun firstCommander(deckId: Long): DeckCardEntity?
+
+    @Query("SELECT * FROM deck_cards WHERE deck_id = :deckId AND slot = 'mainboard' AND type_line NOT LIKE '%Land%' ORDER BY RANDOM() LIMIT 1")
+    suspend fun randomNonLandMain(deckId: Long): DeckCardEntity?
+
     @Query("SELECT * FROM deck_cards WHERE deck_id = :deckId")
     suspend fun getCardsForDeck(deckId: Long): List<DeckCardEntity>
 
