@@ -710,3 +710,396 @@ universal).
 2. `docs: update architecture for url auto detection`
 3. `docs: record url auto detection batch in plan`
 4. `build: bump version to 1.3.0 (versionCode 5)`
+
+---
+
+# Plan: Next Batch — Standard Theme, Tag Card Sheet, Covers, Export Filename
+
+Research-only plan for the next batch. Seven features (decisions marked in
+each section):
+
+1. **Standard theme** — Material You dynamic color on API 31+, Material 3
+   baseline fallback below that. Just another option in the theme dropdown —
+   Nord stays the default/fallback (`SettingsStore` `"nord"`, `themeById`).
+2. **Tag card tap** — ModalBottomSheet with card image + info + icon actions
+   (Move / Edit / Delete). Only inside a Tag (`Screen.Cards`); Home search
+   results and DeckView keep `FullscreenOverlay`. Move = existing tags only.
+3. **Default deck cover** — commander card (first) / random non-land
+   mainboard card when no cover was set.
+4. **Metagame covers** — replace stretched 80×40 mtgtop8 thumbs with
+   lazily-resolved Scryfall art.
+5. **Export CSV filename** — include a ddMMyyyy timestamp.
+6. **Scan screen stays open** — capture no longer navigates away; overlays
+   show the session count (tap → list) and the last scanned card name.
+7. **Language-independent recognition** — identify JP/CN/etc. cards from the
+   bottom-left metadata (rarity · collector number · set · language) instead
+   of the localized name (root cause of the current JP/CN lookup failures).
+
+## Research Findings
+
+### Current state
+
+- Theme: `ui/theme/ThemeModel.kt` `AppTheme(id, label, light, dark)` — pure
+  static `ColorScheme` data; `THEMES` list feeds the Settings dropdown
+  automatically (`SettingsScreen.kt:170`). `Theme.kt:AppTheme()` picks
+  `theme.dark/light` from the `darkMode` toggle (default `true`).
+  4 themes: Catppuccin, Nord, ShadesOfPurple, Cobalt2 — each hand-picked
+  palettes, none is a vanilla Android look.
+- Tag screen: `CardListScreen.kt` — rows are `Card(...).clickable {
+  onCardClick(card) }`; `Screens.kt:119` maps that to `selectedCard` →
+  `FullscreenOverlay` (image only, no info/actions). Swipe-left deletes
+  (no confirm). No bottom sheet exists anywhere in the app yet.
+- Data: `CardEntity` has everything the sheet needs (condition, language,
+  added, tag, quantity, foil, scryfall_id) but the list projection
+  `CardSearchResult` does **not** (no condition/language/added) → sheet must
+  read the full entity, not the list row.
+- `CardDao` has no per-card UPDATE for tag/condition/foil/set and no
+  `byId(id)`; `TagDao` has no SELECT but `tagCounts()` already unions the
+  `tags` table with distinct `cards.tag` (includes empty tags) → Move dialog
+  can reuse it.
+- `added` = `LocalDateTime.now().toString()` (ISO) from app paths, but CSV
+  import copies ManaBox's raw string → date display must be best-effort.
+- Finish (`foil`) values are heterogeneous: canonical set from
+  `QtyListImport` is `normal / foil / etched / "etched foil"` (note the doc
+  comment says `foil etched` but the code stores `etched foil`), plus free
+  text from ManualAdd and raw CSV values.
+- Market price: only local `scryfall_cards.price_usd` (bulk snapshot, keyed
+  by scryfall_id via `ScryfallRepository.lookupById`). No price history →
+  the screenshot's `+11.30 (+3.85%)` delta cannot be shown (out of scope).
+- Set editing: local `scryfall_cards` keeps one printing per name, so
+  alternate printings need the live API. `ScryfallApiLookupTest` already
+  proves the pattern: `HttpURLConnection` +
+  `https://api.scryfall.com/cards/search?q=...`, User-Agent `MtGCardTracker/1.0`,
+  kotlinx.serialization with `ignoreUnknownKeys`.
+- Compose BOM `2025.06.00` → Material3 has `ModalBottomSheet`,
+  `dynamicLightColorScheme/dynamicDarkColorScheme` (API 31+). Both icons
+  families available: FontAwesome Solid (used everywhere) +
+  `material-icons-extended` (for a Move icon if FA lacks one).
+
+### Key pitfalls (design responses)
+
+1. **Sheet content is clipped to the sheet's rounded shape** — the
+   screenshot's card image floating *above* the sheet edge would be cut off.
+   Baseline: image lives *inside* the sheet as the first block
+   (`aspectRatio(63f/88f)`, `ContentScale.Fit`, never `Crop` — cards must
+   not be cropped). Optional polish: `sheetContainerColor = Transparent` +
+   inner `Surface` with rounded top so the image can visually sit higher;
+   only if it does not clip.
+2. **Back/scrim**: `ModalBottomSheet` is a dialog window → back and scrim
+   dismiss it via `onDismissRequest`; `Screens.kt` `BackHandler` (activity
+   window) must not also fire. Verify back closes the sheet only, never
+   pops the screen.
+3. **Read the full `CardEntity`** for the sheet (`SELECT * FROM cards WHERE
+   id = :id` as `Flow`) so the sheet stays correct after Move/Edit and closes
+   itself naturally after Delete (`entity == null`).
+4. **Move must merge, not duplicate**: destination may already have the
+   identical row (same key `tag,name,set,cn,foil` + `sameCardInfo`) →
+   `addQuantity` + delete source, else `UPDATE cards SET tag`. Reuse the
+   private merge semantics already in `CardRepository.insertMergingDuplicates`.
+5. **Edit set needs network** — explicit loading + explicit error text on
+   failure/HTTP 429/empty (fail fast, no silent empty list). Scryfall
+   etiquette: User-Agent required, 1 request here (pagination `has_more` is
+   unlikely for one card name; if set, take the first 175 results).
+6. **Dynamic color ignores the theme file's colors** — that is the point;
+   the `darkMode` toggle still switches `dynamicDark/LightColorScheme`.
+   Below API 31 fall back to baseline `lightColorScheme()/darkColorScheme()`.
+7. **Icon for Move**: FA Solid has no proven move/exchange icon in use yet →
+   verify at compile time (`ArrowRightArrowLeft`/`ShareNodes`), fallback
+   `Icons.Filled.Move` from `material-icons-extended`.
+8. **Empty/blank `scryfall_id`** (manual rows) → placeholder glyph like the
+   deck cards (`♠`), hide the price line.
+
+## Feature 1 — Standard theme (Material You)
+
+- [x] `ui/theme/ThemeModel.kt`: add `dynamic: Boolean = false` to `AppTheme`;
+      append `StandardTheme` to `THEMES` (dropdown order; Nord stays default)
+- [x] `ui/theme/Standard.kt`: `id = "standard"`, `label = "Standard"`,
+      `dynamic = true`, `light/dark` = plain `lightColorScheme()` /
+      `darkColorScheme()` (baseline, doubles as the pre-31 fallback)
+- [x] `ui/theme/Theme.kt`: branch when `theme.dynamic && SDK_INT >= 31` →
+      `dynamicLightColorScheme(LocalContext.current)` / `dynamicDark…`,
+      else existing static path (keep `remember(themeId, dark)`)
+- [x] No DataStore/Settings changes — theme id is just `"standard"` now
+      offered by the existing dropdown
+- [x] Test: pure helper for the branch decision if extracted; otherwise
+      covered by build + manual check (Compose-only)
+
+## Feature 2 — Tag card bottom sheet
+
+**Data layer**
+
+- [x] `db/CardDao.kt`:
+      - `byId(id): Flow<CardEntity?>`
+      - `updateAttributes(id, condition, foil)`
+      - `updatePrinting(id, setCode, setName, collectorNumber, scryfallId, rarity)`
+      - `moveTag(id, newTag)`
+- [x] `data/CardRepository.kt`: `cardById`, `moveCard(card, newTag)` (merge
+      via `findByDuplicateKey` + `sameCardInfo`), `updateCardAttributes`,
+      `updateCardPrinting`
+- [x] `data/ScryfallPrintings.kt` (new, JVM-testable):
+      `printingsUrl(name)` → `api.scryfall.com/cards/search?q=<!"name">`,
+      `parsePrintings(json): List<PrintingInfo>` (set, set_name,
+      collector_number, rarity, id, prices.usd, released_at — sort newest
+      first), `HttpURLConnection` fetch with the app's User-Agent
+- [x] `ui/CardListViewModel.kt`: `moveCard`, `updateAttributes`,
+      `updatePrinting`, `deleteCard` (exists), `printings(name)` suspend
+
+**UI layer**
+
+- [x] `ui/components/CardBottomSheet.kt` (new, `@OptIn(ExperimentalMaterial3Api)`):
+      - local `selectedCardId` state in `CardListScreen` + `byId` flow
+      - content: image block (`ScryfallImage.normal`, `ScryfallAsyncImage`,
+        `Fit` + 63/88 box) → `"${quantity}x ${name}"` → `"${setName} #${cn}"`
+        → chips (language, condition display via `CardConditions.displayName`,
+        tag, rarity) → `"Added on …"` (best-effort ISO parse, raw fallback)
+        → `"Market $x.xx"` from `lookupById(scryfallId).priceUsd` (hidden if
+        null) → action row of **icon** `IconButton`s: Move, Edit, Delete
+      - `rememberModalBottomSheetState(skipPartiallyExpanded = true)`,
+        scrollable info column
+- [x] Move: `AlertDialog` list-picker of **existing tags only** — rows come
+      from `tagCounts` (tags table ∪ distinct `cards.tag`) minus the current
+      one; **no text field, no "create tag" path** (creation stays in
+      ManageTags/Onboarding), tap a row → `vm.moveCard` → dismiss sheet;
+      empty state "No other tags"
+- [x] Edit: `ui/components/EditCardDialog.kt` (new):
+      - Condition dropdown (`CardConditions.ALL` + current raw value)
+      - Finish dropdown (canonical `normal/foil/etched/"etched foil"` +
+        current raw value if different)
+      - Set row → "Change printings…" → fetch list → picker dialog
+        (`setName (SET) #cn · rarity · $price`, newest first) → on pick
+        `updatePrinting`
+      - Save / Cancel (text buttons — only the sheet's entry actions are
+        icon buttons, per spec)
+- [x] Delete: `AlertDialog` confirm (error color) → `vm.deleteCard` → sheet
+      closes when the flow emits `null`
+- [x] `ui/CardListScreen.kt`: own the sheet state; **remove**
+      `onCardClick` param; `ui/Screens.kt`: drop the Cards-route wiring
+      (line 119) — `selectedCard`/`FullscreenOverlay` stays for Home search
+- [x] Tests (JVM): `ScryfallPrintingsParseTest` (fixture JSON: sort order,
+      exact fields, malformed → explicit error), added-date formatting,
+      finish/condition display formatting
+
+## Feature 3 — Default deck cover (Decks screen)
+
+**Findings:** `DeckEntity.coverScryfallId` is null → DecksScreen draws the `♠`
+placeholder (`DecksScreen.kt:319-328`). Manual covers come from DeckView's
+"Set as cover" (`DeckViewViewModel.setCover` → `updateDeckCover`) and must
+keep winning. `DeckDao.findCardBySlot` exists but has no `ORDER BY` (not
+deterministic for "first commander"). `DeckCardEntity.typeLine` is populated
+on import → land detection is a simple `NOT LIKE '%Land%'`.
+
+- [x] `db/DeckDao.kt` + `DeckRepository`:
+      - `firstCommander(deckId)` → `slot = 'commander' ORDER BY id LIMIT 1`
+      - `randomNonLandMain(deckId)` → `slot = 'mainboard' AND type_line
+        NOT LIKE '%Land%' ORDER BY RANDOM() LIMIT 1`
+- [x] `ui/DecksScreen.kt` `DeckGridCard`: when `coverScryfallId == null`,
+      `LaunchedEffect(deck.id)` → pick candidate (commander slot present →
+      first commander, else random non-land mainboard) → **persist** via
+      `updateDeckCover` (stable cover from then on; no re-roll on every
+      visit) → placeholder only when no candidate (empty deck)
+- [x] Commander detection by **slot presence**, not the format string
+      (format casing/labels vary across import paths; only commander decks
+      ever get `slot = 'commander'` rows)
+
+**Pitfalls:** persist freezes the random pick (intended; "Set as cover"
+still overrides); cover may go stale if that card is later removed from the
+deck (same as manual covers — out of scope); resolve must be async/off the
+composition hot path.
+
+## Feature 4 — Metagame screen cover images
+
+**Findings (probed live):** mtgtop8 covers are
+`/metas_thumbs/{archetypeId}.jpg` = **80×40 JPEG** (verified), stretched into
+a `fillMaxWidth × 80.dp` box (`MetaScreen.kt:155-168`) → blurry 2× upscale.
+mtgtop8 has **no larger archetype image anywhere** (archetype/event pages are
+text-only). Only real source = Scryfall art. Archetype names are often exact
+card names (cEDH probed: `Kinnan, Bonder Prodigy`, `Sisay, Weatherlight
+Captain` → local `scryfall_cards.byName` hit; generic ones like
+`Partner WUBR` miss). Grid is `LazyVerticalGrid` → lazy work only touches
+composed items.
+
+Options:
+
+1. **Lazy two-stage cover (recommended):** A) local `byName(archetypeName)`
+   → `ScryfallImage.artCrop` (zero network); B) on miss, fetch the archetype
+   page → first deck event page → first card name (COMMANDER section
+   preferred, else first non-land mainboard) → local `byName` → artCrop.
+   Session cache `Map<archetypeId, coverUrl>` in `MetaViewModel`; mtgtop8
+   calls throttled (sequential queue, ~300-500 ms gap, UA already set);
+   thumb/placeholder renders first, swaps when resolved; any failure keeps
+   the thumb.
+2. Local-only (stage A) + show the thumb without upscaling (native size /
+   smaller box).
+3. Drop the raster cover: generated header from the row's mana-symbol colors
+   + monogram (the fragment already carries W/U/B/R/G per row).
+
+Decision (user-confirmed): **Option 1**, degrading to Option 2 if mtgtop8
+throttling proves flaky in practice.
+
+**Pitfalls:** extra mtgtop8 traffic (throttle + session-only cache, never
+persist — thumbs/art are volatile); `byName` `LIMIT 1` may pick a different
+printing than the deck's (harmless for art); wrong-image risk for fuzzy name
+matches (keep Stage A to exact-name queries only).
+
+## Feature 5 — Export Collection CSV filename
+
+**Finding:** `SettingsScreen.kt:249` launches SAF with the static name
+`card_tracker_collection.csv`.
+
+- [x] Suggested name = `collection_ddMMyyyy.csv` (user-confirmed: 4-digit
+      year), built at tap time with
+      `SimpleDateFormat("ddMMyyyy", Locale.getDefault())`
+- [x] Extract a tiny pure `exportFileName(now: Date)` helper + JVM test
+      (matches repo's testable-helper style)
+
+**Pitfall:** SAF lets the user rename and appends `(1)` on same-day
+re-exports — acceptable, no dedupe logic.
+
+## Feature 6 — Scan screen: stay on camera + overlays
+
+**Findings:** today the capture callback (`Screens.kt:100-107`) fires
+`scanViewModel.processImage(path)` **and immediately navigates** to
+`Screen.ScanResults(sid)` — the camera screen leaves composition, the preview
+unbinds, and the user must go back to scan the next card. The Scan ViewModel
+is `remember`ed in `AppNavigation` (lives for the whole session) and already
+exposes `isProcessing` / `lastError`; it does **not** expose the count or the
+last successful name. `ScanResultsScreen` already renders the session list
+(reuse it as-is). Reference layout (`cam_overlays.jpeg`): overlay 1 =
+top-right vertical pill, overlay 2 = bottom-center pill above the nav bar.
+
+- [x] `ui/ScanViewModel.kt`:
+      - `scannedCount: StateFlow<Int>` — `sessionId.flatMapLatest {
+        getScannedCards(it) }.map { it.size }` (0 before first scan)
+      - `lastScan: StateFlow<ScanOverlayState?>` — sealed:
+        `Scanning` / `Found(name)` / `Error(message)`; set in `processImage`
+        (keep `Found` until the next capture; `Error` reuses `lastError`
+        values like `"Card not found: X"` / `"No text detected"`)
+      - delete the `SCAN_*.jpg` capture file once OCR finishes (finally) —
+        continuous scanning would otherwise fill `filesDir`
+- [x] `ui/ScanCameraScreen.kt` new params
+      `scannedCount`, `lastScan`, `onOpenList`:
+      - **Overlay 1** (top-right, under the TopAppBar): rounded vertical
+        pill — list icon + count badge; tap → `onOpenList()`
+      - **Overlay 2** (bottom-center, above the shutter): rounded horizontal
+        pill — `Scanning…` while processing, card name on success (single
+        line, ellipsized), error text (error color) on failure
+      - shutter **disabled while `isProcessing`** (today two rapid captures
+        run two OCR jobs concurrently and race into the session list)
+      - shutter icon: replace the `●` text glyph (reads as a record button)
+        with `FontAwesomeIcons.Solid.Camera` (already proven in `NAV_ITEMS`),
+        white/`onPrimary`, same 72 dp circle
+- [x] `ui/Screens.kt` Scan case: `onImageCaptured = { scanViewModel
+      .processImage(it) }` (drop the navigation + `ensureSession` launch);
+      `onOpenList = { scope.launch { navigate(Screen.ScanResults(scanViewModel.ensureSession())) } }`
+
+**Pitfalls:** returning from the list re-creates the preview (CameraX
+rebind, ~1 s) — accepted, "always open" means while on the Scan screen;
+`processImage` is fire-and-forget from a camera callback → keep all state
+writes on the VM (they already are); repeated taps on the same card still
+create one row per scan (current semantics — count = rows; an optional
+`quantity` column + merge would need a DB migration, decide at
+implementation if the reference app's "+1" behavior is wanted).
+
+## Feature 7 — Language-independent recognition (name + metadata regions)
+
+**Root cause (matches the user's observation):** OCR is fine — the CJK
+models return correct Japanese/Chinese characters (`TextRecognitionProcessor`
+runs Chinese → Japanese → Korean → Latin, `TextRecognitionProcessor.kt:27-47`).
+The failure is the **lookup**: `extractCardName()` takes the first non-type
+line → the localized name → `lookupByNameResilient()` hits `scryfall_cards`,
+which is Scryfall's *English* "Default Cards" bulk → miss → fuzzy API search
+by a foreign name → Scryfall's name search is English-oriented →
+`Card not found`. A card's identity does not depend on language: **set code +
+collector number** is printed in Latin on every modern card and is unique per
+set (all languages of a card share the collector number).
+
+**Reference regions (`bolt-to-ai.png`):** top box = card name (localized on
+foreign cards); bottom-left box = two lines —
+`U 0040` (rarity letter + collector number) and `FCA • EN` (set code ·
+language).
+
+- [x] `data/TextRecognitionProcessor.kt`: stop discarding structure — new
+      `recognizeTextRegions(inputImage): OcrPage` that keeps ML Kit
+      `textBlocks` (text + `boundingBox` ints); keep `recognizeText()`
+      delegating to it for any other caller
+- [x] New `data/CardMetadataParser.kt` (pure, JVM-testable — takes
+      `List<OcrBlock(text, top, bottom, left, right)]` + image w/h as plain
+      ints, **never touches `android.graphics.Rect`**):
+      - `nameRegion(blocks, h, w)` → text of blocks with `bottom <= ~0.20h`
+        and not in the top-right mana-cost corner (`right > 0.70w` excluded)
+      - `metadataRegion(blocks, h, w)` → blocks with `top >= ~0.82h` and
+        `right <= ~0.45w` (left column only — artist/copyright is right-aligned)
+      - `parseCollector(line)` → rarity letter + digits
+        (`^\s*[CUMBRSFT]\s*[-.]?\s*0*(\d{1,4})\s*$`, tolerate OCR `O/0`
+        confusion); return raw and leading-zero-stripped variants
+      - `parseSetLang(line)` → `setCode` + `language`
+        (`^\s*([A-Z0-9]{2,6})\s*[•·・\-–]?\s*([A-Z]{2,3})\s*$`)
+- [x] `ui/ScanViewModel.processImage` lookup order:
+      1. metadata parse → `ScryfallCardDao.bySetAndCollector(set, cn)` with
+         both collector variants (`"0040"`/`"40"` — local table's padding
+         varies by set) → hit = exact card regardless of language
+      2. miss → current name path, but fed with the **name-region text**
+         (better than "first line of everything" for every language) →
+         local `byName` → API fuzzy (unchanged fallback)
+      3. still nothing → explicit `"Card not found"` as today
+- [x] Language: prefer the metadata code (`EN`, `JP`, `KR`, `ZHS`, …),
+      normalized to the existing scheme (`en`/`ja`/`ko`/`zh` — mapping table);
+      keep the script-based `detectLanguage()` as fallback when metadata is
+      missing
+- [x] Model coverage note: the CJK recognizers also read the Latin collector
+      line; if metadata parsing fails on a JP/CN card, one extra Latin-model
+      pass on the same image is the cheap retry (only on miss — keeps the
+      common path single-pass)
+- [x] Tests (JVM): parser fixtures — EN/JP/CN OCR samples (name + metadata
+      lines), leading-zero / no-zero collectors, `O/0` noise, metadata block
+      mixed with artist line (position filter), missing-metadata → name
+      fallback; name-region extraction beats "first line" on a card whose
+      first line is a watermark
+
+**Pitfalls:** region thresholds are fractional (rotation/perspective shifts
+boxes — keep generous bands and never hard-fail: metadata is a *fast path*,
+name lookup stays as fallback); pre-Exodus frames / promos / tokens without
+the metadata line → fallback path; DFC backs have no name band → fallback;
+`bySetAndCollector` needs lowercase set (query is case-insensitive — verify);
+foreign-language cards store the DB's English `name` in `scanned_cards` (good
+— the list/results show the canonical name + image).
+
+## Verification
+
+- [x] `make test` green (98 existing + new)
+- [x] `make build` → installable APK
+- [ ] Manual: Settings → Standard theme → wallpaper-derived colors on API 31+,
+      baseline below; dark toggle still flips dark/light; other 4 themes intact
+- [ ] Manual: Tag → tap card → sheet (image, chips, date, price); back/scrim
+      dismiss sheet without leaving the tag; Move picker shows only existing
+      tags (no typing) and merges into an identical row in the destination
+      tag; Edit changes condition/finish offline and
+      set via picker online (explicit error offline); Delete confirms then
+      removes; swipe-delete and quantity stepper still work; Home/DeckView
+      taps still open the fullscreen overlay
+- [ ] Manual: deck without cover shows commander (first of partner pair) or
+      a random non-land card after first render, stable on revisit, manual
+      cover still wins, empty deck keeps ♠
+- [ ] Manual: Metagame covers load Scryfall art for card-named archetypes
+      (thumb while loading / on failure), mtgtop8 traffic throttled
+- [ ] Manual: export CSV suggests `collection_ddMMyyyy.csv` (today's date)
+- [ ] Manual: Scan → capture stays on camera; overlay 1 count increments and
+      tap opens the existing list (back returns to a live preview); overlay 2
+      shows `Scanning…` → card name (or red error); shutter ignores taps
+      while processing; shutter shows a camera icon (no more ● record look);
+      capture files don't pile up in `filesDir`
+- [ ] Manual: JP and CN cards scan to the correct card (English name +
+      image in the list) via metadata; English cards still match; an old
+      card without the metadata line still resolves via the name path
+
+## Commits (when implemented)
+
+1. `feat: add material you standard theme`
+2. `feat: tag card bottom sheet with move edit delete`
+3. `feat: default deck cover from deck cards`
+4. `feat: scryfall art covers for metagame archetypes`
+5. `feat: timestamped collection export filename`
+6. `feat: keep scan camera open with count and name overlays`
+7. `feat: identify cards from collector metadata for any language`
+8. `docs: update architecture for standard theme and card sheet`
+9. `docs: record next batch plan`
