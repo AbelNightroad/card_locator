@@ -1,8 +1,14 @@
 package com.gitlab.abelnightroad.data
 
 import com.gitlab.abelnightroad.db.CardEntity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object CollectionCsv {
+
+    fun exportFileName(now: Date = Date()): String =
+        "collection_" + SimpleDateFormat("ddMMyyyy", Locale.getDefault()).format(now) + ".csv"
 
     private val header = listOf(
         "tag", "name", "set_code", "set_name", "collector_number", "foil",

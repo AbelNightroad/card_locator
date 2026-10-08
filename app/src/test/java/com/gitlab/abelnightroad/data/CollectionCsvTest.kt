@@ -4,6 +4,9 @@ import com.gitlab.abelnightroad.db.CardEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
 import org.junit.Test
+import java.util.Calendar
+import java.util.Date
+import java.util.GregorianCalendar
 
 class CollectionCsvTest {
 
@@ -88,5 +91,23 @@ class CollectionCsvTest {
             fail("expected IllegalArgumentException")
         } catch (expected: IllegalArgumentException) {
         }
+    }
+
+    @Test
+    fun `export file name uses ddMMyyyy timestamp`() {
+        val now = Date()
+        val cal = Calendar.getInstance().apply { time = now }
+        val expected = "collection_%02d%02d%04d.csv".format(
+            cal.get(Calendar.DAY_OF_MONTH),
+            cal.get(Calendar.MONTH) + 1,
+            cal.get(Calendar.YEAR)
+        )
+        assertEquals(expected, CollectionCsv.exportFileName(now))
+    }
+
+    @Test
+    fun `export file name pads day and month`() {
+        val now = GregorianCalendar(2026, Calendar.FEBRUARY, 3).time
+        assertEquals("collection_03022026.csv", CollectionCsv.exportFileName(now))
     }
 }

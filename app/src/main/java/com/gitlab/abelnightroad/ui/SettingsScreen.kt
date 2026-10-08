@@ -246,7 +246,7 @@ internal fun SettingsScreen(
                     Text("Backup & Restore", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = { exportLauncher.launch("card_tracker_collection.csv") },
+                        onClick = { exportLauncher.launch(CollectionCsv.exportFileName()) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Export collection as CSV")
