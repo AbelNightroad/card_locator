@@ -268,7 +268,11 @@ data class MultiCopyCard(
 
 @Insert(onConflict = REPLACE) suspend fun insert(card: CardEntity)
 @Insert(onConflict = REPLACE) suspend fun insertAll(cards: List<CardEntity>)
+fun byId(id: Long): Flow<CardEntity?>
 @Query("UPDATE cards SET quantity = quantity + :delta WHERE id = :id") suspend fun addQuantity(id: Long, delta: Int)
+@Query("UPDATE cards SET condition = :condition, foil = :foil WHERE id = :id") suspend fun updateAttributes(id: Long, condition: String, foil: String)
+@Query("UPDATE cards SET set_code = :setCode, set_name = :setName, collector_number = :collectorNumber, scryfall_id = :scryfallId, rarity = :rarity WHERE id = :id") suspend fun updatePrinting(id: Long, setCode: String, setName: String, collectorNumber: String, scryfallId: String, rarity: String)
+@Query("UPDATE cards SET tag = :newTag WHERE id = :id") suspend fun moveTag(id: Long, newTag: String)
 @Query("SELECT * FROM cards WHERE tag = :tag AND name = :name COLLATE NOCASE AND set_code = :setCode COLLATE NOCASE AND collector_number = :collectorNumber AND foil = :foil LIMIT 25") suspend fun findByDuplicateKey(tag: String, name: String, setCode: String, collectorNumber: String, foil: String): List<CardEntity>
 @Query("UPDATE cards SET quantity = quantity + 1 WHERE id = :id") suspend fun incrementQuantity(id: Long)
 @Query("DELETE FROM cards WHERE id = :id AND quantity = 1") suspend fun deleteIfQuantityOne(id: Long)
@@ -384,7 +388,7 @@ data class DeckWithCards(
 
 | Repository | Created via | Dependencies | Purpose |
 |------------|-------------|--------------|---------|
-| `CardRepository` | `CardRepository.create(context)` | `CardDao`, `TagDao` | Collection CRUD, CSV import, tag management, duplicate-merging import (`insertMergingDuplicates`) |
+| `CardRepository` | `CardRepository.create(context)` | `CardDao`, `TagDao` | Collection CRUD, CSV import, tag management, duplicate-merging import (`insertMergingDuplicates`), card detail flow (`cardById`), cross-tag `moveCard` (merges into an identical destination row via `findByDuplicateKey` + `sameCardInfo`, else re-tags), `updateCardAttributes` / `updateCardPrinting` |
 | `DeckRepository` | `DeckRepository.create(context)` | `DeckDao`, `ScryfallCardDao` | Deck CRUD, validation, clone, color identity |
 | `ScryfallRepository` | `ScryfallRepository.create(context)` | `ScryfallCardDao`, `SettingsStore` | 15-day bulk sync, autocomplete, name lookup, set+collector lookup |
 | `ScanRepository` | `ScanRepository.create(context)` | `ScanSessionDao` | Scan sessions, add-to-collection |
@@ -534,6 +538,21 @@ Accept: text/html,application/xhtml+xml
 - **Cloudflare:** HTTP 403 or a "Just a moment" / `challenge-platform` body → error
   "Goldfish blocked the request — copy the deck list and paste it instead" (never silent).
 
+### 6.7 Scryfall Cards Search (alternate printings)
+
+```
+GET https://api.scryfall.com/cards/search?q=%21%22{name}%22
+User-Agent: MtGCardTracker/1.0
+Accept: application/json
+```
+
+`data/ScryfallPrintings.kt` (pure JVM): exact-name query returns every printing
+of a card (first page, ≤175 entries). `parsePrintings` decodes
+`set`/`set_name`/`collector_number`/`rarity`/`id`/`released_at`/`prices.usd`
+sorted newest first and throws `IllegalArgumentException` on malformed JSON.
+HTTP 429 → explicit rate-limit error, other non-200 → status error (never
+silent). Used only by the tag card sheet's "Change printings…" picker.
+
 ---
 
 ## 7. Navigation
@@ -614,7 +633,21 @@ item selected (`indexOfFirst` → -1).
 - **Card list:** `LazyColumn` with `SwipeToDismissBox` per card.
   - Each card: name (titleSmall), set name + rarity (bodySmall), `QuantityStepper`.
   - Swipe left: delete with red "X Delete" background.
-- **Tap card:** Opens fullscreen image overlay.
+- **Tap card:** Opens `CardBottomSheet` (own `selectedCardId` state + `CardDao.byId`
+  flow; sheet unmounts itself when the flow emits `null` after a delete):
+  - Image (`ScryfallImage.normal`, `ContentScale.Fit` in a 63/88 box, `♠` when
+    there is no scryfall id) → `"4x Lightning Bolt"` → `"Set #cn"` → chips
+    (language, condition display, tag, rarity) → added date → market price
+    (`scryfall_cards.price_usd`, hidden when null).
+  - Icon actions: **Move** (`ArrowRightArrowLeft`) → `AlertDialog` listing
+    existing tags only (from `tagCounts` minus current; no create path) →
+    `moveCard` merges into an identical destination row or re-tags, sheet
+    dismisses. **Edit** (`PenToSquare`) → `EditCardDialog`: condition + finish
+    dropdowns (offline), "Change printings…" fetches §6.7 with an explicit
+    error offline and opens the picker; picking updates the row's set fields,
+    Save persists condition/finish. **Delete** (`Trash`) → confirm dialog →
+    sheet closes when the `byId` flow emits `null`.
+  - Home search results and DeckView keep `FullscreenOverlay` (unchanged).
 
 ### 8.3 ManualAddScreen
 
@@ -626,10 +659,10 @@ item selected (`indexOfFirst` → -1).
 ### 8.4 SettingsScreen
 
 - **Sections (Card wrappers):**
-  1. **Appearance:** Theme dropdown (Catppuccin/Nord/Cobalt2/Shades of Purple), Font dropdown (Roboto/Comic Neue/Germania One).
+  1. **Appearance:** Theme dropdown (Catppuccin/Nord/Cobalt2/Shades of Purple/Standard), Font dropdown (Roboto/Comic Neue/Germania One).
   2. **Card Scan:** Haptic feedback toggle.
   3. **Tags:** "Manage Tags" button → `Screen.ManageTags` (pushed screen; back returns here).
-  4. **Backup & Restore:** Export CSV, Restore CSV, Import from 3rd-Party.
+  4. **Backup & Restore:** Export CSV (SAF name = `CollectionCsv.exportFileName()` → `collection_ddMMyyyy.csv`), Restore CSV, Import from 3rd-Party.
   5. **Scryfall Reference Data:** Last update date, sync status.
   6. **About:** App description, `Version ${BuildConfig.VERSION_NAME}`, "Crash logs" button.
 - **Import from 3rd-Party:** Opens `ImportDialog` with tag name field + file chooser (CSV/TXT).
@@ -642,7 +675,7 @@ item selected (`indexOfFirst` → -1).
 ### 8.5 MetaScreen
 
 - **Format chips:** FilterChips for Standard/MO/PI/PAU/LE/VI/PREM/Commander. Standard auto-loaded; Commander loads the cEDH metagame (`MetaDecklistLoader` XHR fallback — see §6.5).
-- **Deck grid:** 2-column `LazyVerticalGrid` of archetypes from mtgtop8.
+- **Deck grid:** 2-column `LazyVerticalGrid` of archetypes from mtgtop8. Each card's cover is a lazily resolved Scryfall art crop (`MetaViewModel.covers`: session cache, `coverMutex` + ~400 ms throttle on mtgtop8 traffic; two-stage = local `byName(archetype)` else first card name from the archetype's first decklist; mtgtop8 thumb while loading and on failure — never persisted).
 - **Tap deck:** Opens dialog with decklist + "Import to Decks" button.
 - **Import:** Creates deck from parsed cards, validates Commander color identity (partner pair = 2 commanders, identity check uses their union).
 
@@ -651,7 +684,7 @@ item selected (`indexOfFirst` → -1).
 - **Format grid:** 2-column grid of formats with ≥1 deck (from `formatCounts()`); each format card gets a runtime-generated color: `DynamicColorGenerator.generateComplementaryColors(colorScheme.primary, count)` hue-shifts the active theme's primary around the color wheel (theme saturation, lightness clamped to 0.55–0.68 so cards stay mid-tone and readable in light and dark), `remember(baseColor, formatCounts.size)` keeps it stable across recompositions, `index % size` picks the color and `DynamicColorGenerator.onColor()` picks dark/light text by WCAG luminance. Never the theme's `background`/`surface`.
 - **Long-press format:** Delete format (removes all decks with CASCADE).
 - **Tap format:** Shows that format's decks.
-- **Deck card:** Cover image (artCrop, `ContentScale.Crop` into a fixed 5:3 box so it always fills the card edges with no letterboxing), then a 8dp-padded text block with name, format, card count. Long-press: clone/rename/delete (rename = AlertDialog with `OutlinedTextField` prefilled, `DecksViewModel.renameDeck` → `DeckDao.renameDeck`).
+- **Deck card:** Cover image (artCrop, `ContentScale.Crop` into a fixed 5:3 box so it always fills the card edges with no letterboxing), then a 8dp-padded text block with name, format, card count. When `cover_scryfall_id` is null a `LaunchedEffect(deck.id)` persists a default cover once — first `slot = 'commander'` row (`DeckDao.firstCommander`), else a random non-land mainboard row (`DeckDao.randomNonLandMain`); empty deck keeps the `♠` placeholder (a manual "Set as cover" still wins). Long-press: clone/rename/delete (rename = AlertDialog with `OutlinedTextField` prefilled, `DecksViewModel.renameDeck` → `DeckDao.renameDeck`).
 - **FAB:** Create deck dialog (name + format dropdown).
 - **Top bar:** Import button (download icon) → `Screen.UnifiedImport`.
 
@@ -683,6 +716,12 @@ item selected (`indexOfFirst` → -1).
 ### 8.10 ScanCameraScreen
 
 - **CameraX preview** with capture button; `CameraPreview` binds **preview + `ImageCapture` once** in a single `LaunchedEffect` (extras passed as `extraUseCases` — no competing rebinds, capture works first try).
+- **Capture stays on the camera screen:** no navigation after the shutter;
+  `ScanViewModel.ScanOverlayState` drives two overlays — top-right session
+  count pill (tap → existing `Screen.ScanResults`, back returns to the live
+  preview) and bottom-center status pill (`Scanning…` → last card name → red
+  error). Shutter is disabled + shows `FontAwesomeIcons.Solid.Camera` while
+  processing; capture temp files are deleted in a `finally`.
 - **Permission:** Runtime `CAMERA` request with graceful denied handling; `VIBRATE` permission declared in the manifest.
 - **Haptic:** Short vibration on capture via `Vibrator`/`VibratorManager`, wrapped in try/catch (OEM-defensive).
 
@@ -704,7 +743,9 @@ item selected (`indexOfFirst` → -1).
 | Component | File | Purpose |
 |-----------|------|---------|
 | `ScryfallAsyncImage` | `AsyncImage.kt` | Coil image loader with custom User-Agent |
-| `FullscreenOverlay` | `FullscreenOverlay.kt` | Fullscreen card image dialog (uses `ScryfallImage.large()`) |
+| `FullscreenOverlay` | `FullscreenOverlay.kt` | Fullscreen card image dialog (uses `ScryfallImage.large()`) — Home search + DeckView; tag rows use `CardBottomSheet` |
+| `CardBottomSheet` | `CardBottomSheet.kt` | Tag card detail `ModalBottomSheet` (image, chips, added/price, Move/Edit/Delete dialogs) |
+| `EditCardDialog` | `EditCardDialog.kt` | Card edit dialog: condition/finish dropdowns + Scryfall "Change printings…" picker |
 | `QuantityStepper` | `QuantityStepper.kt` | +/- quantity controls |
 | `CreateTagDialog` | `CreateTagDialog.kt` | Shared "New Tag" dialog (name field + Random button) used by ManageTagsScreen and the Home FAB speed dial |
 | `LoadingBox`, `ErrorBox`, `EmptyBox` | `LoadingBox.kt` | Loading/error/empty states |
@@ -749,6 +790,16 @@ fun interface FormatRule {
 
 `NM` (Near Mint), `LP` (Lightly Played), `MP` (Moderately Played), `HP` (Heavily Played), `DM` (Damaged).
 
+### Language-independent scan recognition
+
+`data/CardMetadataParser.kt` (pure, JVM-tested) splits ML Kit OCR output into
+text blocks and reads the bottom-left metadata line (`rarity · collector ·
+set · language`) → `CardMetadata`. `ScanViewModel.processImage` lookup order:
+metadata set+collector (raw then normalized — `O/0` noise, zero-padding) →
+name-region text (Latin model) → Latin retry on miss → "Card not found";
+language = metadata code (`EN`, `JP`, `ZHS`, …) with `detectLanguage()` as
+fallback. Foreign cards store the DB's English name in `scanned_cards`.
+
 ### Color Identity
 
 Stored as comma-separated sorted string (e.g., `"W,U,B"`). Parsed from Scryfall's `color_identity` JSON array. Denormalized onto both `scryfall_cards` and `deck_cards` for fast validation without joins.
@@ -768,13 +819,14 @@ SUPERTYPES = listOf("Legendary", "Snow", "World", "Basic")
 
 ## 12. Theming
 
-**4 themes** (each in separate file with `lightColorScheme()` + `darkColorScheme()`):
-| ID | Label |
-|----|-------|
-| `catppuccin` | Catppuccin |
-| `nord` | Nord (default, dark) |
-| `shades_of_purple` | Shades of Purple |
-| `cobalt2` | Cobalt2 |
+**5 themes** (each in separate file with `lightColorScheme()` + `darkColorScheme()`):
+| ID | Label | Notes |
+|----|-------|-------|
+| `catppuccin` | Catppuccin | |
+| `nord` | Nord (default, dark) | Fallback when dynamic color is unavailable |
+| `shades_of_purple` | Shades of Purple | |
+| `cobalt2` | Cobalt2 | |
+| `standard` | Standard | `AppTheme.dynamic = true` — Material You `dynamicLight/DarkColorScheme` on API 31+ (wallpaper-derived), baseline `Standard.kt` schemes below |
 
 **3 fonts:**
 | ID | Label | Source |
