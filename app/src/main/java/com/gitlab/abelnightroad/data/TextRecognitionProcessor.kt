@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
@@ -24,26 +25,49 @@ class TextRecognitionProcessor(val context: Context) {
     private val koreanRecognizer: TextRecognizer =
         TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
 
-    suspend fun recognizeText(inputImage: InputImage): String {
-        val chineseText = try {
-            chineseRecognizer.process(inputImage).await().text
-        } catch (_: Exception) { "" }
+    suspend fun recognizeText(inputImage: InputImage): String =
+        recognizeTextRegions(inputImage).text
 
-        val japaneseText = try {
-            japaneseRecognizer.process(inputImage).await().text
-        } catch (_: Exception) { "" }
+    /** Runs the ordered recognizer pass and keeps block text + bounding boxes. */
+    suspend fun recognizeTextRegions(inputImage: InputImage): OcrPage {
+        val chinese = safeProcess(chineseRecognizer, inputImage)
+        val japanese = safeProcess(japaneseRecognizer, inputImage)
+        val chineseText = chinese?.text.orEmpty()
+        val japaneseText = japanese?.text.orEmpty()
 
-        if (chineseText.length >= japaneseText.length && chineseText.isNotBlank()) return chineseText
-        if (japaneseText.isNotBlank()) return japaneseText
+        val chosen = when {
+            chinese != null && chineseText.isNotBlank() && chineseText.length >= japaneseText.length -> chinese
+            japanese != null && japaneseText.isNotBlank() -> japanese
+            else -> safeProcess(koreanRecognizer, inputImage)?.takeIf { it.text.isNotBlank() }
+                ?: safeProcess(latinRecognizer, inputImage)
+        }
+        return toPage(chosen, inputImage)
+    }
 
-        val koreanText = try {
-            koreanRecognizer.process(inputImage).await().text
-        } catch (_: Exception) { "" }
-        if (koreanText.isNotBlank()) return koreanText
+    /** Cheap Latin-only retry used when the ordered pass misses the metadata. */
+    suspend fun recognizeLatinRegions(inputImage: InputImage): OcrPage =
+        toPage(safeProcess(latinRecognizer, inputImage), inputImage)
 
-        return try {
-            latinRecognizer.process(inputImage).await().text
-        } catch (_: Exception) { "" }
+    private suspend fun safeProcess(recognizer: TextRecognizer, inputImage: InputImage): Text? =
+        try {
+            recognizer.process(inputImage).await()
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun toPage(result: Text?, inputImage: InputImage): OcrPage {
+        if (result == null) return OcrPage(emptyList(), inputImage.width, inputImage.height)
+        val blocks = result.textBlocks.mapNotNull { block ->
+            val box = block.boundingBox ?: return@mapNotNull null
+            OcrBlock(
+                text = block.text,
+                top = box.top,
+                bottom = box.bottom,
+                left = box.left,
+                right = box.right
+            )
+        }
+        return OcrPage(blocks, inputImage.width, inputImage.height)
     }
 
     fun close() {

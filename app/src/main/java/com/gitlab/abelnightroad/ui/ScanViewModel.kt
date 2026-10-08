@@ -3,6 +3,8 @@ package com.gitlab.abelnightroad.ui
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gitlab.abelnightroad.data.CardMetadata
+import com.gitlab.abelnightroad.data.CardMetadataParser
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.ScanRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
@@ -79,30 +81,57 @@ class ScanViewModel(
                 }
                 val sid = _sessionId.value ?: return@launch
 
-                val ocrText = withContext(Dispatchers.Default) {
-                    val image = InputImage.fromFilePath(
+                val (image, page) = withContext(Dispatchers.Default) {
+                    val img = InputImage.fromFilePath(
                         processor.context,
                         Uri.parse("file://$filePath")
                     )
-                    processor.recognizeText(image)
+                    img to processor.recognizeTextRegions(img)
                 }
 
-                if (ocrText.isBlank()) {
+                val fullText = page.text
+                if (fullText.isBlank()) {
                     fail("No text detected from image")
                     return@launch
                 }
 
-                val cardName = TextRecognitionProcessor.extractCardName(ocrText)
-                if (cardName == null) {
-                    fail("Could not detect card name from image")
-                    return@launch
+                var meta = CardMetadataParser.parseMetadata(page.blocks, page.height, page.width)
+                var card = meta?.let { lookupByMetadata(it) }
+                var cardName: String? = null
+
+                if (card == null) {
+                    val nameText = CardMetadataParser.nameRegion(page.blocks, page.height, page.width)
+                        .ifBlank { fullText }
+                    val name = TextRecognitionProcessor.extractCardName(nameText)
+                    cardName = name
+                    if (name != null) {
+                        card = withContext(Dispatchers.IO) { scryfall.lookupByNameResilient(name) }
+                    }
                 }
 
-                val card = withContext(Dispatchers.IO) {
-                    scryfall.lookupByNameResilient(cardName)
-                }
                 if (card == null) {
-                    fail("Card not found: $cardName")
+                    val latinPage = withContext(Dispatchers.Default) { processor.recognizeLatinRegions(image) }
+                    if (latinPage.blocks.isNotEmpty()) {
+                        val latinMeta = CardMetadataParser.parseMetadata(
+                            latinPage.blocks, latinPage.height, latinPage.width
+                        )
+                        if (latinMeta != null && meta == null) meta = latinMeta
+                        card = latinMeta?.let { lookupByMetadata(it) }
+                        if (card == null) {
+                            val nameText = CardMetadataParser.nameRegion(
+                                latinPage.blocks, latinPage.height, latinPage.width
+                            ).ifBlank { latinPage.text }
+                            val latinName = TextRecognitionProcessor.extractCardName(nameText)
+                            if (latinName != null) {
+                                card = withContext(Dispatchers.IO) { scryfall.lookupByNameResilient(latinName) }
+                                if (cardName == null) cardName = latinName
+                            }
+                        }
+                    }
+                }
+
+                if (card == null) {
+                    fail("Card not found: ${cardName ?: "card"}")
                     return@launch
                 }
 
@@ -121,7 +150,8 @@ class ScanViewModel(
                         colorIdentity = card.colorIdentity,
                         scryfallId = card.id,
                         priceUsd = card.priceUsd ?: 0.0,
-                        language = detectLanguage(ocrText)
+                        language = meta?.languageCode?.let { CardMetadataParser.languageFromCode(it) }
+                            ?: detectLanguage(fullText)
                     )
                 )
                 _addedCount.value = _addedCount.value + 1
@@ -133,6 +163,11 @@ class ScanViewModel(
                 File(filePath).delete()
             }
         }
+    }
+
+    private suspend fun lookupByMetadata(meta: CardMetadata) = withContext(Dispatchers.IO) {
+        scryfall.lookupBySetAndCollector(meta.setCode, meta.collectorRaw)
+            ?: scryfall.lookupBySetAndCollector(meta.setCode, meta.collectorNormalized)
     }
 
     private fun fail(message: String) {
