@@ -72,9 +72,10 @@ internal fun MetaScreen(
 ) {
     val formats = ALL_FORMATS
     var selectedFormat by remember { mutableStateOf("Standard") }
-    val metaViewModel: MetaViewModel = viewModel()
+    val metaViewModel: MetaViewModel = viewModel { MetaViewModel(scryfall) }
     val metaState by metaViewModel.state.collectAsState()
     val decklistState by metaViewModel.decklistState.collectAsState()
+    val covers by metaViewModel.covers.collectAsState()
     var selectedDeck by remember { mutableStateOf<MetaDeckEntry?>(null) }
     var showDecklistDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -142,6 +143,8 @@ internal fun MetaScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(state.decks) { deck ->
+                            val resolvedCover = covers[deck.url]?.takeIf { it.isNotBlank() }
+                            LaunchedEffect(deck.url) { metaViewModel.resolveCover(deck) }
                             Card(
                                 Modifier.fillMaxWidth().clickable {
                                     selectedDeck = deck
@@ -158,13 +161,25 @@ internal fun MetaScreen(
                                         Modifier.fillMaxWidth().height(80.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (deck.coverImageUrl.isNotBlank()) {
+                                        val coverUrl = resolvedCover ?: deck.coverImageUrl
+                                        if (coverUrl.isNotBlank()) {
                                             ScryfallAsyncImage(
-                                                url = deck.coverImageUrl,
+                                                url = coverUrl,
                                                 modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Fit,
+                                                contentScale = ContentScale.Crop,
                                                 loading = { CircularProgressIndicator() },
-                                                error = { Text("X") }
+                                                error = {
+                                                    if (coverUrl != deck.coverImageUrl && deck.coverImageUrl.isNotBlank()) {
+                                                        ScryfallAsyncImage(
+                                                            url = deck.coverImageUrl,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = ContentScale.Crop,
+                                                            error = {}
+                                                        )
+                                                    } else {
+                                                        Text("X")
+                                                    }
+                                                }
                                             )
                                         }
                                     }

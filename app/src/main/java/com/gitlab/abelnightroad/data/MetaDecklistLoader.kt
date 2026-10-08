@@ -113,6 +113,26 @@ object MetaDecklistLoader {
     }
 
     suspend fun load(archetypeUrl: String): List<MetaDeckCard> = withContext(Dispatchers.IO) {
+        fetchDecklist(archetypeUrl)
+    }
+
+    /**
+     * Candidate cover-card names for an archetype: commanders first, then
+     * mainboard cards, in deck order. Empty when any fetch/parse step fails —
+     * the caller keeps its existing thumbnail in that case.
+     */
+    suspend fun coverCardNames(archetypeUrl: String): List<String> {
+        val cards = try {
+            load(archetypeUrl)
+        } catch (e: Exception) {
+            return emptyList()
+        }
+        val commanders = cards.filter { it.slot == "commander" }.map { it.cardName }
+        val mainboard = cards.filter { it.slot == "mainboard" }.map { it.cardName }
+        return (commanders + mainboard).distinct()
+    }
+
+    private suspend fun fetchDecklist(archetypeUrl: String): List<MetaDeckCard> {
         val fullUrl = if (archetypeUrl.startsWith("http")) archetypeUrl
             else "$BASE_URL/$archetypeUrl"
 
@@ -129,7 +149,7 @@ object MetaDecklistLoader {
 
         val cards = parseDecklist(decklistContainer)
         if (cards.isEmpty()) throw IOException("Could not parse decklist from page")
-        cards
+        return cards
     }
 
     internal fun parseDecklist(container: Element): List<MetaDeckCard> {
