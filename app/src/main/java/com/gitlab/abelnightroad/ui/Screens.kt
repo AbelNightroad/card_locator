@@ -48,6 +48,7 @@ fun AppNavigation(
     var screen by remember { mutableStateOf<Screen>(Screen.Main) }
     var selectedCard by remember { mutableStateOf<CardSearchResult?>(null) }
     var selectedDeckCardScryfallId by remember { mutableStateOf<String?>(null) }
+    var showImportSheet by remember { mutableStateOf(false) }
     val backStack = remember { mutableListOf<Screen>() }
     var currentScanSessionId by remember { mutableStateOf<Long?>(null) }
 
@@ -153,7 +154,7 @@ fun AppNavigation(
             initialFormat = s.format,
             onBack = { goBack() },
             onDeckClick = { deckId, format -> navigate(Screen.DeckView(deckId)) },
-            onImport = { navigate(Screen.UnifiedImport) },
+            onImport = { showImportSheet = true },
             bottomBar = bottomBar
         )
         is Screen.DeckView -> DeckViewScreen(
@@ -163,11 +164,17 @@ fun AppNavigation(
             onBack = { goBack() },
             onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
         )
-        Screen.UnifiedImport -> UnifiedImportScreen(
+    }
+
+    if (showImportSheet) {
+        UnifiedImportSheet(
             deckRepository = deckRepository,
             scryfall = scryfall,
-            onBack = { goBack() },
-            onImportComplete = { deckId -> goBack(); navigate(Screen.DeckView(deckId)) }
+            onDismiss = { showImportSheet = false },
+            onImportComplete = { deckId ->
+                showImportSheet = false
+                navigate(Screen.DeckView(deckId))
+            }
         )
     }
 

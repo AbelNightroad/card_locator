@@ -2,7 +2,6 @@ package com.gitlab.abelnightroad.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,9 +49,9 @@ import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.ui.components.CardBottomSheet
+import com.gitlab.abelnightroad.ui.components.CardRow
 import com.gitlab.abelnightroad.ui.components.ImportResult
 import com.gitlab.abelnightroad.ui.components.ImportResultDialog
-import com.gitlab.abelnightroad.ui.components.QuantityStepper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -255,46 +254,23 @@ internal fun CardListScreen(
                     enableDismissFromStartToEnd = false,
                     enableDismissFromEndToStart = true
                 ) {
-                    Card(
-                        Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                            .clickable { selectedCardId = card.id },
-                        elevation = CardDefaults.cardElevation(2.dp)
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Row 1: Quantity + Card Name (spanning 2 rows visually)
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                QuantityStepper(
-                                    quantity = card.quantity,
-                                    onDecrease = { vm.decrementQuantity(card.id) },
-                                    onIncrease = { vm.incrementQuantity(card.id) }
-                                )
-                                Text(
-                                    card.name,
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-                            }
-
-                            // Row 2: Mana Cost • Set Name • Rarity
-                            Column(Modifier.weight(1f)) {
-                                if (card.manaCost?.isNotBlank() == true) {
-                                    Text(
-                                        card.manaCost,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Text(
-                                    "${card.setName} \u00b7 ${card.rarity}",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
+                    CardRow(
+                        quantity = card.quantity,
+                        name = card.name,
+                        onIncrease = { vm.incrementQuantity(card.id) },
+                        onDecrease = { vm.decrementQuantity(card.id) },
+                        onClick = { selectedCardId = card.id },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        subtitle = {
+                            Text(
+                                listOf(card.manaCost, card.setName, card.rarity)
+                                    .filter { !it.isNullOrBlank() }
+                                    .joinToString(" \u2022 "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    }
+                    )
                 }
             }
         }

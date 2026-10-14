@@ -247,6 +247,8 @@ All migrations are applied in `AppDatabaseProvider`. `fallbackToDestructiveMigra
 | 6→7 | Add `cmc`, `legalities`, `reserved`, `game_changer` to `scryfall_cards` |
 | 7→8 | Add `condition`, `price_usd` to `deck_cards` |
 | 8→9 | Create `scan_sessions` and `scanned_cards` tables |
+| 9→10 | Add `mana_cost` to `cards` |
+| 10→11 | Remap condition grades: `LP`→`SP`, `MP`→`PL`, `DM`→`D` (in `cards` + `deck_cards`) |
 
 ---
 
@@ -578,7 +580,6 @@ sealed interface Screen {
     data object Meta : Screen
     data class Decks(val format: String? = null) : Screen
     data class DeckView(val deckId: Long) : Screen
-    data object UnifiedImport : Screen
 }
 ```
 
@@ -631,7 +632,7 @@ item selected (`indexOfFirst` → -1).
   - Clipboard uses `ClipboardManager.setPrimaryClip()`.
   - File writes to `Downloads/{tag}.txt`.
 - **Card list:** `LazyColumn` with `SwipeToDismissBox` per card.
-  - Each card: name (titleSmall), set name + rarity (bodySmall), `QuantityStepper`.
+  - Each card: shared `CardRow` (`components/CardRow.kt`) — quantity (titleLarge, left), name (titleSmall), subtitle "Mana Cost • Set Name • Rarity" (bodySmall), stacked +/− controls (right).
   - Swipe left: delete with red "X Delete" background.
 - **Tap card:** Opens `CardBottomSheet` (own `selectedCardId` state + `CardDao.byId`
   flow; sheet unmounts itself when the flow emits `null` after a delete):
@@ -686,12 +687,12 @@ item selected (`indexOfFirst` → -1).
 - **Tap format:** Shows that format's decks.
 - **Deck card:** Cover image (artCrop, `ContentScale.Crop` into a fixed 5:3 box so it always fills the card edges with no letterboxing), then a 8dp-padded text block with name, format, card count. When `cover_scryfall_id` is null a `LaunchedEffect(deck.id)` persists a default cover once — first `slot = 'commander'` row (`DeckDao.firstCommander`), else a random non-land mainboard row (`DeckDao.randomNonLandMain`); empty deck keeps the `♠` placeholder (a manual "Set as cover" still wins). Long-press: clone/rename/delete (rename = AlertDialog with `OutlinedTextField` prefilled, `DecksViewModel.renameDeck` → `DeckDao.renameDeck`).
 - **FAB:** Create deck dialog (name + format dropdown).
-- **Top bar:** Import button (download icon) → `Screen.UnifiedImport`.
+- **Top bar:** Import button (download icon) → opens `UnifiedImportSheet` (modal bottom sheet, no navigation).
 
 ### 8.7 DeckViewScreen
 
 - **Cards grouped by slot:** commander → companion → mainboard (grouped by `primaryType()` in fixed order: Creature → Instant → Sorcery → Artifact → Enchantment → Planeswalker → Battle → Land → Other, unknown types last) → sideboard (flat list, always last).
-- **Card row:** Mana cost, name, quantity controls (`QuantityStepper`), rarity/set info.
+- **Card row:** Shared `CardRow` — quantity, name (+ condition badge when not M/NM), subtitle "Mana Cost • Set Name • Rarity", price as trailing, stacked +/− (decrease at qty 1 removes with undo via `minQuantity = 0`).
 - **Cover button:** Sets card as deck cover (hidden for sideboard cards).
 - **Top bar:** Export (`exportDeckToTxt` + `shareDeckFile` share intent; `FileProvider` authority `${applicationId}.fileprovider` with `res/xml/file_paths.xml` → `<cache-path name="decks">`; failures surface as a Toast instead of a crash), Add card button.
 - **AddCardToDeckDialog:** Scryfall autocomplete. For Commander: slot selection (mainboard/commander/companion), color identity validation against existing commander.
@@ -703,14 +704,12 @@ item selected (`indexOfFirst` → -1).
 - **Computation:** Pure top-level `computeDeckStats(cards)` in `ui/DeckStatistics.kt` (unit-tested; guards divide-by-zero, non-finite totals, cmc bucketed 0–8 with `9+` overflow).
 - **Charts:** Custom Canvas composables (`BarChart`, `DonutChart`, `PieChartWithLegend`) in `ui/components/DeckStatsCharts.kt`; paint colors via `Color.toArgb()` (never `hashCode()`), all dimensions coerced ≥ 0.
 
-### 8.9 UnifiedImportScreen
+### 8.9 UnifiedImportSheet
 
-- **Sources:** FilterChips for Moxfield, EDHREC, Archidekt, MTG Goldfish, TappedOut — chips select the parser only for **pasted text/files**; URLs ignore them.
-- **URL auto-detection** (`ImportSource.detect(url)` in `UnifiedImportViewModel.kt`): host-suffix match (tolerant of scheme-less input, `www.`, subdomains, `#fragment`/query) → picks the parser; the field shows a "Detected: <site>" label while a recognized URL is typed; unknown hosts error "Unsupported deck URL — paste the decklist text instead"; TappedOut URLs are detected but never fetched (probed Cloudflare 403) → explicit copy-paste guidance.
-- **URL-aware sources** (Moxfield, EDHREC incl. deck previews, Archidekt, MTG Goldfish): fetch via API/scrape clients; invalid URLs report the expected format, HTTP failures report status + "may be private/deleted".
-- **Paste/File sources** (TappedOut; also any URL-aware source): Text paste or file import (CSV/TXT).
-- **Flow:** Parse → Preview dialog (card list with quantity/slot) → Import → Navigate to DeckView.
-- **Format dropdown:** Defaults to Commander. Used for deck creation.
+- **Modal bottom sheet** (`ModalBottomSheet`, `skipPartiallyExpanded`) hosted by `Screens.kt` state (`showImportSheet`) — no navigation route. Decks top-bar import button opens it; tap-outside/back dismisses **and clears all fields** (`vm.clearInputs()` resets name, format, state; the URL/decklist text field is local `remember` state and resets on dispose).
+- **No source picker** — the source is auto-detected from the URL domain (`ImportSource.detect(url)` in `UnifiedImportViewModel.kt`): host-suffix match (tolerant of scheme-less input, `www.`, subdomains, `#fragment`/query); the field shows a "Detected: <site>" label while a recognized URL is typed; unknown hosts error "Unsupported deck URL — paste the decklist text instead"; TappedOut URLs are detected but never fetched (probed Cloudflare 403) → explicit copy-paste guidance.
+- **Input handling:** first line decides URL vs text (`isUrl` = `https?://` match or known host) → `parseUrl` (fetch via Moxfield/EDHREC/Archidekt/MTG Goldfish clients) or `parseText` (`UniversalDecklistParser`). Deck name defaults from the fetched deck when blank; format dropdown defaults to Commander.
+- **Flow:** Parse → Preview dialog (card list with quantity/slot) → Import → sheet closes, navigate to DeckView. `ImportState.Preview` carries `sourceLabel` (display) + `sourceKey` (stored on `deck.source`; `"text"` for pasted lists).
 - **importDeckCards():** Shared function resolves cards via `ScryfallRepository.lookupByNameResilient()` (parallel lookups) and adds them to the deck. Commander: a `commander` slot declared by the source wins; otherwise card 0 becomes the commander. The identity filter skips cards outside the **union** of every commander-slot card's identity (`DeckRepository.mergeColorIdentities`), so partner pairs keep the whole list.
 
 ### 8.10 ScanCameraScreen
@@ -746,7 +745,8 @@ item selected (`indexOfFirst` → -1).
 | `FullscreenOverlay` | `FullscreenOverlay.kt` | Fullscreen card image dialog (uses `ScryfallImage.large()`) — Home search + DeckView; tag rows use `CardBottomSheet` |
 | `CardBottomSheet` | `CardBottomSheet.kt` | Tag card detail `ModalBottomSheet` (image, chips, added/price, Move/Edit/Delete dialogs) |
 | `EditCardDialog` | `EditCardDialog.kt` | Card edit dialog: condition/finish dropdowns + Scryfall "Change printings…" picker |
-| `QuantityStepper` | `QuantityStepper.kt` | +/- quantity controls |
+| `CardRow` | `CardRow.kt` | Shared card widget: quantity, name, "Mana Cost • Set Name • Rarity" subtitle, stacked +/− — used by tag card list + decklists |
+| `QuantityStepper` | `QuantityStepper.kt` | Inline − qty + stepper (legacy; `CardRow` embeds its own stacked controls) |
 | `CreateTagDialog` | `CreateTagDialog.kt` | Shared "New Tag" dialog (name field + Random button) used by ManageTagsScreen and the Home FAB speed dial |
 | `LoadingBox`, `ErrorBox`, `EmptyBox` | `LoadingBox.kt` | Loading/error/empty states |
 | `CameraPreview` | `CameraPreview.kt` | CameraX `PreviewView` composable |
@@ -788,7 +788,7 @@ fun interface FormatRule {
 
 ### Card Conditions
 
-`NM` (Near Mint), `LP` (Lightly Played), `MP` (Moderately Played), `HP` (Heavily Played), `DM` (Damaged).
+`M` (Mint), `NM` (Near Mint), `SP` (Slightly Played), `PL` (Played), `HP` (Heavily Played), `D` (Damaged) — store-style grades (`data/CardConditions.kt`); Mint and Near Mint are distinct (monetary value differs). Migration 10→11 remapped legacy `LP`/`MP`/`DM` values.
 
 ### Language-independent scan recognition
 

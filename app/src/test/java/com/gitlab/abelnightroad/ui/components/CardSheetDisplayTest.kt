@@ -33,9 +33,12 @@ class CardSheetDisplayTest {
 
     @Test
     fun `condition display formats known grades`() {
+        assertEquals("Mint", CardConditions.displayName("M"))
         assertEquals("Near Mint", CardConditions.displayName("NM"))
-        assertEquals("Lightly Played", CardConditions.displayName("LP"))
-        assertEquals("Damaged", CardConditions.displayName("DM"))
+        assertEquals("Slightly Played", CardConditions.displayName("SP"))
+        assertEquals("Played", CardConditions.displayName("PL"))
+        assertEquals("Heavily Played", CardConditions.displayName("HP"))
+        assertEquals("Damaged", CardConditions.displayName("D"))
         assertEquals("PSA 10", CardConditions.displayName("PSA 10"))
     }
 }

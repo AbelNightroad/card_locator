@@ -1,20 +1,22 @@
 package com.gitlab.abelnightroad.data
 
 object CardConditions {
+    const val M = "M"
     const val NM = "NM"
-    const val LP = "LP"
-    const val MP = "MP"
+    const val SP = "SP"
+    const val PL = "PL"
     const val HP = "HP"
-    const val DM = "DM"
+    const val D = "D"
 
-    val ALL = listOf(NM, LP, MP, HP, DM)
+    val ALL = listOf(M, NM, SP, PL, HP, D)
 
     fun displayName(condition: String): String = when (condition) {
+        M -> "Mint"
         NM -> "Near Mint"
-        LP -> "Lightly Played"
-        MP -> "Moderately Played"
+        SP -> "Slightly Played"
+        PL -> "Played"
         HP -> "Heavily Played"
-        DM -> "Damaged"
+        D -> "Damaged"
         else -> condition
     }
 }

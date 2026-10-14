@@ -58,7 +58,7 @@ import compose.icons.fontawesomeicons.Solid
 import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
-import com.gitlab.abelnightroad.ui.components.QuantityStepper
+import com.gitlab.abelnightroad.ui.components.CardRow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
@@ -160,53 +160,55 @@ private fun DeckCardRow(
     onQuantityChange: (Int) -> Unit,
     onCardClick: () -> Unit
 ) {
-    val context = LocalContext.current
     val conditionColor = when (card.condition) {
-        "NM" -> MaterialTheme.colorScheme.primary
-        "LP" -> MaterialTheme.colorScheme.tertiary
-        "MP" -> MaterialTheme.colorScheme.secondary
-        "HP" -> MaterialTheme.colorScheme.error
-        "DM" -> MaterialTheme.colorScheme.error
+        com.gitlab.abelnightroad.data.CardConditions.M,
+        com.gitlab.abelnightroad.data.CardConditions.NM -> MaterialTheme.colorScheme.primary
+        com.gitlab.abelnightroad.data.CardConditions.SP -> MaterialTheme.colorScheme.tertiary
+        com.gitlab.abelnightroad.data.CardConditions.PL -> MaterialTheme.colorScheme.secondary
+        com.gitlab.abelnightroad.data.CardConditions.HP,
+        com.gitlab.abelnightroad.data.CardConditions.D -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.outline
     }
-    Card(
-        Modifier.fillMaxWidth().padding(vertical = 3.dp)
-            .clickable { onCardClick() },
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(card.cardName, style = MaterialTheme.typography.titleSmall)
-                    if (card.condition != "NM") {
-                        Spacer(Modifier.width(6.dp))
-                        Text(card.condition,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = conditionColor)
-                    }
-                }
-                if (card.manaCost.isNotBlank()) {
-                    Text(card.manaCost,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+    CardRow(
+        quantity = card.quantity,
+        name = card.cardName,
+        onIncrease = { onQuantityChange(1) },
+        onDecrease = { onQuantityChange(-1) },
+        minQuantity = 0,
+        onClick = onCardClick,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        nameAccessory = {
+            if (card.condition != com.gitlab.abelnightroad.data.CardConditions.M &&
+                card.condition != com.gitlab.abelnightroad.data.CardConditions.NM
+            ) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    card.condition,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = conditionColor
+                )
             }
+        },
+        subtitle = {
+            Text(
+                listOf(card.manaCost, card.setName, card.rarity)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" \u2022 "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        trailing = {
             if (card.priceUsd > 0) {
-                Text("$${"%.2f".format(card.priceUsd * card.quantity)}",
+                Text(
+                    "$${"%.2f".format(card.priceUsd * card.quantity)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 8.dp))
+                    modifier = Modifier.padding(end = 4.dp)
+                )
             }
-            QuantityStepper(
-                quantity = card.quantity,
-                onDecrease = { onQuantityChange(-1) },
-                onIncrease = { onQuantityChange(1) }
-            )
         }
-    }
+    )
 }
 
 @Composable
