@@ -79,7 +79,7 @@ class ManualAddViewModel(
                     purchasePriceCurrency = "USD",
                     added = LocalDateTime.now().toString(),
                     tag = tag.value.ifBlank { "Manual" },
-                    manaCost = ""
+                    manaCost = card.manaCost
                 )
             )
             _saved.value = true

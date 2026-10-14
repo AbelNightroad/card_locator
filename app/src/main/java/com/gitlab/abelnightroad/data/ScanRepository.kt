@@ -55,7 +55,7 @@ class ScanRepository(private val dao: ScanSessionDao) {
                 purchasePriceCurrency = "USD",
                 added = LocalDateTime.now().toString(),
                 tag = tag.ifBlank { "Scan" },
-                manaCost = ""
+                manaCost = scanned.manaCost
             )
         }
         cardRepository.insertAll(entities)

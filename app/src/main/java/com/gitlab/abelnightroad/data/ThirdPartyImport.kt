@@ -88,7 +88,12 @@ object ThirdPartyImport {
                 enriched.add(card)
             } else {
                 enriched.add(
-                    card.copy(setName = ref.setName, rarity = ref.rarity, scryfallId = ref.id)
+                    card.copy(
+                        setName = ref.setName,
+                        rarity = ref.rarity,
+                        scryfallId = ref.id,
+                        manaCost = ref.manaCost
+                    )
                 )
             }
             onProgress(index + 1, total)

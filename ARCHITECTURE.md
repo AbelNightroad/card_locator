@@ -249,6 +249,7 @@ All migrations are applied in `AppDatabaseProvider`. `fallbackToDestructiveMigra
 | 8→9 | Create `scan_sessions` and `scanned_cards` tables |
 | 9→10 | Add `mana_cost` to `cards` |
 | 10→11 | Remap condition grades: `LP`→`SP`, `MP`→`PL`, `DM`→`D` (in `cards` + `deck_cards`) |
+| 11→12 | Backfill `cards.mana_cost` from `scryfall_cards` where empty |
 
 ---
 

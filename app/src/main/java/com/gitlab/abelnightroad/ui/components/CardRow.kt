@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,7 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import compose.icons.FontAwesomeIcons
+import compose.icons.fontawesomeicons.Solid
+import compose.icons.fontawesomeicons.solid.Minus
+import compose.icons.fontawesomeicons.solid.Plus
 
 @Composable
 fun CardRow(
@@ -48,7 +52,7 @@ fun CardRow(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(name, style = MaterialTheme.typography.titleSmall)
@@ -60,16 +64,24 @@ fun CardRow(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(
                     onClick = onIncrease,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
-                    Text("+", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Icon(
+                        FontAwesomeIcons.Solid.Plus,
+                        "Increase quantity",
+                        Modifier.size(14.dp)
+                    )
                 }
                 IconButton(
                     onClick = onDecrease,
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(28.dp),
                     enabled = quantity > minQuantity
                 ) {
-                    Text("\u2212", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Icon(
+                        FontAwesomeIcons.Solid.Minus,
+                        "Decrease quantity",
+                        Modifier.size(14.dp)
+                    )
                 }
             }
         }

@@ -178,17 +178,17 @@ fun CardBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { showMove = true }) {
-                    Icon(FontAwesomeIcons.Solid.ArrowRightArrowLeft, "Move to another tag", modifier = Modifier.size(24.dp))
+                    Icon(FontAwesomeIcons.Solid.ArrowRightArrowLeft, "Move to another tag", modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = { showEdit = true }) {
-                    Icon(FontAwesomeIcons.Solid.PenToSquare, "Edit card", modifier = Modifier.size(24.dp))
+                    Icon(FontAwesomeIcons.Solid.PenToSquare, "Edit card", modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(
                         FontAwesomeIcons.Solid.Trash,
                         "Delete card",
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
