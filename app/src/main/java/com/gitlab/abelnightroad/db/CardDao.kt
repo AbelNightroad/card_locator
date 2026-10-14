@@ -128,9 +128,15 @@ interface CardDao {
     fun tagCounts(): Flow<List<TagCount>>
 
 @Query(
-    "SELECT id, name, set_code, set_name, collector_number, foil, rarity, " +
-        "quantity, scryfall_id, tag, mana_cost FROM cards WHERE tag = :tag " +
-        "ORDER BY name COLLATE NOCASE ASC"
+    "SELECT cards.id AS id, cards.name AS name, cards.set_code AS set_code, " +
+        "cards.set_name AS set_name, cards.collector_number AS collector_number, " +
+        "cards.foil AS foil, cards.rarity AS rarity, cards.quantity AS quantity, " +
+        "cards.scryfall_id AS scryfall_id, cards.tag AS tag, " +
+        "CASE WHEN cards.mana_cost != '' THEN cards.mana_cost " +
+        "ELSE COALESCE(scryfall_cards.mana_cost, '') END AS mana_cost " +
+        "FROM cards LEFT JOIN scryfall_cards ON scryfall_cards.id = cards.scryfall_id " +
+        "WHERE cards.tag = :tag " +
+        "ORDER BY cards.name COLLATE NOCASE ASC"
 )
 fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
 
