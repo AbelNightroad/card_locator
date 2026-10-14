@@ -269,7 +269,7 @@ internal fun CardListScreen(
                                 onDecrease = { vm.decrementQuantity(card.id) },
                                 onIncrease = { vm.incrementQuantity(card.id) }
                             )
-                            Column(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
                                 Text(card.name, style = MaterialTheme.typography.titleSmall)
                                 Text(
                                     "${card.setName} \u00b7 ${card.rarity}",

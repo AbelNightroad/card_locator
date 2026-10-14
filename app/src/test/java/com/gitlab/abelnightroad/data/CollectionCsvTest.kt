@@ -13,7 +13,8 @@ class CollectionCsvTest {
     private fun card(
         name: String = "Lightning Bolt",
         tag: String = "Box-A1",
-        quantity: Int = 4
+        quantity: Int = 4,
+        manaCost: String = ""
     ) = CardEntity(
         name = name,
         setCode = "LEA",
@@ -31,7 +32,8 @@ class CollectionCsvTest {
         language = "English",
         purchasePriceCurrency = "USD",
         added = "2026-01-01",
-        tag = tag
+        tag = tag,
+        manaCost = manaCost
     )
 
     @Test

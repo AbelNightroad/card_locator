@@ -74,7 +74,8 @@ class ThirdPartyImportTest {
                 language = "",
                 purchasePriceCurrency = "",
                 added = "",
-                tag = "Test"
+                tag = "Test",
+                manaCost = ""
             )
         }
         val progress = mutableListOf<Pair<Int, Int>>()

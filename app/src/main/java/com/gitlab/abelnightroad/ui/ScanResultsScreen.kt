@@ -180,7 +180,7 @@ private fun ScannedCardRow(
 
             Spacer(Modifier.width(12.dp))
 
-Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f)) {
                 Text(card.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(
                     Modifier.fillMaxWidth(),
@@ -192,7 +192,6 @@ Column(Modifier.weight(1f)) {
                     }
                     Text("${card.rarity} \u00b7 ${card.setName}", style = MaterialTheme.typography.bodySmall)
                 }
-            }
             }
 
             IconButton(onClick = onDelete) {

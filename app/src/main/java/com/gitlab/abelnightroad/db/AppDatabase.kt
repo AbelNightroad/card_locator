@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [CardEntity::class, ScryfallCardEntity::class, DeckEntity::class, DeckCardEntity::class, TagEntity::class, ScanSessionEntity::class, ScannedCardEntity::class],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -51,6 +51,10 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("CREATE TABLE IF NOT EXISTS `scan_sessions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `createdAt` TEXT NOT NULL)")
             db.execSQL("CREATE TABLE IF NOT EXISTS `scanned_cards` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` INTEGER NOT NULL, `name` TEXT NOT NULL, `setCode` TEXT NOT NULL, `setName` TEXT NOT NULL, `collectorNumber` TEXT NOT NULL, `rarity` TEXT NOT NULL, `manaCost` TEXT NOT NULL, `typeLine` TEXT NOT NULL, `oracleText` TEXT NOT NULL, `colorIdentity` TEXT NOT NULL, `scryfallId` TEXT NOT NULL, `priceUsd` REAL NOT NULL, `language` TEXT NOT NULL, FOREIGN KEY(`sessionId`) REFERENCES `scan_sessions`(`id`) ON DELETE CASCADE)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_scanned_cards_sessionId` ON `scanned_cards` (`sessionId`)")
+        }
+
+        val MIGRATION_9_10 = Migration(9, 10) { db ->
+            db.execSQL("ALTER TABLE `cards` ADD COLUMN `mana_cost` TEXT NOT NULL DEFAULT ''")
         }
     }
 }

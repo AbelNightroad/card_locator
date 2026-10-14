@@ -76,7 +76,8 @@ object QtyListImport {
                 language = "",
                 purchasePriceCurrency = "",
                 added = LocalDateTime.now().toString(),
-                tag = tag
+                tag = tag,
+                manaCost = ""
             )
             val key = listOf(
                 card.name.uppercase(), card.setCode.uppercase(),

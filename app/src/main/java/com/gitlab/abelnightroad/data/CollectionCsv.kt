@@ -64,17 +64,20 @@ object CollectionCsv {
                 condition = row[13],
                 language = row[14],
                 purchasePriceCurrency = row[15],
-                added = row[16]
+                added = row[16],
+                manaCost = ""
             )
         }
     }
 
-    private fun quote(value: String): String =
-        if (value.any { it == ',' || it == '"' || it == '\r' || it == '\n' }) {
-            "\"" + value.replace("\"", "\"\"") + "\""
+private fun quote(value: String?): String =
+    value?.let { v ->
+        if (v.any { it == ',' || it == '"' || it == '\r' || it == '\n' }) {
+            "\"" + v.replace("\"", "\"\"") + "\""
         } else {
-            value
+            v
         }
+    } ?: ""
 
     private fun parseRows(text: String): List<List<String>> {
         val rows = mutableListOf<List<String>>()

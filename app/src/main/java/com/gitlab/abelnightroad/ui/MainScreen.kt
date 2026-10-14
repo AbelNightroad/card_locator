@@ -188,7 +188,7 @@ internal fun MainScreen(
                     multiCards.map {
                         CardSearchResult(
                             0, it.name, it.setCode, it.setName, "", "", "",
-                            it.totalQuantity, it.scryfallId, "collection"
+                            it.totalQuantity, it.scryfallId, "collection", null
                         )
                     }, onCardClick
                 )

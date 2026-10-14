@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RoomWarnings
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
@@ -139,6 +140,7 @@ fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
             "WHERE name LIKE '%' || :query || '%' COLLATE NOCASE " +
             "ORDER BY name COLLATE NOCASE ASC"
     )
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     fun searchByName(query: String): Flow<List<CardSearchResult>>
 
     @Query(
@@ -156,6 +158,7 @@ fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
             "AND (:rarity IS NULL OR rarity = :rarity) " +
             "ORDER BY name COLLATE NOCASE ASC"
     )
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     fun searchAdvanced(query: String, colors: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
 
     @Transaction

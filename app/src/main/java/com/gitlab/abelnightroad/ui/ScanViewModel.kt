@@ -106,8 +106,8 @@ class ScanViewModel(
                     if (setLangFromFullText != null || collectorFromFullText != null) {
                         card = withContext(Dispatchers.IO) {
                             scryfall.lookupBySetAndCollector(
-                                setLangFromFullText?.setCode ?: collectorFromFullText?.normalized,
-                                collectorFromFullText?.rarity ?: ''
+                                setLangFromFullText?.setCode ?: collectorFromFullText?.normalized ?: "",
+                                (collectorFromFullText?.rarity ?: 'U').toString()
                             )
                         }
                     }

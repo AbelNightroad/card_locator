@@ -81,7 +81,8 @@ object CsvImport {
                     language = cols[langIdx].trim(),
                     purchasePriceCurrency = cols[curIdx].trim(),
                     added = cols[addedIdx].trim(),
-                    tag = tag
+                    tag = tag,
+                    manaCost = ""
                 )
             )
         }
