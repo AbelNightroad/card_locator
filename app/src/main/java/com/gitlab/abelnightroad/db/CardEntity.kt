@@ -23,7 +23,7 @@ data class CardEntity(
     @ColumnInfo(name = "foil") val foil: String,
     @ColumnInfo(name = "rarity") val rarity: String,
     @ColumnInfo(name = "quantity") val quantity: Int,
-    @ColumnInfo(name = "mana_box_id") val manaBoxId: String,
+    @ColumnInfo(name = "mana_box_id") val manaBoxId: String?,
     @ColumnInfo(name = "scryfall_id") val scryfallId: String,
     @ColumnInfo(name = "purchase_price") val purchasePrice: Double,
     @ColumnInfo(name = "misprint") val misprint: Boolean,
@@ -32,5 +32,6 @@ data class CardEntity(
     @ColumnInfo(name = "language") val language: String,
     @ColumnInfo(name = "purchase_price_currency") val purchasePriceCurrency: String,
     @ColumnInfo(name = "added") val added: String,
-    @ColumnInfo(name = "tag") val tag: String
+    @ColumnInfo(name = "tag") val tag: String,
+    @ColumnInfo(name = "mana_cost") val manaCost: String?
 )

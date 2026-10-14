@@ -145,9 +145,6 @@ fun CardBottomSheet(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (card.language.isNotBlank()) {
-                    SuggestionChip(onClick = {}, label = { Text(card.language) })
-                }
                 SuggestionChip(
                     onClick = {},
                     label = { Text(CardConditions.displayName(card.condition)) }
@@ -180,16 +177,17 @@ fun CardBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { showMove = true }) {
-                    Icon(FontAwesomeIcons.Solid.ArrowRightArrowLeft, "Move to another tag")
+                    Icon(FontAwesomeIcons.Solid.ArrowRightArrowLeft, "Move to another tag", modifier = Modifier.size(24.dp))
                 }
                 IconButton(onClick = { showEdit = true }) {
-                    Icon(FontAwesomeIcons.Solid.PenToSquare, "Edit card")
+                    Icon(FontAwesomeIcons.Solid.PenToSquare, "Edit card", modifier = Modifier.size(24.dp))
                 }
                 IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(
                         FontAwesomeIcons.Solid.Trash,
                         "Delete card",
-                        tint = MaterialTheme.colorScheme.error
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }

@@ -24,7 +24,8 @@ data class CardSearchResult(
     val rarity: String,
     val quantity: Int,
     @ColumnInfo(name = "scryfall_id") val scryfallId: String,
-    val tag: String
+    val tag: String,
+    val manaCost: String?
 )
 
 data class MultiCopyCard(
@@ -125,12 +126,12 @@ interface CardDao {
     )
     fun tagCounts(): Flow<List<TagCount>>
 
-    @Query(
-        "SELECT id, name, set_code, set_name, collector_number, foil, rarity, " +
-            "quantity, scryfall_id, tag FROM cards WHERE tag = :tag " +
-            "ORDER BY name COLLATE NOCASE ASC"
-    )
-    fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
+@Query(
+    "SELECT id, name, set_code, set_name, collector_number, foil, rarity, " +
+        "quantity, scryfall_id, tag, mana_cost FROM cards WHERE tag = :tag " +
+        "ORDER BY name COLLATE NOCASE ASC"
+)
+fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
 
     @Query(
         "SELECT id, name, set_code, set_name, collector_number, foil, rarity, " +

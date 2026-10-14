@@ -1103,3 +1103,56 @@ foreign-language cards store the DB's English `name` in `scanned_cards` (good
 7. `feat: identify cards from collector metadata for any language`
 8. `docs: update architecture for standard theme and card sheet`
 9. `docs: record next batch plan`
+
+## Plan: Polish — BottomSheet Fixes, Scan Improvement, Cover Removal, Card Widget Update
+
+### Change 1 — BottomSheet icons too big
+
+- **File:** `app/src/main/java/com/gitlab/abelnightroad/ui/components/CardBottomSheet.kt` (lines 177-195)
+- **Problem:** Action icons (Move, Edit, Delete) are too large in the bottom action row
+- **Tasks:**
+  - Reduce IconButton sizes using `Modifier.size()` or `contentScale`
+  - Ensure icons are consistent and compact
+  - Verify in both light and dark themes
+
+### Change 2 — Empty chip in BottomSheet
+
+- **File:** `app/src/main/java/com/gitlab/abelnightroad/ui/components/CardBottomSheet.kt` (lines 148-161)
+- **Problem:** First chip (language) is always empty/blank regardless of card; empty chip appears before tag and rarity
+- **Tasks:**
+  - Make language chip truly conditional — only show when `card.language.isNotBlank()`
+  - When language is blank, skip the chip entirely so no empty chip appears
+  - Ensure remaining chips (condition, tag, rarity) shift left without gaps
+
+### Change 3 — Japanese card scan fails
+
+- **Files:** `app/src/main/java/com/gitlab/abelnightroad/data/CardMetadataParser.kt`, `app/src/main/java/com/gitlab/abelnightroad/ui/ScanViewModel.kt`
+- **Problem:** OCR not getting metadata from bottom-left of Japanese cards to improve lookup
+- **Tasks:**
+  - Adjust `metadataRegion` thresholds in `CardMetadataParser.kt` to be more generous for CJK cards
+  - Add fallback: if metadata parsing fails for JP/CN cards, retry with Latin model on same image
+  - Ensure `lookupBySetAndCollector` works as fallback path for any card with set code + collector number
+  - Test with Japanese/Chinese card OCR outputs to verify metadata extraction
+
+### Change 4 — Remove cover selection feature
+
+- **File:** `app/src/main/java/com/gitlab/abelnightroad/ui/DecksScreen.kt` (and `DeckViewViewModel` if applicable)
+- **Problem:** Manual "set as cover" feature is unnecessary; automatic cover works flawlessly
+- **Tasks:**
+  - Remove manual "set as cover" UI from DeckView and Decks screens
+  - Keep automatic cover picker (first commander / random non-land mainboard when cover is null)
+  - Ensure manual cover still overrides if previously set, but remove the UI to change it
+  - Update `DecksScreen.kt` LaunchedEffect to persist the auto-picked cover on first visit
+
+### Change 5 — Update Card widget (Tags and decklists)
+
+- **Files:** `app/src/main/java/com/gitlab/abelnightroad/ui/CardListScreen.kt`, `app/src/main/java/com/gitlab/abelnightroad/ui/DecksScreen.kt`, `app/src/main/java/com/gitlab/abelnightroad/ui/ScanResultsScreen.kt`
+- **Problem:** Current card display doesn't match desired layout from `@cardwidget.png`
+- **Tasks:**
+  - **Top Card:** Place card number/quantity in front, span two rows (name + set/rarity underneath)
+  - **+ and - buttons:** Same size, each occupy exactly 1 row (QuantityStepper already does this — verify)
+  - **In decklists:** Cost, rarity, and set name displayed in the same row
+  - **Add cost to Card in Tags:** Include mana cost field in Tag card display
+  - **Current vs desired:** Bottom card (current) vs Top card (desired) from reference
+  - Verify `QuantityStepper` has +/- at same size, each 1 row height
+  - Ensure decklist card row shows: cost + rarity + set name together

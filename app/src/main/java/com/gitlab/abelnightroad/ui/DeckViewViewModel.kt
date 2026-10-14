@@ -69,12 +69,6 @@ class DeckViewViewModel(
 
     fun clearRemovedCard() { _removedCard.value = null }
 
-    fun setCover(scryfallId: String) {
-        viewModelScope.launch {
-            deckRepository.updateDeckCover(deckId, scryfallId)
-        }
-    }
-
     fun addCardToDeck(
         card: ScryfallCardEntity,
         slot: String,

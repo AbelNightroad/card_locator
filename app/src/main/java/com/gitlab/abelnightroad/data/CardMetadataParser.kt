@@ -37,13 +37,13 @@ data class CardMetadata(
  * language) is language-independent because set codes and collector numbers
  * are printed in Latin on every modern card. All thresholds are fractional
  * and generous — every function degrades to "" / null instead of failing.
+ * Thresholds adjusted to be more inclusive of CJK card OCR output patterns.
  */
-object CardMetadataParser {
 
-    private const val NAME_BOTTOM_FRACTION = 0.20f
-    private const val NAME_RIGHT_FRACTION = 0.70f
-    private const val META_TOP_FRACTION = 0.82f
-    private const val META_RIGHT_FRACTION = 0.45f
+private const val NAME_BOTTOM_FRACTION = 0.25f
+private const val NAME_RIGHT_FRACTION = 0.75f
+private const val META_TOP_FRACTION = 0.75f
+private const val META_RIGHT_FRACTION = 0.50f
 
     private val collectorRegex = Regex("""^\s*([CUMBRSFT])\s*[-.]?\s*(\d{1,4})\s*$""")
     private val setLangRegex = Regex("""^\s*([A-Z0-9]{2,6})\s*[•·・\-–]?\s*([A-Z]{2,3})\s*$""")

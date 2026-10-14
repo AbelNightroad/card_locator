@@ -99,6 +99,20 @@ class ScanViewModel(
                 var card = meta?.let { lookupByMetadata(it) }
                 var cardName: String? = null
 
+                // Fallback: if metadata parse failed, try extracting from full OCR text
+                if (card == null) {
+                    val setLangFromFullText = CardMetadataParser.parseSetLang(fullText)
+                    val collectorFromFullText = CardMetadataParser.parseCollector(fullText)
+                    if (setLangFromFullText != null || collectorFromFullText != null) {
+                        card = withContext(Dispatchers.IO) {
+                            scryfall.lookupBySetAndCollector(
+                                setLangFromFullText?.setCode ?: collectorFromFullText?.normalized,
+                                collectorFromFullText?.rarity ?: ''
+                            )
+                        }
+                    }
+                }
+
                 if (card == null) {
                     val nameText = CardMetadataParser.nameRegion(page.blocks, page.height, page.width)
                         .ifBlank { fullText }

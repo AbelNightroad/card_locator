@@ -180,25 +180,19 @@ private fun ScannedCardRow(
 
             Spacer(Modifier.width(12.dp))
 
-            Column(Modifier.weight(1f)) {
-                Text(
-                    card.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    "${card.setName} \u00b7 ${card.rarity} \u00b7 ${card.language.uppercase()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (card.manaCost.isNotBlank()) {
-                    Text(
-                        card.manaCost,
-                        style = MaterialTheme.typography.bodySmall
-                    )
+Column(Modifier.weight(1f)) {
+                Text(card.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (card.manaCost.isNotBlank()) {
+                        Text(card.manaCost, style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text("${card.rarity} \u00b7 ${card.setName}", style = MaterialTheme.typography.bodySmall)
                 }
+            }
             }
 
             IconButton(onClick = onDelete) {

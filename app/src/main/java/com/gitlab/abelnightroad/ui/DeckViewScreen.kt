@@ -158,9 +158,7 @@ internal fun DeckViewScreen(
 private fun DeckCardRow(
     card: com.gitlab.abelnightroad.db.DeckCardEntity,
     onQuantityChange: (Int) -> Unit,
-    onCardClick: () -> Unit,
-    onSetCover: () -> Unit,
-    showCoverButton: Boolean = true
+    onCardClick: () -> Unit
 ) {
     val context = LocalContext.current
     val conditionColor = when (card.condition) {
@@ -207,23 +205,6 @@ private fun DeckCardRow(
                 onDecrease = { onQuantityChange(-1) },
                 onIncrease = { onQuantityChange(1) }
             )
-        }
-        if (showCoverButton) {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("${card.rarity} \u00b7 ${card.setName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(
-                    onClick = {
-                        onSetCover()
-                        Toast.makeText(context, "Cover set", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.height(28.dp)
-                ) { Text("Cover", fontSize = 11.sp) }
-            }
         }
     }
 }
@@ -394,16 +375,14 @@ private fun DecklistTab(
             if (slot == "sideboard") {
                 val flatCards = typeGroups.values.flatten()
                 items(flatCards, key = { it.id }) { card ->
-                    DeckCardRow(
-                        card = card,
-                        onQuantityChange = { delta ->
-                            if (delta < 0 && card.quantity <= 1) vm.removeCardWithUndo(card.id, cards)
-                            else vm.updateCardQuantity(card.id, card.quantity + delta)
-                        },
-                        onCardClick = { onCardClick(card.scryfallId) },
-                        onSetCover = { vm.setCover(card.scryfallId) },
-                        showCoverButton = false
-                    )
+DeckCardRow(
+                            card = card,
+                            onQuantityChange = { delta ->
+                                if (delta < 0 && card.quantity <= 1) vm.removeCardWithUndo(card.id, cards)
+                                else vm.updateCardQuantity(card.id, card.quantity + delta)
+                            },
+                            onCardClick = { onCardClick(card.scryfallId) }
+                        )
                 }
             } else {
                 for ((type, typeCards) in typeGroups) {
@@ -421,8 +400,7 @@ private fun DecklistTab(
                                 if (delta < 0 && card.quantity <= 1) vm.removeCardWithUndo(card.id, cards)
                                 else vm.updateCardQuantity(card.id, card.quantity + delta)
                             },
-                            onCardClick = { onCardClick(card.scryfallId) },
-                            onSetCover = { vm.setCover(card.scryfallId) }
+                            onCardClick = { onCardClick(card.scryfallId) }
                         )
                     }
                 }

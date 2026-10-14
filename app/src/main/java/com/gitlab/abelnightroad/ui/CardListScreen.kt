@@ -264,18 +264,25 @@ internal fun CardListScreen(
                             Modifier.fillMaxWidth().padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(Modifier.weight(1f)) {
+                            QuantityStepper(
+                                quantity = card.quantity,
+                                onDecrease = { vm.decrementQuantity(card.id) },
+                                onIncrease = { vm.incrementQuantity(card.id) }
+                            )
+                            Column(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                                 Text(card.name, style = MaterialTheme.typography.titleSmall)
                                 Text(
                                     "${card.setName} \u00b7 ${card.rarity}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            QuantityStepper(
-                                quantity = card.quantity,
-                                onDecrease = { vm.decrementQuantity(card.id) },
-                                onIncrease = { vm.incrementQuantity(card.id) }
-                            )
+                            if (card.manaCost?.isNotBlank() == true) {
+                                Text(
+                                    card.manaCost,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
