@@ -26,7 +26,7 @@ data class CardSearchResult(
     val quantity: Int,
     @ColumnInfo(name = "scryfall_id") val scryfallId: String,
     val tag: String,
-    val manaCost: String?
+    @ColumnInfo(name = "mana_cost") val manaCost: String?
 )
 
 data class MultiCopyCard(
