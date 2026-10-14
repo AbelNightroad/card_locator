@@ -21,8 +21,8 @@ android {
         applicationId = "com.gitlab.abelnightroad"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.5.0"
+        versionCode = 10
+        versionName = "1.5.2"
 
         vectorDrawables {
             useSupportLibrary = true

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -177,16 +178,17 @@ fun CardBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { showMove = true }) {
-                    Icon(FontAwesomeIcons.Solid.ArrowRightArrowLeft, "Move to another tag")
+                    Icon(FontAwesomeIcons.Solid.ArrowRightArrowLeft, "Move to another tag", modifier = Modifier.size(24.dp))
                 }
                 IconButton(onClick = { showEdit = true }) {
-                    Icon(FontAwesomeIcons.Solid.PenToSquare, "Edit card")
+                    Icon(FontAwesomeIcons.Solid.PenToSquare, "Edit card", modifier = Modifier.size(24.dp))
                 }
                 IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(
                         FontAwesomeIcons.Solid.Trash,
                         "Delete card",
-                        tint = MaterialTheme.colorScheme.error
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }

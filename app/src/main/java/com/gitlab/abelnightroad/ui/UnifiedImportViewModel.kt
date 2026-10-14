@@ -1,20 +1,10 @@
 package com.gitlab.abelnightroad.ui
 
 import android.app.Application
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.gitlab.abelnightroad.data.ArchidektApiClient
 import com.gitlab.abelnightroad.data.DeckRepository
-import com.gitlab.abelnightroad.data.EdhrecApiClient
-import com.gitlab.abelnightroad.data.MtgGoldfishCsvParser
-import com.gitlab.abelnightroad.data.MoxfieldApiClient
-import com.gitlab.abelnightroad.data.MtgGoldfishApiClient
 import com.gitlab.abelnightroad.data.ScryfallRepository
-import com.gitlab.abelnightroad.data.TappedOutCsvParser
-import com.gitlab.abelnightroad.data.TappedOutDckParser
-import com.gitlab.abelnightroad.data.UniversalDecklistParser
-import com.gitlab.abelnightroad.data.MetaDeckCard
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -66,73 +56,7 @@ class UnifiedImportViewModel(
     fun setDeckName(name: String) { _deckName.value = name }
     fun setFormat(format: String) { _format.value = format }
 
-    fun parseUrl(url: String) {
-        if (url.isBlank()) {
-            _state.value = ImportState.Error("No URL provided")
-            return
-        }
-        val source = ImportSource.detect(url)
-            ?: run {
-                _state.value = ImportState.Error("Unsupported deck URL — paste the decklist text instead")
-                return
-            }
-        if (source == ImportSource.TAPPED_OUT) {
-            _state.value = ImportState.Error(
-                "TappedOut URLs are blocked (Cloudflare) — copy the deck list and paste it instead"
-            )
-            return
-        }
-        _state.value = ImportState.Parsing
-        viewModelScope.launch {
-            try {
-                when (source) {
-                    ImportSource.MOXFIELD -> {
-                        val deckId = MoxfieldApiClient.extractDeckId(url)
-                            ?: throw Exception(
-                                "Invalid Moxfield URL — expected: https://www.moxfield.com/decks/<id>"
-                            )
-                        val deck = MoxfieldApiClient.fetchDeck(deckId)
-                        val cards = MoxfieldApiClient.toMetaDeckCards(deck)
-                        if (cards.isEmpty()) throw Exception("No cards found in Moxfield deck")
-                        _deckName.value = _deckName.value.ifBlank { deck.name }
-                        _state.value = ImportState.Preview(cards, ImportSource.MOXFIELD)
-                    }
-                    ImportSource.EDHREC -> {
-                        val deck = EdhrecApiClient.fetchFromUrl(url)
-                        val cards = EdhrecApiClient.toMetaDeckCards(deck)
-                        if (cards.isEmpty()) throw Exception("No cards found in EDHREC deck")
-                        _state.value = ImportState.Preview(cards, ImportSource.EDHREC)
-                    }
-                    ImportSource.ARCHIDEKT -> {
-                        val deckId = ArchidektApiClient.extractDeckId(url)
-                            ?: throw Exception(
-                                "Invalid Archidekt URL — expected: https://archidekt.com/decks/<id>"
-                            )
-                        val deck = ArchidektApiClient.fetchDeck(deckId)
-                        val cards = ArchidektApiClient.toMetaDeckCards(deck)
-                        if (cards.isEmpty()) throw Exception("No cards found in Archidekt deck")
-                        _deckName.value = _deckName.value.ifBlank { deck.name }
-                        _state.value = ImportState.Preview(cards, ImportSource.ARCHIDEKT)
-                    }
-                    ImportSource.MTG_GOLDFISH -> {
-                        val deckId = MtgGoldfishApiClient.extractDeckId(url)
-                            ?: throw Exception(
-                                "Invalid MTG Goldfish URL — expected: https://www.mtggoldfish.com/deck/<id>"
-                            )
-                        val text = MtgGoldfishApiClient.fetchDecklist(deckId)
-                        val cards = UniversalDecklistParser.parse(text)
-                        if (cards.isEmpty()) throw Exception("No cards found in MTG Goldfish deck")
-                        _state.value = ImportState.Preview(cards, ImportSource.MTG_GOLDFISH)
-                    }
-                    ImportSource.TAPPED_OUT -> {}
-                }
-            } catch (e: Exception) {
-                _state.value = ImportState.Error("Failed to fetch deck: ${e.message}")
-            }
-        }
-    }
-
-    fun parseText(text: String, source: ImportSource) {
+    fun parseText(text: String) {
         if (text.isBlank()) {
             _state.value = ImportState.Error("No text provided")
             return
@@ -140,14 +64,20 @@ class UnifiedImportViewModel(
         _state.value = ImportState.Parsing
         viewModelScope.launch {
             try {
-                val cards = when (source) {
+                // Auto-detect source from text
+                val firstLine = text.trim().lineSequence().firstOrNull()
+                val detectedSource = firstLine?.takeIf { it.isNotBlank() }
+                    ?.let { ImportSource.detect(it) }
+                    ?: ImportSource.MOXFIELD // default if no text
+
+                val cards = when (detectedSource) {
                     ImportSource.MTG_GOLDFISH -> {
                         if (text.contains(",")) MtgGoldfishCsvParser.parse(text)
                         else UniversalDecklistParser.parse(text)
                     }
                     ImportSource.TAPPED_OUT -> {
-                        if (text.contains(",")) TappedOutCsvParser.parse(text)
-                        else TappedOutDckParser.parse(text)
+                        // TappedOut is blocked, show error
+                        throw Exception("TappedOut URLs are blocked (Cloudflare) — copy the deck list and paste it instead")
                     }
                     ImportSource.MOXFIELD,
                     ImportSource.EDHREC,
@@ -156,47 +86,12 @@ class UnifiedImportViewModel(
                     }
                 }
                 if (cards.isEmpty()) {
-                    _state.value = ImportState.Error("No cards found in $source")
+                    _state.value = ImportState.Error("No cards found in $detectedSource")
                     return@launch
                 }
-                _state.value = ImportState.Preview(cards, source)
+                _state.value = ImportState.Preview(cards, detectedSource)
             } catch (e: Exception) {
                 _state.value = ImportState.Error("Parse error: ${e.message}")
-            }
-        }
-    }
-
-    fun parseFile(uri: Uri, source: ImportSource) {
-        _state.value = ImportState.Parsing
-        viewModelScope.launch {
-            try {
-                val context = getApplication<Application>()
-                val text = context.contentResolver.openInputStream(uri)?.use { input ->
-                    input.bufferedReader(Charsets.UTF_8).readText()
-                } ?: throw Exception("Could not read file")
-
-                val cards = when (source) {
-                    ImportSource.MTG_GOLDFISH -> {
-                        if (text.contains(",")) MtgGoldfishCsvParser.parse(text)
-                        else UniversalDecklistParser.parse(text)
-                    }
-                    ImportSource.TAPPED_OUT -> {
-                        if (text.contains(",")) TappedOutCsvParser.parse(text)
-                        else TappedOutDckParser.parse(text)
-                    }
-                    ImportSource.MOXFIELD,
-                    ImportSource.EDHREC,
-                    ImportSource.ARCHIDEKT -> {
-                        UniversalDecklistParser.parse(text)
-                    }
-                }
-                if (cards.isEmpty()) {
-                    _state.value = ImportState.Error("No cards found in file")
-                    return@launch
-                }
-                _state.value = ImportState.Preview(cards, source)
-            } catch (e: Exception) {
-                _state.value = ImportState.Error("File read error: ${e.message}")
             }
         }
     }
@@ -219,4 +114,8 @@ class UnifiedImportViewModel(
     }
 
     fun reset() { _state.value = ImportState.Idle }
+    fun parseFile(uri: String, source: ImportSource) { _state.value = ImportState.Error("File import from source chips disabled — use auto-detection by pasting decklist text") }
+    fun parseFile(uri: Any, source: ImportSource) {
+        _state.value = ImportState.Error("File import from source chips is disabled — use auto-detection by pasting decklist text")
+    }
 }

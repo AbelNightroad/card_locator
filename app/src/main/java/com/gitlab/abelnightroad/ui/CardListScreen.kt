@@ -264,23 +264,33 @@ internal fun CardListScreen(
                             Modifier.fillMaxWidth().padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            QuantityStepper(
-                                quantity = card.quantity,
-                                onDecrease = { vm.decrementQuantity(card.id) },
-                                onIncrease = { vm.incrementQuantity(card.id) }
-                            )
+                            // Row 1: Quantity + Card Name (spanning 2 rows visually)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                QuantityStepper(
+                                    quantity = card.quantity,
+                                    onDecrease = { vm.decrementQuantity(card.id) },
+                                    onIncrease = { vm.incrementQuantity(card.id) }
+                                )
+                                Text(
+                                    card.name,
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                            }
+
+                            // Row 2: Mana Cost • Set Name • Rarity
                             Column(Modifier.weight(1f)) {
-                                Text(card.name, style = MaterialTheme.typography.titleSmall)
+                                if (card.manaCost?.isNotBlank() == true) {
+                                    Text(
+                                        card.manaCost,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                                 Text(
                                     "${card.setName} \u00b7 ${card.rarity}",
                                     style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            if (card.manaCost?.isNotBlank() == true) {
-                                Text(
-                                    card.manaCost,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
