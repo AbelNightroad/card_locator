@@ -1156,3 +1156,124 @@ foreign-language cards store the DB's English `name` in `scanned_cards` (good
   - **Current vs desired:** Bottom card (current) vs Top card (desired) from reference
   - Verify `QuantityStepper` has +/- at same size, each 1 row height
   - Ensure decklist card row shows: cost + rarity + set name together
+
+## Plan: Deck Card Sheet, Full Printings, Tag Mana Cost Fix, JetBrains Mono
+
+### Change 1 — DeckView card tap → BottomSheet (same as Home/Tags)
+
+- **Files:** `ui/DeckViewScreen.kt`, `ui/components/DeckCardBottomSheet.kt` (new), `ui/components/CardBottomSheet.kt` (share sub-dialogs), `ui/Screens.kt`
+- **Problem:** Tapping a decklist card opens only the image `FullscreenOverlay`; Tags open an info `CardBottomSheet` (image, chips, Move/Edit/Delete). DeckView should match.
+- **Current flow:** `DeckViewScreen.kt` → `onCardClick(card.scryfallId)` → `Screens.kt` `selectedDeckCardScryfallId` → `FullscreenOverlay`
+- **Tasks:**
+  - Add `selectedDeckCardId: Long?` state inside `DeckViewScreen` (drop the `onCardClick` → Screens overlay wiring for deck cards)
+  - New `DeckCardBottomSheet` in `ui/components/`, modeled on `CardBottomSheet` but typed for `DeckCardEntity` (via `DeckDao`/existing VM flow):
+    - Image (`ScryfallImage.normal`) → tap opens the existing `FullscreenOverlay`
+    - Headline `"2x Lightning Bolt"`, `"Set #collector"`, chips (condition via `CardConditions.displayName`, slot, rarity, price)
+    - Actions: **Edit** (`PenToSquare`) → adapt `EditCardDialog` to a deck-card variant (condition/finish + "Change printings…" updating `DeckCardEntity` set fields via `DeckViewViewModel`); **Remove** (`Trash`) → confirm → `removeCardWithUndo` (snackbar undo already exists)
+    - No **Move** (decks have slots, not tags) — omit the icon
+  - Keep swipe/quantity behavior on `CardRow` unchanged; sheet unmounts when the card row disappears (mirror the `byId`-flow null-dismiss pattern from Tags)
+  - `Screens.kt`: remove `selectedDeckCardScryfallId` overlay only if no other caller needs it (Home search keeps its own `selectedCard` overlay)
+
+### Change 2 — "Change printings…" shows only ~2 results
+
+- **Files:** `data/ScryfallPrintings.kt`, `app/src/test/.../ScryfallPrintingsParseTest.kt`
+- **Root cause:** `printingsUrl` (`ScryfallPrintings.kt:43-46`) queries `q=!"<name>"` with no `unique=prints`. Scryfall defaults to `unique=cards` (one result per oracle card) → Lightning Bolt returns 2, not 70.
+- **Tasks:**
+  - Append `&unique=prints` (and `&order=released&dir=desc` for sensible ordering) to the search URL
+  - Parse `has_more`/`next_page` and follow pagination (cap at ~5 pages / ~875 entries to bound basics like Island 832 printings); show all fetched results in the existing picker
+  - Update `ScryfallPrintingsParseTest.kt:57-63` (hard-codes the old URL) + add a fixture with `has_more: true`
+  - Correct the stale doc comment "returns every printing"
+
+### Change 3 — Tag CardRow still shows no Mana Cost (even for new cards)
+
+- **Files:** `data/ScryfallBulkCard.kt`, `data/ScryfallBulkImport.kt`, `data/ScryfallRepository.kt`, `db/CardDao.kt`
+- **Root cause (verified):** `scryfall_cards` is written only by the bulk import (`ScryfallBulkImport.toEntity`). Scryfall omits top-level `mana_cost` for **multi-faced cards** (it lives on `card_faces`, e.g. `Delver of Secrets`); `ScryfallBulkCard` has no `card_faces` field → stores `""` → `ManualAddViewModel.save` copies `""` into `cards.mana_cost`. (Single-faced new cards do get a cost — DFCs never will until fixed.) Note: commit `a5d5ff0` already fixed the separate `CardSearchResult.manaCost` mapping bug.
+- **Tasks:**
+  - `ScryfallBulkCard.kt`: add `@SerialName("card_faces") val cardFaces: List<ScryfallCardFace>? = null` with a minimal face type (`mana_cost` field only)
+  - `ScryfallBulkImport.toEntity`: when top-level `manaCost` is blank, fall back to `cardFaces.joinToString(" // ") { it.manaCost }` (lands stay `""`)
+  - Existing rows: `syncIfNeeded` only re-imports when bulk `updated_at` changes, so add a one-shot forced re-sync (e.g. bump the stored sync marker in `SettingsStore` once, or clear+reimport on first launch after this change) so already-imported DFCs pick up the cost
+  - `CardDao.searchByName` / `searchAdvanced`: apply the same `cardsByTag`-style `LEFT JOIN scryfall_cards` `mana_cost` fallback so Home search results can show it later (consistency)
+  - Test: extend `ScryfallBulkImportTest` with a DFC fixture (top-level `mana_cost: null`, face costs present) and a land (no cost → `""`)
+  - Migration 11→12 already backfills `cards.mana_cost` from `scryfall_cards`; after the forced re-sync, add a tiny one-shot `UPDATE cards SET mana_cost = (…join…) WHERE mana_cost = ''` (or rerun the 11→12 SQL via a new migration) so collection rows pick up the newly enriched reference data
+
+### Change 4 — Add JetBrains Mono and make it the default font
+
+- **Files:** `app/src/main/res/font/jetbrains_mono.ttf` (new), `ui/theme/ThemeModel.kt`, `ui/theme/Theme.kt`, `data/SettingsStore.kt`, `MainActivity.kt`, `ui/SettingsScreen.kt`
+- **Context:** Font picker already exists (`AppFont` enum → `fontFamilyFor` → `AppTheme(fontId)`); defaults are hardcoded to `"roboto"` in 4 places
+- **Tasks:**
+  - Bundle `JetBrainsMono-Regular.ttf` (OFL license — include the license text in `res/font/` or NOTICE) under `res/font/jetbrains_mono.ttf`
+  - `AppFont`: add `JETBRAINS_MONO("jetbrains_mono", "JetBrains Mono")` + `fontFamilyFor` branch `FontFamily(Font(R.font.jetbrains_mono))`
+  - Flip the default `"roboto"` → `"jetbrains_mono"` everywhere it is hardcoded: `SettingsStore.kt:27` (`?: "jetbrains_mono"`), `Theme.kt:17` default param, `MainActivity.kt:58` initial, `SettingsScreen.kt:80` initial
+  - Note: users who already picked a font keep their stored value — the new default applies to fresh installs / cleared settings (intentional)
+  - Verify Settings → Font picker lists JetBrains Mono and switching still works; Roboto remains selectable
+
+## Verification (this batch)
+
+- [x] `make test` green, `make build` no new warnings
+- [ ] Manual: decklist tap → sheet with image/chips/Edit/Remove; image tap → fullscreen overlay; Remove + snackbar undo works; Edit printings updates the deck row
+- [ ] Manual: Edit card → "Change printings…" on Lightning Bolt lists ~70 printings (newest first); Island doesn't freeze the UI
+- [ ] Manual: newly added DFC (e.g. Delver of Secrets) shows `//`-joined mana cost in its Tag; existing DFC rows get it after first launch (forced re-sync)
+- [ ] Manual: fresh install shows JetBrains Mono everywhere; font picker still switches fonts
+
+## Commits (when implemented)
+
+1. `feat: deck card bottom sheet with edit and undo-remove`
+2. `fix: fetch all printings via unique=prints with pagination`
+3. `fix: resolve mana cost for multi-faced cards and re-sync reference data`
+4. `feat: add JetBrains Mono as default font`
+5. `docs: update architecture for deck sheet, printings, fonts`
+
+## Plan: App Update from GitHub Releases
+
+- **Repo:** `github.com/AbelNightroad/card_locator` (origin remote) → releases API `https://api.github.com/repos/AbelNightroad/card_locator/releases/latest`
+- **Context:** APK sideload app (no Play Store), `versionName "1.5.2"` / `versionCode 10` in `app/build.gradle`; existing raw-`HttpURLConnection` + kotlinx.serialization pattern (`ScryfallBulkClient`, `ScryfallPrintings`); FileProvider already registered (`${applicationId}.fileprovider`) but `file_paths.xml` only exposes `cache-path decks/`; manifest has no install permission yet; app has no WorkManager — periodic work follows the `ScryfallRepository.syncIfNeeded` timestamp-on-launch pattern
+
+### Change 1 — Update client (`data/GitHubReleaseClient.kt`, new)
+
+- GET `.../releases/latest` with `HttpURLConnection` (same style as `ScryfallBulkClient`), parse with kotlinx.serialization:
+  - `tag_name` (e.g. `"v1.6.0"`), `body` (release notes), `assets[]` with `name`/`browser_download_url` for the `.apk`
+- `data class LatestRelease(version, notes, apkUrl)`; error is explicit (`Error(message)`) — API down/rate-limited (60 req/h unauthenticated) fails loudly on manual check, silently on background check
+- `isNewerThan(current, tag)`: strip optional `v`, compare semver segments numerically (`1.10.0` > `1.9.3`)
+
+### Change 2 — Weekly background check (on-launch, no new dependency)
+
+- **Files:** `data/SettingsStore.kt`, `MainActivity.kt`
+- Store `lastUpdateCheck: Long` + `updateDismissedVersion: String` in DataStore (same pattern as Scryfall's `getLastCheck`)
+- On app launch (where `syncIfNeeded` already runs): if `now - lastUpdateCheck >= 7 days` → fetch latest release, persist timestamp regardless of result; never blocks startup (launch coroutine)
+- If newer version exists and it's not the dismissed one → show a one-shot `AlertDialog` over the nav: "Update available: vX.Y.Z (current vA.B.C)" with **Release notes** (body, scrollable), buttons **Later** (stores `updateDismissedVersion`) and **Download & Install** (Change 3). No dialog when equal/older/error
+
+### Change 3 — Download & install flow (`data/AppUpdater.kt`, new)
+
+- **Files:** `data/AppUpdater.kt`, `AndroidManifest.xml`, `res/xml/file_paths.xml`
+- Download APK from `apkUrl` to `cacheDir/updates/latest.apk` (stream copy like `ScryfallBulkClient.download`, delete stale file first, `Dispatchers.IO`)
+- Expose via existing FileProvider → add `<cache-path name="updates" path="updates/" />` to `file_paths.xml`
+- Install: `ACTION_VIEW` intent with `FLAG_GRANT_READ_URI_PERMISSION` + `application/vnd.android.package-archive` (resolve activity first — `resolveActivity != null`)
+- Permissions/paths:
+  - `<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />`
+  - Android O+: before the intent, if `!packageManager.canRequestPackageInstalls()` → launch `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` (package URI) first, then resume install on return (or instruct the user once)
+- Progress: dialog with indeterminate→percent progress (byte counter), cancel button; on IO failure → Toast/dialog error, file deleted
+
+### Change 4 — "Check for Updates" button in Settings → About
+
+- **File:** `ui/SettingsScreen.kt` (`AboutCard`, line 366)
+- Put **Check for Updates** and **Crash logs** in the **same `Row`** (`Arrangement.spacedBy(8.dp)`): replace the standalone `OutlinedButton` at line 389 with `Row { OutlinedButton(Check for Updates); OutlinedButton(Crash logs) }` — Check for Updates first (left)
+- Behavior: button shows a small `CircularProgressIndicator` while checking (state: Idle/Checking/UpToDate/UpdateFound/Error); results:
+  - Up to date → Toast `"You're on the latest version (vX.Y.Z)"`
+  - Update found → reuse the same update dialog from Change 2 (release notes + Download & Install)
+  - Error → Toast the explicit message (rate limit / network)
+- Manual check always bypasses the weekly timestamp (and updates `lastUpdateCheck` on success)
+
+## Verification (this batch)
+
+- [x] `make test` green: unit tests for `isNewerThan` (v-prefix, multi-digit segments, equal, older) + `GitHubReleaseClient` JSON fixture (latest + missing-asset + rate-limit body)
+- [x] `make build` — manifest merges with `REQUEST_INSTALL_PACKAGES`
+- [ ] Manual: Settings → About shows **Check for Updates** beside Crash logs (same row); on latest → toast; simulate newer tag → dialog with notes → Download → install prompt appears after unknown-sources grant
+- [ ] Manual: background check fires only after 7 days since last check (toggle clock / clear DataStore), dialog suppressed after **Later** for that version only
+
+## Commits (when implemented)
+
+1. `feat: github releases update client with semver check`
+2. `feat: weekly update check with release notes dialog`
+3. `feat: apk download and install flow`
+4. `feat: check for updates button in settings about`
+5. `docs: update architecture for app updates`

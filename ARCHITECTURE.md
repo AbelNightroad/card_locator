@@ -27,6 +27,7 @@
 |---------|--------|
 | Core collection / decks / tags / meta | **Stable** — shipped |
 | Card scan (CameraX + ML Kit OCR) | **Shipped** — see `PLAN.md` (10/10 phases) |
+| Self-update from GitHub Releases | **Shipped** — v1.6.0 (`data/AppUpdateManager.kt`, §6.8) |
 | LLM + vector deck analysis | **On hold — not essential.** Design only in `LLM_DECK_ANALYSIS_PLAN.md`; blocked on a trained model. No deps or code exist. |
 
 ---
@@ -82,7 +83,7 @@ wrapper: 9.7.1. Builds on any JDK ≥ 17, verified on system JDK 26.
 
 ### App Version
 
- `versionCode = 7`, `versionName = "1.4.0"` with `buildFeatures.buildConfig = true`;
+ `versionCode = 11`, `versionName = "1.6.0"` with `buildFeatures.buildConfig = true`;
 `BuildConfig.VERSION_NAME` is shown in Settings → About. Versioning policy: PATCH
 for fixes, MINOR for features, MAJOR for breaking changes (see §15).
 
@@ -98,6 +99,7 @@ kotlin.code.style=official
 ### Fonts
 
 Place `.ttf` files in `app/src/main/res/font/`:
+- `jetbrains_mono.ttf` (JetBrains Mono — **default**; OFL, license text in repo-root `NOTICE`)
 - `comic_neue.ttf` (Comic Neue)
 - `germania_one.ttf` (Germania One)
 - Roboto is system default, no file needed.
@@ -290,17 +292,29 @@ fun byId(id: Long): Flow<CardEntity?>
 @Query("SELECT tag, COUNT(*) as cardCount, COALESCE(SUM(quantity * purchase_price), 0.0) as totalValue FROM cards GROUP BY tag UNION ALL SELECT tag, 0 as cardCount, 0.0 as totalValue FROM tags WHERE tag NOT IN (SELECT DISTINCT tag FROM cards) ORDER BY tag")
 fun tagCounts(): Flow<List<TagCount>>
 
-@Query("SELECT id, name, set_code as setCode, set_name as setName, collector_number as collectorNumber, foil, rarity, quantity, scryfall_id as scryfallId, tag FROM cards WHERE tag = :tag ORDER BY name")
+-- cardsByTag / searchByName / searchAdvanced share this projection (mana-cost
+-- fallback to the reference row):
+--   SELECT cards.id, cards.name, cards.set_code, cards.set_name,
+--          cards.collector_number, cards.foil, cards.rarity, cards.quantity,
+--          cards.scryfall_id, cards.tag,
+--          CASE WHEN cards.mana_cost != '' THEN cards.mana_cost
+--               ELSE COALESCE(scryfall_cards.mana_cost, '') END AS mana_cost
+--   FROM cards LEFT JOIN scryfall_cards ON scryfall_cards.id = cards.scryfall_id
+
+@Query("… WHERE cards.tag = :tag ORDER BY cards.name COLLATE NOCASE ASC")
 fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
 
-@Query("SELECT id, name, set_code as setCode, set_name as setName, collector_number as collectorNumber, foil, rarity, quantity, scryfall_id as scryfallId, tag FROM cards WHERE name LIKE '%' || :query || '%' ORDER BY name")
+@Query("… WHERE cards.name LIKE '%' || :query || '%' COLLATE NOCASE ORDER BY cards.name COLLATE NOCASE ASC")
 fun searchByName(query: String): Flow<List<CardSearchResult>>
 
-@Query("SELECT id, name, set_code, set_name, collector_number, foil, rarity, quantity, scryfall_id, tag FROM cards WHERE name LIKE '%' || :query || '%' COLLATE NOCASE AND (:colors IS NULL OR (instr(:colors, 'W') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%W%')) OR (instr(:colors, 'U') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%U%')) OR (instr(:colors, 'B') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%B%')) OR (instr(:colors, 'R') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%R%')) OR (instr(:colors, 'G') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%G%')) OR (instr(:colors, 'C') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity = ''))) AND (:type IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) AND (:rarity IS NULL OR rarity = :rarity) ORDER BY name COLLATE NOCASE ASC")
+@Query("… WHERE cards.name LIKE '%' || :query || '%' COLLATE NOCASE AND (:colors IS NULL OR (instr(:colors, 'W') > 0 AND cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%W%')) OR …) AND (:type IS NULL OR cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) AND (:rarity IS NULL OR cards.rarity = :rarity) ORDER BY cards.name COLLATE NOCASE ASC")
 fun searchAdvanced(query: String, colors: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
 
 @Query("SELECT name, set_code as setCode, set_name as setName, scryfall_id as scryfallId, SUM(quantity) as totalQuantity FROM cards GROUP BY name, set_code HAVING SUM(quantity) > 4 ORDER BY name")
 fun multiCopyCards(): Flow<List<MultiCopyCard>>
+
+@Query("UPDATE cards SET mana_cost = COALESCE((SELECT mana_cost FROM scryfall_cards WHERE scryfall_cards.id = cards.scryfall_id), '') WHERE COALESCE(mana_cost, '') = ''")
+suspend fun backfillManaCostFromReference()
 ```
 
 - `searchAdvanced.colors` is the selected color codes concatenated (`"WU"`, `"WC"`, `null` =
@@ -308,6 +322,12 @@ fun multiCopyCards(): Flow<List<MultiCopyCard>>
   card matches **any** selected color (OR); `C` matches rows whose
   `scryfall_cards.color_identity` is empty. Rows without a `scryfall_cards` row are excluded
   while a color filter is active.
+- `cardsByTag` / `searchByName` / `searchAdvanced` all `LEFT JOIN scryfall_cards`
+  and expose `mana_cost` as `CASE WHEN cards.mana_cost != '' THEN cards.mana_cost
+  ELSE COALESCE(scryfall_cards.mana_cost, '') END`, so empty collection rows fall
+  back to the (face-aware) reference cost.
+- `backfillManaCostFromReference()` — one-shot `UPDATE cards SET mana_cost = …
+  WHERE mana_cost = ''` run after a forced reference re-sync.
 - `CardRepository.searchAdvanced()` encodes the UI's `Set<String>` into `colors`
   (`joinToString("")`, empty set → `null`).
 
@@ -391,9 +411,9 @@ data class DeckWithCards(
 
 | Repository | Created via | Dependencies | Purpose |
 |------------|-------------|--------------|---------|
-| `CardRepository` | `CardRepository.create(context)` | `CardDao`, `TagDao` | Collection CRUD, CSV import, tag management, duplicate-merging import (`insertMergingDuplicates`), card detail flow (`cardById`), cross-tag `moveCard` (merges into an identical destination row via `findByDuplicateKey` + `sameCardInfo`, else re-tags), `updateCardAttributes` / `updateCardPrinting` |
-| `DeckRepository` | `DeckRepository.create(context)` | `DeckDao`, `ScryfallCardDao` | Deck CRUD, validation, clone, color identity |
-| `ScryfallRepository` | `ScryfallRepository.create(context)` | `ScryfallCardDao`, `SettingsStore` | 15-day bulk sync, autocomplete, name lookup, set+collector lookup |
+| `CardRepository` | `CardRepository.create(context)` | `CardDao`, `TagDao` | Collection CRUD, CSV import, tag management, duplicate-merging import (`insertMergingDuplicates`), card detail flow (`cardById`), cross-tag `moveCard` (merges into an identical destination row via `findByDuplicateKey` + `sameCardInfo`, else re-tags), `updateCardAttributes` / `updateCardPrinting`, one-shot `backfillManaCost()` |
+| `DeckRepository` | `DeckRepository.create(context)` | `DeckDao`, `ScryfallCardDao` | Deck CRUD, validation, clone, color identity, per-card `updateCardCondition` / `updateCardPrinting` |
+| `ScryfallRepository` | `ScryfallRepository.create(context)` | `ScryfallCardDao`, `SettingsStore` | 15-day bulk sync (plus one-shot forced re-sync via `bulk_mana_resync_pending`), autocomplete, name lookup, set+collector lookup |
 | `ScanRepository` | `ScanRepository.create(context)` | `ScanSessionDao` | Scan sessions, add-to-collection |
 | `SettingsStore` | `SettingsStore(context)` | DataStore | Preferences |
 
@@ -409,11 +429,14 @@ Singleton pattern. Returns `AppDatabase` instance. Applies all migrations (3→9
 |-----|------|---------|-----------------|
 | `theme_id` | String | `"nord"` | `themeId` |
 | `dark_mode` | Boolean | `true` | `darkMode` |
-| `font_id` | String | `"roboto"` | `fontId` |
+| `font_id` | String | `"jetbrains_mono"` | `fontId` |
 | `scryfall_updated_at` | String | `null` | `scryfallUpdatedAt` |
 | `scryfall_last_check` | Long | `0L` | No |
 | `onboarding_complete` | Boolean | `false` | `onboardingComplete` |
 | `haptic_feedback` | Boolean | `true` | `hapticFeedback` |
+| `bulk_mana_resync_pending` | Boolean | `true` (one-shot forced re-sync) | No — `bulkManaResyncPending()` / `setBulkManaResyncPending()` |
+| `update_last_check` | Long | `0L` | No — `lastUpdateCheck()` / `setLastUpdateCheck()` |
+| `update_dismissed_version` | String | `null` | No — `updateDismissedVersion()` / `setUpdateDismissedVersion()` |
 
 ### Import Formats
 
@@ -441,6 +464,11 @@ cards in the same tag (any differing field keeps the cards separate).
 ### 6.1 Scryfall Bulk Data
 
 **Sync flow:** On launch, `ScryfallRepository.syncIfNeeded()` checks:
+0. `bulk_mana_resync_pending` set (default true after the face-aware mana-cost
+   update)? → bypass the checks below, re-import the bulk data, then clear the
+   flag. `MainActivity` follows a `Populated`/`Updated` result with
+   `CardRepository.backfillManaCost()` (`CardDao.backfillManaCostFromReference`)
+   so collection rows with an empty `mana_cost` pick up the reference cost.
 1. `scryfall_cards` table empty? → sync.
 2. `scryfall_last_check` older than 15 days? → check `updated_at` from Scryfall API.
 3. If changed → re-download.
@@ -544,17 +572,63 @@ Accept: text/html,application/xhtml+xml
 ### 6.7 Scryfall Cards Search (alternate printings)
 
 ```
-GET https://api.scryfall.com/cards/search?q=%21%22{name}%22
+GET https://api.scryfall.com/cards/search?q=%21%22{name}%22&unique=prints&order=released&dir=desc
 User-Agent: MtGCardTracker/1.0
 Accept: application/json
 ```
 
-`data/ScryfallPrintings.kt` (pure JVM): exact-name query returns every printing
-of a card (first page, ≤175 entries). `parsePrintings` decodes
+`data/ScryfallPrintings.kt` (pure JVM): exact-name query with `unique=prints`
+returns every printing of a card, newest release first. `fetchPrintings`
+follows `has_more`/`next_page` up to `MAX_PAGES = 5` and dedupes by id
+(bounds basics like Island's 800+ printings). `parsePage` decodes
 `set`/`set_name`/`collector_number`/`rarity`/`id`/`released_at`/`prices.usd`
-sorted newest first and throws `IllegalArgumentException` on malformed JSON.
-HTTP 429 → explicit rate-limit error, other non-200 → status error (never
-silent). Used only by the tag card sheet's "Change printings…" picker.
+and throws `IllegalArgumentException` on malformed JSON. HTTP 429 → explicit
+rate-limit error, other non-200 → status error (never silent). Used by the
+tag card sheet's and the deck card sheet's "Change printings…" pickers.
+
+### 6.8 GitHub Releases (self-update)
+
+**Client — `data/GitHubReleaseClient.kt` (pure JVM, fixture-tested):**
+```
+GET https://api.github.com/repos/AbelNightroad/card_locator/releases/latest
+User-Agent: MtGCardTracker/1.0
+Accept: application/vnd.github+json
+```
+- `parseRelease` → `LatestRelease(version = tag_name, notes = body, apkUrl = …)`
+  (the first `.apk` asset; missing asset/malformed JSON/no tag throw explicit
+  `IOException`s). Non-200 bodies map through `apiErrorMessage` — 403/429 with
+  a "rate limit" message → `"GitHub rate limit — try again later"`.
+- `isNewerThan(current, tag)`: strips an optional `v`, compares semver segments
+  numerically (`1.10.0 > 1.9.3`); missing segments count as 0.
+
+**Scheduling — `data/AppUpdateManager.kt`:**
+- `checkWeekly()` runs from `MainActivity.onCreate` (own coroutine, never blocks
+  startup, errors swallowed): only when `now - update_last_check >= 7 days`,
+  persists `update_last_check` regardless of outcome, and sets the
+  `pending: StateFlow<LatestRelease?>` only when newer **and** not equal to
+  `update_dismissed_version`.
+- `checkManual()` (Settings button) bypasses the 7-day gate, advances the
+  timestamp on success, ignores the dismissed version, and returns a
+  `CheckResult` (`UpToDate` / `UpdateFound` / `Failed`).
+- `dismissPending()` ("Later") stores the tag; `clearPending()` hides without
+  storing (e.g. after the install intent started).
+
+**Download & install — `data/AppUpdater.kt`:**
+- Streams the APK to `cacheDir/updates/latest.apk` (stale file deleted first,
+  progress `(done, total)` callbacks, cancellation/IO failure deletes the file),
+  served through the existing FileProvider (`<cache-path name="updates">`).
+- `installIntent` = `ACTION_VIEW` + `application/vnd.android.package-archive`
+  + `FLAG_GRANT_READ_URI_PERMISSION`, resolved first (`resolveActivity != null`
+  else explicit "No app can install…" error).
+- Android O+: if `!canRequestPackageInstalls()` the dialog launches
+  `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` first and resumes on return
+  (the `REQUEST_INSTALL_PACKAGES` permission + a `<queries>` intent for the
+  install MIME are declared in the manifest).
+
+**UI:** `ui/components/UpdateDialog.kt` — one-shot `AlertDialog` hosted by
+`AppNavigation` from the `pending` flow: scrollable release notes, indeterminate
+then percent/byte-counter progress, Cancel, error text with retry, buttons
+**Later** / **Download & Install** / **Install**.
 
 ---
 
@@ -607,6 +681,12 @@ item selected (`indexOfFirst` → -1).
 
 **Back handling:** Hardware back dismisses fullscreen overlays first, then pops stack. Bottom nav selection keeps a linear history: the current screen is pushed, and if the target screen already exists in history the stack truncates up to it (no back cycles), so back from a tab destination pops to the previous tab instead of exiting the app.
 
+**One-shot dialogs hosted by `AppNavigation`:** the import sheet
+(`showImportSheet`), the fullscreen card overlays (`selectedCard`,
+`selectedDeckCardScryfallId`) and the update dialog (from
+`AppUpdateManager.pending` — §6.8) render above the current screen without a
+route.
+
 ---
 
 ## 8. UI Screens — Complete Behavior
@@ -649,7 +729,9 @@ item selected (`indexOfFirst` → -1).
     error offline and opens the picker; picking updates the row's set fields,
     Save persists condition/finish. **Delete** (`Trash`) → confirm dialog →
     sheet closes when the `byId` flow emits `null`.
-  - Home search results and DeckView keep `FullscreenOverlay` (unchanged).
+  - Home search results keep `FullscreenOverlay`; DeckView cards open
+    `DeckCardBottomSheet` instead (§8.7), whose image tap opens the same
+    `FullscreenOverlay` via `AppNavigation.selectedDeckCardScryfallId`.
 
 ### 8.3 ManualAddScreen
 
@@ -661,12 +743,12 @@ item selected (`indexOfFirst` → -1).
 ### 8.4 SettingsScreen
 
 - **Sections (Card wrappers):**
-  1. **Appearance:** Theme dropdown (Catppuccin/Nord/Cobalt2/Shades of Purple/Standard), Font dropdown (Roboto/Comic Neue/Germania One).
+  1. **Appearance:** Theme dropdown (Catppuccin/Nord/Cobalt2/Shades of Purple/Standard), Font dropdown (JetBrains Mono (default)/Roboto/Comic Neue/Germania One).
   2. **Card Scan:** Haptic feedback toggle.
   3. **Tags:** "Manage Tags" button → `Screen.ManageTags` (pushed screen; back returns here).
   4. **Backup & Restore:** Export CSV (SAF name = `CollectionCsv.exportFileName()` → `collection_ddMMyyyy.csv`), Restore CSV, Import from 3rd-Party.
   5. **Scryfall Reference Data:** Last update date, sync status.
-  6. **About:** App description, `Version ${BuildConfig.VERSION_NAME}`, "Crash logs" button.
+  6. **About:** App description, `Version ${BuildConfig.VERSION_NAME}`, one `Row` with **Check for Updates** (spinner while `AppUpdateManager.checkManual()` runs; UpToDate → Toast `You're on the latest version (vX.Y.Z)`, UpdateFound → the shared update dialog §6.8, Failed → Toast of the explicit message) + **Crash logs**.
 - **Import from 3rd-Party:** Opens `ImportDialog` with tag name field + file chooser (CSV/TXT).
   - Format detection happens in `ThirdPartyImport.import()` (ManaBox CSV → `CsvImport`, anything else → `QtyListImport`), so pasted txt lists no longer fail with CSV column errors.
   - The dialog stays open with a spinner while importing (plus an `x / y cards` counter for txt/CSV rows); closes on completion.
@@ -694,6 +776,7 @@ item selected (`indexOfFirst` → -1).
 
 - **Cards grouped by slot:** commander → companion → mainboard (grouped by `primaryType()` in fixed order: Creature → Instant → Sorcery → Artifact → Enchantment → Planeswalker → Battle → Land → Other, unknown types last) → sideboard (flat list, always last).
 - **Card row:** Shared `CardRow` — quantity, name (+ condition badge when not M/NM), subtitle "Mana Cost • Set Name • Rarity", price as trailing, stacked +/− (decrease at qty 1 removes with undo via `minQuantity = 0`).
+- **Tap card:** `DeckCardBottomSheet` (own `selectedDeckCardId` state in `DeckViewScreen`; derived `selectedDeckCard` from the hoisted `cards` list, null → sheet unmounts): image → `FullscreenOverlay`, `"2x Lightning Bolt"` headline, `"Set #cn"`, chips (condition, slot, rarity, price), **Edit** (primitives `EditCardDialog` with `showFinish = false` — deck cards have no finish column, so `foil` stays `"normal"`; "Change printings…" writes set fields + `price_usd` via `DeckViewViewModel.updateCardPrinting`), **Remove** (confirm → `removeCardWithUndo`). No **Move**.
 - **Cover button:** Sets card as deck cover (hidden for sideboard cards).
 - **Top bar:** Export (`exportDeckToTxt` + `shareDeckFile` share intent; `FileProvider` authority `${applicationId}.fileprovider` with `res/xml/file_paths.xml` → `<cache-path name="decks">`; failures surface as a Toast instead of a crash), Add card button.
 - **AddCardToDeckDialog:** Scryfall autocomplete. For Commander: slot selection (mainboard/commander/companion), color identity validation against existing commander.
@@ -743,9 +826,11 @@ item selected (`indexOfFirst` → -1).
 | Component | File | Purpose |
 |-----------|------|---------|
 | `ScryfallAsyncImage` | `AsyncImage.kt` | Coil image loader with custom User-Agent |
-| `FullscreenOverlay` | `FullscreenOverlay.kt` | Fullscreen card image dialog (uses `ScryfallImage.large()`) — Home search + DeckView; tag rows use `CardBottomSheet` |
+| `FullscreenOverlay` | `FullscreenOverlay.kt` | Fullscreen card image dialog (uses `ScryfallImage.large()`) — Home search + DeckView (deck sheet image tap); tag rows use `CardBottomSheet` |
 | `CardBottomSheet` | `CardBottomSheet.kt` | Tag card detail `ModalBottomSheet` (image, chips, added/price, Move/Edit/Delete dialogs) |
-| `EditCardDialog` | `EditCardDialog.kt` | Card edit dialog: condition/finish dropdowns + Scryfall "Change printings…" picker |
+| `DeckCardBottomSheet` | `DeckCardBottomSheet.kt` | Deck card detail `ModalBottomSheet` (image, condition/slot/rarity/price chips, Edit/Remove — no Move) |
+| `EditCardDialog` | `EditCardDialog.kt` | Card edit dialog: primitives core (`cardKey`/`cardName`/set/collector/condition/`showFinish`/`fetchPrintings`/`onSave`/`onPickPrinting`) + a `CardEntity` overload — shared by tag cards (finish shown) and deck cards (`showFinish = false`) |
+| `UpdateDialog` | `UpdateDialog.kt` | One-shot self-update `AlertDialog` (§6.8): notes, download progress, unknown-sources grant, install |
 | `CardRow` | `CardRow.kt` | Shared card widget: quantity, name, "Mana Cost • Set Name • Rarity" subtitle, stacked +/− — used by tag card list + decklists |
 | `QuantityStepper` | `QuantityStepper.kt` | Inline − qty + stepper (legacy; `CardRow` embeds its own stacked controls) |
 | `CreateTagDialog` | `CreateTagDialog.kt` | Shared "New Tag" dialog (name field + Random button) used by ManageTagsScreen and the Home FAB speed dial |
@@ -829,9 +914,10 @@ SUPERTYPES = listOf("Legendary", "Snow", "World", "Basic")
 | `cobalt2` | Cobalt2 | |
 | `standard` | Standard | `AppTheme.dynamic = true` — Material You `dynamicLight/DarkColorScheme` on API 31+ (wallpaper-derived), baseline `Standard.kt` schemes below |
 
-**3 fonts:**
+**4 fonts:**
 | ID | Label | Source |
 |----|-------|--------|
+| `jetbrains_mono` | JetBrains Mono (default) | `R.font.jetbrains_mono` (OFL — `NOTICE`) |
 | `roboto` | Roboto | System default |
 | `comic_neue` | Comic Neue | `R.font.comic_neue` |
 | `germania_one` | Germania One | `R.font.germania_one` |
@@ -854,15 +940,18 @@ val deckRepository = DeckRepository.create(this)
 val scryfall = ScryfallRepository.create(this)
 val scanRepository = ScanRepository.create(this)
 val settings = SettingsStore(this)
+val updateManager = AppUpdateManager(settings)
 val mainViewModel = MainViewModel(repository, settings)
 ```
 
 On launch: `CrashLog.install(this)` chains an uncaught-exception handler that
 persists the stack trace to `filesDir/crash.log` (trimmed to 64K, newest first)
 before delegating to the system handler. Then `scryfall.syncIfNeeded()` runs on
-`Dispatchers.IO`, shows Toast with status.
+`Dispatchers.IO`, shows Toast with status, and a `Populated`/`Updated` result is
+followed by `repository.backfillManaCost()`. A second coroutine runs
+`updateManager.checkWeekly()` (§6.8, 7-day gate, never blocks startup).
 
-`setContent` observes `themeId`, `darkMode`, `fontId` from `MainViewModel` → applies `AppTheme` → renders `AppNavigation` (all repositories + settings passed as constructor params).
+`setContent` observes `themeId`, `darkMode`, `fontId` from `MainViewModel` → applies `AppTheme` → renders `AppNavigation` (all repositories + settings + updateManager passed as constructor params).
 
 ---
 
