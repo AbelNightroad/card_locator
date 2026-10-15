@@ -1277,3 +1277,143 @@ foreign-language cards store the DB's English `name` in `scanned_cards` (good
 3. `feat: apk download and install flow`
 4. `feat: check for updates button in settings about`
 5. `docs: update architecture for app updates`
+
+## Plan: Deck Game Record (Games/Wins) + Stats Chart Sizing
+
+- **Goal:** manually track games played / wins per deck, shown as **Wins / Games / Win Rate centered as the last info inside the Deck Overview card** (Statistics tab), with a compact icon-only control row (↑ / ↓ / edit) right below it — small so it doesn't pollute the interface, with long-press labels for identification; additionally fix chart sizing — the Mana Value Distribution bar chart is **too tall** and the Card Types pie should match the Color Distribution donut.
+- **Scope decision (YAGNI):** aggregate counters only — no wins/games chart (dropped by request), no per-game history table, no win-rate-over-time series, no W/L display outside the Statistics tab. A history/trend chart later would be a separate feature (new `deck_results` table).
+
+### Change 1 — Schema: `games_played` / `games_won` on `decks`
+
+- **Files:** `db/DeckEntity.kt`, `db/AppDatabase.kt`, `data/AppDatabaseProvider.kt`, `db/DeckDao.kt`, `data/DeckRepository.kt`
+- **DeckEntity:** add
+  `@ColumnInfo(name = "games_played") val gamesPlayed: Int = 0` and
+  `@ColumnInfo(name = "games_won") val gamesWon: Int = 0`
+  (only construction site is `DeckRepository.createDeck`, named args → compiles unchanged).
+- **DB:** bump `version = 12 → 13`, add
+  `MIGRATION_12_13` = two `ALTER TABLE decks ADD COLUMN … INTEGER NOT NULL DEFAULT 0`
+  statements, register it in `AppDatabaseProvider.addMigrations(...)`
+  (required — `fallbackToDestructiveMigration` would otherwise wipe user decks).
+- **DeckDao:** two targeted updates (single-column `UPDATE`s like the existing
+  `updateCardQuantity` style):
+  - `recordGame(deckId, won: Boolean)` —
+    `UPDATE decks SET games_played = games_played + 1,
+    games_won = games_won + CASE WHEN :won = 1 THEN 1 ELSE 0 END WHERE id = :deckId`
+    (a win always implies one more game; Room binds `Boolean` as 1/0)
+  - `setGameRecord(deckId, games, wins)` — exact overwrite for the edit dialog.
+- **DeckRepository:** wrappers `recordGame(deckId, won)` / `setGameRecord(deckId, games, wins)`;
+  validation lives in the ViewModel layer (see Change 3), DAO stays dumb.
+- **cloneDeck:** add `gamesPlayed = 0, gamesWon = 0` to the `deck.copy(...)` —
+  a copy is a new deck and must not inherit the original's record.
+
+### Change 2 — ViewModel actions
+
+- **File:** `ui/DeckViewViewModel.kt`
+- `fun recordGame(won: Boolean)` → `deckRepository.recordGame(deckId, won)` inside `viewModelScope`.
+- `fun setGameRecord(games: Int, wins: Int)` → validates via
+  `isValidGameRecord(games, wins)` (Change 3) before calling the repository;
+  invalid input is rejected (return early) — the dialog already blocks it, this
+  is the fail-fast backstop.
+- **No new state:** `deckWithCards` is a Room `Flow<DeckWithCards?>` with
+  `@Embedded DeckEntity`, so any `UPDATE decks` re-emits and the Statistics tab
+  recomposes automatically.
+
+### Change 3 — Pure game-record logic (unit-tested)
+
+- **File:** `ui/DeckStatistics.kt` (alongside `computeDeckStats`)
+- `data class GameRecordSummary(val games: Int, val wins: Int, val losses: Int, val winRatePercent: Float)`
+- `internal fun gameRecordSummary(games: Int, wins: Int): GameRecordSummary` —
+  clamps negatives to 0 and `wins` to `≤ games`, `winRatePercent = 0f` when `games == 0`
+  (same divide-by-zero discipline as the other stats).
+- `internal fun isValidGameRecord(games: Int, wins: Int): Boolean` —
+  `games >= 0 && wins in 0..games`.
+- **Test:** new `app/src/test/.../ui/DeckGameRecordTest.kt` — zero games → 0 %,
+  wins > games clamped, negatives clamped, valid boundary (wins == games → 100 %),
+  validation matrix.
+
+### Change 4 — Deck Overview: Wins / Games / Win Rate + logging controls
+
+- **File:** `ui/DeckStatisticsScreen.kt` (no new chart component — the wins/games donut is dropped)
+- **Deck Overview card** (existing, first card): as the **last content of the card**, below the current info (composition `StatItem` row, optional Total Value), add a centered row reusing `StatItem`:
+  `Spacer(8.dp)` → `HorizontalDivider()` →
+  `Row(SpaceEvenly) { StatItem("Wins", "9"); StatItem("Games", "14"); StatItem("Win Rate", "64%") }`
+  (order exactly as requested: Wins / Games / Win Rate).
+  Values: `deckWithCards?.deck.gamesPlayed` / `gamesWon` → `gameRecordSummary(...)` (Change 3); win rate `"0%"` when no games.
+- **Action row directly below the Deck Overview card** (controls cannot go inside the card — the row above must remain its last info). **Icon-only, small, right-aligned** so it doesn't pollute the UI:
+  `Row(fillMaxWidth, horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End))`
+  with three icons:
+  - **↑ `FontAwesomeIcons.Solid.ArrowUp`** (Reddit upvote style) — short tap →
+    `vm.recordGame(won = true)` (games+1, wins+1)
+  - **↓ `FontAwesomeIcons.Solid.ArrowDown`** (Reddit downvote style) — short tap →
+    `vm.recordGame(won = false)` (games+1)
+  - **`FontAwesomeIcons.Solid.PenToSquare`** → Change 5 edit dialog.
+  - **Icon choice grounded:** the shipped `font-awesome-android:2.0.0` AAR has **no
+    solid Thumbs icons** (only `Regular.ThumbsUp/ThumbsDown`, outline weight — would
+    clash with the app's all-solid icon style), so Reddit-style arrows are used;
+    YouTube-style thumbs remain an option via `Regular.ThumbsUp/ThumbsDown` if preferred.
+  - **Sizing:** mirror the card-info bottom sheet action pattern
+    (`DeckCardBottomSheet.kt:148-162`): default `IconButton` (preserves the 48dp
+    touch target) with `Icon(Modifier.size(18.dp))`, default `onSurfaceVariant` tint —
+    small glyph, no button chrome (vs. the rejected `OutlinedButton` row).
+  - **Long-press labels:** wrap each `IconButton` in Material3
+    `TooltipBox(positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+    state = rememberTooltipState(), tooltip = { PlainTooltip { Text(...) } })`
+    with labels **"Log Win"**, **"Log Loss"**, **"Edit record"**; icon
+    `contentDescription` mirrors the same text for accessibility.
+    Long press must only show the label and **not** log a game. Implemented deterministically:
+    `TooltipBox(enableUserInput = false)` (no built-in gesture handling) + each icon in a
+    `Box(48.dp).combinedClickable(onClick = …, onLongClick = { scope.launch { tooltipState.show() } })` —
+    `combinedClickable` guarantees the long click consumes the gesture, so the single
+    click can never fire on release. `@OptIn(ExperimentalMaterial3Api::class)` is required
+    (TooltipBox APIs are still experimental in material3 1.3.2).
+- **Empty deck:** keep the existing `cards.isEmpty()` early return (a 0-card deck shows no statistics content, including logging — accepted behavior).
+
+### Change 5 — Edit dialog for exact values
+
+- **File:** `ui/DeckStatisticsScreen.kt`
+- `EditGameRecordDialog(games, wins, onDismiss, onSave)` — AlertDialog with two
+  numeric `OutlinedTextField`s (digits-only filter, `KeyboardType.Number`),
+  inline error when `!isValidGameRecord` ("Wins cannot exceed games" /
+  "Must be 0 or more"), Save disabled until valid; **Save** →
+  `vm.setGameRecord(games, wins)`, **Cancel** → dismiss.
+  Covers corrections and the manual-entry requirement (type exact totals);
+  resetting = typing `0 / 0`. No separate reset button (YAGNI).
+- Entry point: the pencil icon in the action row (Change 4); the Log buttons stay for quick logging.
+
+### Change 6 — Chart sizing: Mana Value too tall + Card Types pie
+
+- **File:** `ui/components/DeckStatsCharts.kt`
+- Extract shared `private val STATS_CHART_HEIGHT = 160.dp`.
+- **`BarChart` (Mana Value Distribution) — user report: "is too tall"** —
+  canvas `Modifier.fillMaxWidth().height(200.dp)` → `height(STATS_CHART_HEIGHT)`.
+  A competitive list with a dominant 1-mana bucket (e.g. cEDH
+  `mtgtop8.com/event?e=92090&d=899457&f=cEDH`) fills the bar to the canvas top,
+  which makes the whole card feel huge; 160dp also matches the donut/pie boxes.
+  - Micro-fix while there: the tallest bar's count label sits at `y - 5` with a
+    fixed `topPadding = 20f` px (density-independent) and can clip at the canvas
+    top — derive the top padding from the paint's `textSize` so the number
+    always fits above the bar.
+- **`PieChartWithLegend`:** canvas `height(200.dp)` → `height(STATS_CHART_HEIGHT)`
+  — the pie's filled circle (diameter = canvas height, already centered) then
+  matches the Color Distribution donut's overall size. Legend/spacing unchanged.
+- `DonutChart` switches to the same constant (already 160.dp → no visual change).
+
+## Verification (this batch)
+
+- [x] `make test` green: `DeckGameRecordTest` (summary clamping, %, validation matrix) + all existing tests
+- [x] `make build` (assembleRelease) no new warnings
+- [ ] Manual: Deck Overview card ends with **Wins / Games / Win Rate** centered (after Total Value when present); tap ↑ → Wins+1 and Games+1, tap ↓ → Games+1; values update instantly and survive restart (migration 12→13 keeps existing decks)
+- [ ] Manual: ↑ / ↓ / ✏ are small right-aligned icons (18.dp, same as the card-info bottom sheet) below the card — no button chrome; long-press shows "Log Win" / "Log Loss" / "Edit record" label **without** logging a game; labels visible in both themes
+- [ ] Manual: edit dialog rejects wins > games / negatives, accepts corrections (incl. 0/0)
+- [ ] Manual: clone deck resets the record to 0/0
+- [ ] Manual: Mana Value Distribution visibly shorter (160dp, same box as donut/pie) and the tallest bar's count label fully visible — check with https://mtgtop8.com/event?e=92090&d=899457&f=cEDH (lots of 1-mana cards)
+- [ ] Manual: Card Types pie chart renders at the same height as the Color Distribution donut (both 160dp boxes) in both themes
+
+## Commits (when implemented)
+
+1. `feat: deck game record schema with migration and clone reset`
+2. `feat: game record actions and win rate summary logic`
+3. `feat: wins games row and logging controls in deck statistics`
+4. `fix: unify deck stats chart heights at 160dp`
+5. `docs: update PLAN and architecture for deck game record`
+6. `build: bump version to 1.7.0 (versionCode 12)`

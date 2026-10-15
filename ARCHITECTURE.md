@@ -83,7 +83,7 @@ wrapper: 9.7.1. Builds on any JDK ≥ 17, verified on system JDK 26.
 
 ### App Version
 
- `versionCode = 11`, `versionName = "1.6.0"` with `buildFeatures.buildConfig = true`;
+ `versionCode = 12`, `versionName = "1.7.0"` with `buildFeatures.buildConfig = true`;
 `BuildConfig.VERSION_NAME` is shown in Settings → About. Versioning policy: PATCH
 for fixes, MINOR for features, MAJOR for breaking changes (see §15).
 
@@ -171,6 +171,8 @@ CREATE TABLE decks (
     format TEXT NOT NULL,
     source TEXT NOT NULL,
     cover_scryfall_id TEXT DEFAULT NULL,
+    games_played INTEGER NOT NULL DEFAULT 0,
+    games_won INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL DEFAULT (current_timestamp)
 );
 ```
@@ -252,6 +254,7 @@ All migrations are applied in `AppDatabaseProvider`. `fallbackToDestructiveMigra
 | 9→10 | Add `mana_cost` to `cards` |
 | 10→11 | Remap condition grades: `LP`→`SP`, `MP`→`PL`, `DM`→`D` (in `cards` + `deck_cards`) |
 | 11→12 | Backfill `cards.mana_cost` from `scryfall_cards` where empty |
+| 12→13 | Add `games_played`, `games_won` to `decks` (deck game record counters) |
 
 ---
 
@@ -372,6 +375,8 @@ data class DeckWithCards(
 @Query("DELETE FROM deck_cards WHERE deck_id = :deckId") suspend fun deleteAllCards(deckId: Long)
 @Query("UPDATE deck_cards SET quantity = :quantity WHERE id = :cardId") suspend fun updateCardQuantity(cardId: Long, quantity: Int)
 @Query("UPDATE decks SET cover_scryfall_id = :scryfallId WHERE id = :deckId") suspend fun updateDeckCover(deckId: Long, scryfallId: String?)
+@Query("UPDATE decks SET games_played = games_played + 1, games_won = games_won + CASE WHEN :won = 1 THEN 1 ELSE 0 END WHERE id = :deckId") suspend fun recordGame(deckId: Long, won: Boolean)
+@Query("UPDATE decks SET games_played = :games, games_won = :wins WHERE id = :deckId") suspend fun setGameRecord(deckId: Long, games: Int, wins: Int)
 @Query("SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = :deckId") suspend fun cardCount(deckId: Long): Int
 @Query("SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = :deckId") fun cardCountFlow(deckId: Long): Flow<Int>
 @Query("SELECT slot, COUNT(*) as cnt FROM deck_cards WHERE deck_id = :deckId GROUP BY slot") fun slotCounts(deckId: Long): Flow<List<SlotCount>>
@@ -412,7 +417,7 @@ data class DeckWithCards(
 | Repository | Created via | Dependencies | Purpose |
 |------------|-------------|--------------|---------|
 | `CardRepository` | `CardRepository.create(context)` | `CardDao`, `TagDao` | Collection CRUD, CSV import, tag management, duplicate-merging import (`insertMergingDuplicates`), card detail flow (`cardById`), cross-tag `moveCard` (merges into an identical destination row via `findByDuplicateKey` + `sameCardInfo`, else re-tags), `updateCardAttributes` / `updateCardPrinting`, one-shot `backfillManaCost()` |
-| `DeckRepository` | `DeckRepository.create(context)` | `DeckDao`, `ScryfallCardDao` | Deck CRUD, validation, clone, color identity, per-card `updateCardCondition` / `updateCardPrinting` |
+| `DeckRepository` | `DeckRepository.create(context)` | `DeckDao`, `ScryfallCardDao` | Deck CRUD, validation, clone (resets game record to 0/0), color identity, per-card `updateCardCondition` / `updateCardPrinting`, game record (`recordGame`, `setGameRecord`) |
 | `ScryfallRepository` | `ScryfallRepository.create(context)` | `ScryfallCardDao`, `SettingsStore` | 15-day bulk sync (plus one-shot forced re-sync via `bulk_mana_resync_pending`), autocomplete, name lookup, set+collector lookup |
 | `ScanRepository` | `ScanRepository.create(context)` | `ScanSessionDao` | Scan sessions, add-to-collection |
 | `SettingsStore` | `SettingsStore(context)` | DataStore | Preferences |
@@ -421,7 +426,7 @@ Each `create(context)` method obtains the Room database via `AppDatabaseProvider
 
 ### AppDatabaseProvider
 
-Singleton pattern. Returns `AppDatabase` instance. Applies all migrations (3→9) + `fallbackToDestructiveMigration(true)`.
+Singleton pattern. Returns `AppDatabase` instance. Applies all migrations (3→13) + `fallbackToDestructiveMigration(true)`.
 
 ### SettingsStore (DataStore Preferences)
 
@@ -785,8 +790,9 @@ route.
 ### 8.8 DeckStatisticsScreen
 
 - **Stats:** Total value, mana value distribution (bar chart, buckets 0–8 + `9+` for everything higher), type distribution (colored pie chart + legend with color swatches), color distribution (slim donut, no center total), rarity distribution.
+- **Game record:** The Deck Overview card ends (after Total Value, divider-separated) with centered `Wins` / `Games` / `Win Rate` `StatItem`s fed by `gameRecordSummary(gamesPlayed, gamesWon)` (pure, clamps negatives/wins>games, 0% at 0 games — `ui/DeckStatistics.kt`, unit-tested in `DeckGameRecordTest`). Right-aligned icon row below the card (18dp glyphs, `48dp` touch targets, same sizing as the card-info bottom sheet): `Solid.ArrowUp` = log win, `Solid.ArrowDown` = log loss → `DeckViewViewModel.recordGame(won)` (single `UPDATE` via `DeckDao.recordGame`); `Solid.PenToSquare` opens `EditGameRecordDialog` (digits-only fields, Save disabled until `isValidGameRecord`, → `vm.setGameRecord`). Long-press an icon shows a Material3 `PlainTooltip` label ("Log Win" / "Log Loss" / "Edit record") via `TooltipBox` + `combinedClickable(onLongClick)` — `enableUserInput = false` so a long press can never also log a game.
 - **Computation:** Pure top-level `computeDeckStats(cards)` in `ui/DeckStatistics.kt` (unit-tested; guards divide-by-zero, non-finite totals, cmc bucketed 0–8 with `9+` overflow).
-- **Charts:** Custom Canvas composables (`BarChart`, `DonutChart`, `PieChartWithLegend`) in `ui/components/DeckStatsCharts.kt`; paint colors via `Color.toArgb()` (never `hashCode()`), all dimensions coerced ≥ 0.
+- **Charts:** Custom Canvas composables (`BarChart`, `DonutChart`, `PieChartWithLegend`) in `ui/components/DeckStatsCharts.kt`; all three share `STATS_CHART_HEIGHT = 160.dp` (bar chart was 200dp — felt huge on 1-mana-dense lists; its top padding is derived from the label text size so the tallest bar's count label never clips); paint colors via `Color.toArgb()` (never `hashCode()`), all dimensions coerced ≥ 0.
 
 ### 8.9 UnifiedImportSheet
 
