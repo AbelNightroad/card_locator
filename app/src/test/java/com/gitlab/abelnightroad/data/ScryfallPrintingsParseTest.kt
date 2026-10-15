@@ -55,10 +55,30 @@ class ScryfallPrintingsParseTest {
     }
 
     @Test
-    fun `printings url encodes exact-name query`() {
+    fun `printings url encodes exact-name query with unique=prints`() {
         assertEquals(
-            "https://api.scryfall.com/cards/search?q=%21%22Lightning+Bolt%22",
+            "https://api.scryfall.com/cards/search?q=%21%22Lightning+Bolt%22" +
+                "&unique=prints&order=released&dir=desc",
             ScryfallPrintings.printingsUrl("Lightning Bolt")
         )
+    }
+
+    @Test
+    fun `has_more page exposes next_page url`() {
+        val page = ScryfallPrintings.parsePage(
+            javaClass.getResourceAsStream("/fixtures/printings_has_more.json")!!
+                .bufferedReader().readText()
+        )
+        assertEquals(2, page.printings.size)
+        assertEquals(
+            "https://api.scryfall.com/cards/search?q=abc&page=2",
+            page.nextPage
+        )
+    }
+
+    @Test
+    fun `last page yields no next_page`() {
+        val page = ScryfallPrintings.parsePage(fixture())
+        assertNull(page.nextPage)
     }
 }

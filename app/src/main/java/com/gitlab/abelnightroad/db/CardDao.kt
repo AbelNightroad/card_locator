@@ -5,7 +5,6 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.RoomWarnings
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
@@ -141,31 +140,50 @@ interface CardDao {
 fun cardsByTag(tag: String): Flow<List<CardSearchResult>>
 
     @Query(
-        "SELECT id, name, set_code, set_name, collector_number, foil, rarity, " +
-            "quantity, scryfall_id, tag FROM cards " +
-            "WHERE name LIKE '%' || :query || '%' COLLATE NOCASE " +
-            "ORDER BY name COLLATE NOCASE ASC"
+        "SELECT cards.id AS id, cards.name AS name, cards.set_code AS set_code, " +
+            "cards.set_name AS set_name, cards.collector_number AS collector_number, " +
+            "cards.foil AS foil, cards.rarity AS rarity, cards.quantity AS quantity, " +
+            "cards.scryfall_id AS scryfall_id, cards.tag AS tag, " +
+            "CASE WHEN cards.mana_cost != '' THEN cards.mana_cost " +
+            "ELSE COALESCE(scryfall_cards.mana_cost, '') END AS mana_cost " +
+            "FROM cards LEFT JOIN scryfall_cards ON scryfall_cards.id = cards.scryfall_id " +
+            "WHERE cards.name LIKE '%' || :query || '%' COLLATE NOCASE " +
+            "ORDER BY cards.name COLLATE NOCASE ASC"
     )
-    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     fun searchByName(query: String): Flow<List<CardSearchResult>>
 
     @Query(
-        "SELECT id, name, set_code, set_name, collector_number, foil, rarity, " +
-            "quantity, scryfall_id, tag FROM cards " +
-            "WHERE name LIKE '%' || :query || '%' COLLATE NOCASE " +
+        "SELECT cards.id AS id, cards.name AS name, cards.set_code AS set_code, " +
+            "cards.set_name AS set_name, cards.collector_number AS collector_number, " +
+            "cards.foil AS foil, cards.rarity AS rarity, cards.quantity AS quantity, " +
+            "cards.scryfall_id AS scryfall_id, cards.tag AS tag, " +
+            "CASE WHEN cards.mana_cost != '' THEN cards.mana_cost " +
+            "ELSE COALESCE(scryfall_cards.mana_cost, '') END AS mana_cost " +
+            "FROM cards LEFT JOIN scryfall_cards ON scryfall_cards.id = cards.scryfall_id " +
+            "WHERE cards.name LIKE '%' || :query || '%' COLLATE NOCASE " +
             "AND (:colors IS NULL OR " +
-            "(instr(:colors, 'W') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%W%')) " +
-            "OR (instr(:colors, 'U') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%U%')) " +
-            "OR (instr(:colors, 'B') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%B%')) " +
-            "OR (instr(:colors, 'R') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%R%')) " +
-            "OR (instr(:colors, 'G') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%G%')) " +
-            "OR (instr(:colors, 'C') > 0 AND scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity = ''))) " +
-            "AND (:type IS NULL OR scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) " +
-            "AND (:rarity IS NULL OR rarity = :rarity) " +
-            "ORDER BY name COLLATE NOCASE ASC"
+            "(instr(:colors, 'W') > 0 AND cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%W%')) " +
+            "OR (instr(:colors, 'U') > 0 AND cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%U%')) " +
+            "OR (instr(:colors, 'B') > 0 AND cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%B%')) " +
+            "OR (instr(:colors, 'R') > 0 AND cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%R%')) " +
+            "OR (instr(:colors, 'G') > 0 AND cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity LIKE '%G%')) " +
+            "OR (instr(:colors, 'C') > 0 AND cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE color_identity = ''))) " +
+            "AND (:type IS NULL OR cards.scryfall_id IN (SELECT id FROM scryfall_cards WHERE type_line LIKE '%' || :type || '%')) " +
+            "AND (:rarity IS NULL OR cards.rarity = :rarity) " +
+            "ORDER BY cards.name COLLATE NOCASE ASC"
     )
-    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     fun searchAdvanced(query: String, colors: String?, type: String?, rarity: String?): Flow<List<CardSearchResult>>
+
+    /**
+     * One-shot backfill after a forced reference re-sync: collection rows that
+     * still have no mana cost pick up the (now face-aware) reference cost.
+     */
+    @Query(
+        "UPDATE cards SET mana_cost = COALESCE(" +
+            "(SELECT mana_cost FROM scryfall_cards WHERE scryfall_cards.id = cards.scryfall_id), '') " +
+            "WHERE COALESCE(mana_cost, '') = ''"
+    )
+    suspend fun backfillManaCostFromReference()
 
     @Transaction
     @Query(

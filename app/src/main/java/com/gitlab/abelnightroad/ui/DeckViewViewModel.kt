@@ -4,14 +4,18 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gitlab.abelnightroad.data.DeckRepository
+import com.gitlab.abelnightroad.data.PrintingInfo
+import com.gitlab.abelnightroad.data.ScryfallPrintings
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.db.DeckCardEntity
 import com.gitlab.abelnightroad.db.ScryfallCardEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class DeckViewViewModel(
     private val deckRepository: DeckRepository,
@@ -31,6 +35,29 @@ class DeckViewViewModel(
             deckRepository.updateCardQuantity(cardId, newQuantity)
         }
     }
+
+    fun updateCardCondition(cardId: Long, condition: String) {
+        viewModelScope.launch {
+            deckRepository.updateCardCondition(cardId, condition)
+        }
+    }
+
+    fun updateCardPrinting(cardId: Long, printing: PrintingInfo) {
+        viewModelScope.launch {
+            deckRepository.updateCardPrinting(
+                cardId,
+                printing.setCode,
+                printing.setName,
+                printing.collectorNumber,
+                printing.id,
+                printing.rarity,
+                printing.priceUsd ?: 0.0
+            )
+        }
+    }
+
+    suspend fun printings(name: String): List<PrintingInfo> =
+        withContext(Dispatchers.IO) { ScryfallPrintings.fetchPrintings(name) }
 
     fun removeCard(cardId: Long) {
         viewModelScope.launch {

@@ -21,10 +21,11 @@ class SettingsStore(private val context: Context) {
     private val lastScryfallCheckKey = longPreferencesKey("scryfall_last_check")
     private val onboardingKey = booleanPreferencesKey("onboarding_complete")
     private val hapticFeedbackKey = booleanPreferencesKey("haptic_feedback")
+    private val bulkResyncPendingKey = booleanPreferencesKey("bulk_mana_resync_pending")
 
     val themeId: Flow<String> = context.dataStore.data.map { it[themeKey] ?: "nord" }
     val darkMode: Flow<Boolean> = context.dataStore.data.map { it[darkKey] ?: true }
-    val fontId: Flow<String> = context.dataStore.data.map { it[fontKey] ?: "roboto" }
+    val fontId: Flow<String> = context.dataStore.data.map { it[fontKey] ?: "jetbrains_mono" }
     val scryfallUpdatedAt: Flow<String?> = context.dataStore.data.map { it[scryfallUpdatedAtKey] }
     val onboardingComplete: Flow<Boolean> = context.dataStore.data.map { it[onboardingKey] ?: false }
     val hapticFeedback: Flow<Boolean> = context.dataStore.data.map { it[hapticFeedbackKey] ?: true }
@@ -61,5 +62,13 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setHapticFeedback(enabled: Boolean) {
         context.dataStore.edit { it[hapticFeedbackKey] = enabled }
+    }
+
+    /** True until the face-aware mana-cost bulk re-import has completed once. */
+    suspend fun bulkManaResyncPending(): Boolean =
+        context.dataStore.data.first()[bulkResyncPendingKey] ?: true
+
+    suspend fun setBulkManaResyncPending(pending: Boolean) {
+        context.dataStore.edit { it[bulkResyncPendingKey] = pending }
     }
 }

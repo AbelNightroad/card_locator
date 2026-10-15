@@ -1,0 +1,26 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "set": "2x2",
+      "set_name": "Double Masters 2022",
+      "collector_number": "383",
+      "rarity": "rare",
+      "id": "aaaa1111-2222-3333-4444-555566667777",
+      "released_at": "2022-07-08",
+      "prices": { "usd": "1.50" }
+    },
+    {
+      "set": "pw21",
+      "set_name": "Promo Set 2021",
+      "collector_number": "42",
+      "rarity": "uncommon",
+      "id": "bbbb1111-2222-3333-4444-555566667777",
+      "released_at": "2021-05-01",
+      "prices": { "usd": null }
+    }
+  ],
+  "has_more": true,
+  "next_page": "https://api.scryfall.com/cards/search?q=abc&page=2",
+  "total_cards": 175
+}

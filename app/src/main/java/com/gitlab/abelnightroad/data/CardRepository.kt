@@ -102,6 +102,9 @@ class CardRepository(private val dao: CardDao, private val tagDao: TagDao) {
     suspend fun updateCardAttributes(id: Long, condition: String, foil: String) =
         dao.updateAttributes(id, condition, foil)
 
+    /** Backfills empty collection mana costs from the reference table (post re-sync). */
+    suspend fun backfillManaCost() = dao.backfillManaCostFromReference()
+
     suspend fun updateCardPrinting(
         id: Long,
         setCode: String,

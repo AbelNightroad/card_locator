@@ -77,7 +77,7 @@ internal fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themeId by viewModel.themeId.collectAsState(initial = "nord")
-    val fontId by viewModel.fontId.collectAsState(initial = "roboto")
+    val fontId by viewModel.fontId.collectAsState(initial = "jetbrains_mono")
     val hapticFeedback by viewModel.hapticFeedback.collectAsState(initial = true)
     val scryfallUpdatedAt by viewModel.scryfallUpdatedAt.collectAsState(initial = null)
     var expanded by remember { mutableStateOf(false) }

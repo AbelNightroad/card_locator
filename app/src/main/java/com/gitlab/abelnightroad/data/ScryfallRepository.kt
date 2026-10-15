@@ -80,23 +80,23 @@ class ScryfallRepository(
      * - If the table is empty, downloads and populates it.
      * - Otherwise, every 15 days, checks whether Scryfall published an update and
      *   re-imports when [BulkDataMeta.updatedAt] changed.
+     * - A pending one-shot resync (face-aware `mana_cost` for multi-faced cards)
+     *   bypasses both short-circuits so existing installs re-import once.
      * The downloaded jsonl.gz is always deleted afterwards.
-     *
-     * ponytail: the 15-day check runs on app launch; use WorkManager for
-     * scheduling when the app is closed (no new dependency was added here).
      */
     suspend fun syncIfNeeded(context: Context): SyncStatus {
         val now = System.currentTimeMillis()
         val populated = isPopulated()
+        val forceResync = settings.bulkManaResyncPending()
         val fifteenDaysMs = 15L * 24 * 60 * 60 * 1000
-        if (populated && now - getLastCheck() < fifteenDaysMs) {
+        if (populated && !forceResync && now - getLastCheck() < fifteenDaysMs) {
             return SyncStatus.Skipped
         }
         val file = File(context.cacheDir, "scryfall-default-cards.jsonl.gz")
         return try {
             val meta = ScryfallBulkClient.getDefaultCardsMeta()
             val stored = getUpdatedAt()
-            if (populated && stored == meta.updatedAt) {
+            if (populated && !forceResync && stored == meta.updatedAt) {
                 setLastCheck(now)
                 return SyncStatus.UpToDate
             }
@@ -105,6 +105,7 @@ class ScryfallRepository(
             val inserted = importFile(file)
             setUpdatedAt(meta.updatedAt)
             setLastCheck(now)
+            if (forceResync) settings.setBulkManaResyncPending(false)
             if (populated) SyncStatus.Updated(inserted) else SyncStatus.Populated(inserted)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

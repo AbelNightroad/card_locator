@@ -52,23 +52,58 @@ fun EditCardDialog(
     onPickPrinting: (PrintingInfo) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var condition by remember(card.id) { mutableStateOf(card.condition) }
-    var finish by remember(card.id) { mutableStateOf(card.foil) }
+    EditCardDialog(
+        cardKey = card.id,
+        cardName = card.name,
+        setCode = card.setCode,
+        setName = card.setName,
+        collectorNumber = card.collectorNumber,
+        condition = card.condition,
+        foil = card.foil,
+        showFinish = true,
+        fetchPrintings = fetchPrintings,
+        onSave = onSave,
+        onPickPrinting = onPickPrinting,
+        onDismiss = onDismiss
+    )
+}
+
+/**
+ * Shared edit dialog for collection and deck cards. [showFinish] hides the
+ * finish dropdown when the target table has no finish column (deck cards).
+ */
+@Composable
+fun EditCardDialog(
+    cardKey: Long,
+    cardName: String,
+    setCode: String,
+    setName: String,
+    collectorNumber: String,
+    condition: String,
+    foil: String,
+    showFinish: Boolean,
+    fetchPrintings: suspend (String) -> List<PrintingInfo>,
+    onSave: (condition: String, foil: String) -> Unit,
+    onPickPrinting: (PrintingInfo) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var currentCondition by remember(cardKey) { mutableStateOf(condition) }
+    var currentFinish by remember(cardKey) { mutableStateOf(foil) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var printings by remember { mutableStateOf<List<PrintingInfo>?>(null) }
     var showPicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    val conditions = remember(card.condition) {
-        if (card.condition in CardConditions.ALL) {
+    val conditions = remember(condition) {
+        if (condition in CardConditions.ALL) {
             CardConditions.ALL
         } else {
-            listOf(card.condition) + CardConditions.ALL
+            listOf(condition) + CardConditions.ALL
         }
     }
-    val finishes = remember(card.foil) {
-        if (card.foil in CARD_FINISHES) CARD_FINISHES else listOf(card.foil) + CARD_FINISHES
+    val finishes = remember(foil) {
+        if (foil in CARD_FINISHES) CARD_FINISHES else listOf(foil) + CARD_FINISHES
     }
 
     AlertDialog(
@@ -82,7 +117,7 @@ fun EditCardDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "${card.setName} (${card.setCode}) #${card.collectorNumber}",
+                        "$setName ($setCode) #$collectorNumber",
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -91,7 +126,7 @@ fun EditCardDialog(
                         error = null
                         scope.launch {
                             try {
-                                printings = fetchPrintings(card.name)
+                                printings = fetchPrintings(cardName)
                                 showPicker = true
                             } catch (e: Exception) {
                                 error = e.message ?: "Could not fetch printings"
@@ -118,23 +153,25 @@ fun EditCardDialog(
                 Spacer(Modifier.height(12.dp))
                 DropdownField(
                     label = "Condition",
-                    value = CardConditions.displayName(condition),
+                    value = CardConditions.displayName(currentCondition),
                     options = conditions.map { it to CardConditions.displayName(it) },
-                    onSelect = { condition = it }
+                    onSelect = { currentCondition = it }
                 )
 
-                Spacer(Modifier.height(12.dp))
-                DropdownField(
-                    label = "Finish",
-                    value = displayFinish(finish),
-                    options = finishes.map { it to displayFinish(it) },
-                    onSelect = { finish = it }
-                )
+                if (showFinish) {
+                    Spacer(Modifier.height(12.dp))
+                    DropdownField(
+                        label = "Finish",
+                        value = displayFinish(currentFinish),
+                        options = finishes.map { it to displayFinish(it) },
+                        onSelect = { currentFinish = it }
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                onSave(condition, finish)
+                onSave(currentCondition, currentFinish)
                 onDismiss()
             }) { Text("Save") }
         },

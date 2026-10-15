@@ -116,7 +116,7 @@ private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
         setName = setName,
         collectorNumber = collectorNumber,
         rarity = rarity,
-        manaCost = manaCost,
+        manaCost = resolvedManaCost(),
         typeLine = typeLine,
         oracleText = oracleText,
         priceUsd = prices.usd?.toDoubleOrNull(),
@@ -127,4 +127,18 @@ private fun ScryfallBulkCard.toEntity(): ScryfallCardEntity? {
         reserved = reserved,
         gameChanger = gameChanger ?: false
     )
+}
+
+/**
+ * Scryfall omits the top-level `mana_cost` for multi-faced cards — it lives
+ * on each `card_faces` entry. Lands (and anything else without a cost) stay
+ * `""`.
+ */
+private fun ScryfallBulkCard.resolvedManaCost(): String {
+    manaCost?.takeIf { it.isNotBlank() }?.let { return it }
+    return cardFaces
+        ?.mapNotNull { it.manaCost?.takeIf { cost -> cost.isNotBlank() } }
+        ?.takeIf { it.isNotEmpty() }
+        ?.joinToString(" // ")
+        ?: ""
 }

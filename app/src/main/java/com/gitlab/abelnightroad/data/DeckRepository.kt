@@ -66,6 +66,21 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
 
     suspend fun updateCardQuantity(cardId: Long, quantity: Int) = dao.updateCardQuantity(cardId, quantity)
 
+    suspend fun updateCardCondition(cardId: Long, condition: String) =
+        dao.updateCardCondition(cardId, condition)
+
+    suspend fun updateCardPrinting(
+        cardId: Long,
+        setCode: String,
+        setName: String,
+        collectorNumber: String,
+        scryfallId: String,
+        rarity: String,
+        priceUsd: Double
+    ) = dao.updateCardPrinting(
+        cardId, setCode, setName, collectorNumber, scryfallId, rarity, priceUsd
+    )
+
     suspend fun deleteAllCards(deckId: Long) = dao.deleteAllCards(deckId)
 
     suspend fun removeCardsBySlot(deckId: Long, slot: String) = dao.deleteCardsBySlot(deckId, slot)

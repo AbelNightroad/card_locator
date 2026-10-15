@@ -38,6 +38,11 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val status = withContext(Dispatchers.IO) { scryfall.syncIfNeeded(this@MainActivity) }
+            if (status is ScryfallRepository.SyncStatus.Populated ||
+                status is ScryfallRepository.SyncStatus.Updated
+            ) {
+                withContext(Dispatchers.IO) { repository.backfillManaCost() }
+            }
             val msg = when (status) {
                 is ScryfallRepository.SyncStatus.Populated ->
                     "Imported ${status.inserted} reference cards"
@@ -55,7 +60,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeId by mainViewModel.themeId.collectAsState(initial = "nord")
             val dark by mainViewModel.darkMode.collectAsState(initial = true)
-            val fontId by mainViewModel.fontId.collectAsState(initial = "roboto")
+            val fontId by mainViewModel.fontId.collectAsState(initial = "jetbrains_mono")
             AppTheme(themeId = themeId, dark = dark, fontId = fontId) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppNavigation(

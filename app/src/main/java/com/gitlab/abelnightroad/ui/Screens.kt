@@ -162,7 +162,7 @@ fun AppNavigation(
             scryfall = scryfall,
             deckId = s.deckId,
             onBack = { goBack() },
-            onCardClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
+            onImageClick = { scryfallId -> selectedDeckCardScryfallId = scryfallId }
         )
     }
 

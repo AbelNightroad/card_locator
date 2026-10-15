@@ -59,6 +59,7 @@ import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.ui.components.CardRow
+import com.gitlab.abelnightroad.ui.components.DeckCardBottomSheet
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
@@ -69,13 +70,18 @@ internal fun DeckViewScreen(
     scryfall: ScryfallRepository,
     deckId: Long,
     onBack: () -> Unit,
-    onCardClick: (String) -> Unit
+    onImageClick: (String) -> Unit
 ) {
     val vm: DeckViewViewModel = viewModel(key = "deck-$deckId") {
         DeckViewViewModel(deckRepository, scryfall, deckId)
     }
     val deckWithCards by vm.deckWithCards.collectAsState()
     var showAddCardDialog by remember { mutableStateOf(false) }
+    var selectedDeckCardId by remember { mutableStateOf<Long?>(null) }
+    val cards = deckWithCards?.cards ?: emptyList()
+    val selectedDeckCard = remember(cards, selectedDeckCardId) {
+        selectedDeckCardId?.let { id -> cards.find { it.id == id } }
+    }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -117,7 +123,6 @@ internal fun DeckViewScreen(
             )
         }
     ) { padding ->
-        val cards = deckWithCards?.cards ?: emptyList()
         val pagerState = rememberPagerState(pageCount = { 2 })
         val selectedTab = pagerState.currentPage.coerceIn(0, 1)
 
@@ -138,7 +143,9 @@ internal fun DeckViewScreen(
             }
             HorizontalPager(state = pagerState) { page ->
                 when (page) {
-                    0 -> DecklistTab(cards, vm, onCardClick)
+                    0 -> DecklistTab(cards, vm, onCardClick = { cardId ->
+                        selectedDeckCardId = cardId
+                    })
                     1 -> DeckStatisticsScreen(deckId, vm)
                 }
             }
@@ -150,6 +157,21 @@ internal fun DeckViewScreen(
             vm = vm,
             format = deckWithCards?.deck?.format ?: "Standard",
             onDismiss = { showAddCardDialog = false }
+        )
+    }
+
+    selectedDeckCard?.let { card ->
+        DeckCardBottomSheet(
+            card = card,
+            fetchPrintings = { vm.printings(it) },
+            onDismiss = { selectedDeckCardId = null },
+            onImageClick = { onImageClick(card.scryfallId) },
+            onSaveAttributes = { condition -> vm.updateCardCondition(card.id, condition) },
+            onPickPrinting = { vm.updateCardPrinting(card.id, it) },
+            onRemove = {
+                selectedDeckCardId = null
+                vm.removeCardWithUndo(card.id, cards)
+            }
         )
     }
 }
@@ -344,7 +366,7 @@ private val MAINBOARD_TYPE_ORDER = listOf(
 private fun DecklistTab(
     cards: List<com.gitlab.abelnightroad.db.DeckCardEntity>,
     vm: DeckViewViewModel,
-    onCardClick: (String) -> Unit
+    onCardClick: (Long) -> Unit
 ) {
     if (cards.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -383,7 +405,7 @@ DeckCardRow(
                                 if (delta < 0 && card.quantity <= 1) vm.removeCardWithUndo(card.id, cards)
                                 else vm.updateCardQuantity(card.id, card.quantity + delta)
                             },
-                            onCardClick = { onCardClick(card.scryfallId) }
+                            onCardClick = { onCardClick(card.id) }
                         )
                 }
             } else {
@@ -402,7 +424,7 @@ DeckCardRow(
                                 if (delta < 0 && card.quantity <= 1) vm.removeCardWithUndo(card.id, cards)
                                 else vm.updateCardQuantity(card.id, card.quantity + delta)
                             },
-                            onCardClick = { onCardClick(card.scryfallId) }
+                            onCardClick = { onCardClick(card.id) }
                         )
                     }
                 }

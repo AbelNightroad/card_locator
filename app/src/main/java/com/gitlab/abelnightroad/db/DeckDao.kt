@@ -49,6 +49,24 @@ interface DeckDao {
     @Query("UPDATE deck_cards SET quantity = :quantity WHERE id = :cardId")
     suspend fun updateCardQuantity(cardId: Long, quantity: Int)
 
+    @Query("UPDATE deck_cards SET condition = :condition WHERE id = :cardId")
+    suspend fun updateCardCondition(cardId: Long, condition: String)
+
+    @Query(
+        "UPDATE deck_cards SET set_code = :setCode, set_name = :setName, " +
+            "collector_number = :collectorNumber, scryfall_id = :scryfallId, " +
+            "rarity = :rarity, price_usd = :priceUsd WHERE id = :cardId"
+    )
+    suspend fun updateCardPrinting(
+        cardId: Long,
+        setCode: String,
+        setName: String,
+        collectorNumber: String,
+        scryfallId: String,
+        rarity: String,
+        priceUsd: Double
+    )
+
     @Query("UPDATE decks SET cover_scryfall_id = :scryfallId WHERE id = :deckId")
     suspend fun updateDeckCover(deckId: Long, scryfallId: String?)
 

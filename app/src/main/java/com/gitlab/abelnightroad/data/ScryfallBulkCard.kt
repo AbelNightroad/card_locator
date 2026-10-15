@@ -21,6 +21,11 @@ data class ScryfallImageUris(
 )
 
 @Serializable
+data class ScryfallCardFace(
+    @SerialName("mana_cost") val manaCost: String? = null
+)
+
+@Serializable
 data class ScryfallBulkCard(
     val id: String = "",
     val name: String = "",
@@ -28,7 +33,8 @@ data class ScryfallBulkCard(
     @SerialName("set_name") val setName: String = "",
     @SerialName("collector_number") val collectorNumber: String = "",
     val rarity: String = "",
-    @SerialName("mana_cost") val manaCost: String = "",
+    @SerialName("mana_cost") val manaCost: String? = null,
+    @SerialName("card_faces") val cardFaces: List<ScryfallCardFace>? = null,
     @SerialName("type_line") val typeLine: String = "",
     @SerialName("oracle_text") val oracleText: String = "",
     @SerialName("color_identity") val colorIdentity: List<String> = emptyList(),

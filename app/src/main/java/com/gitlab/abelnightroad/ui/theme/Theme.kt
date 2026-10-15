@@ -14,7 +14,7 @@ import com.gitlab.abelnightroad.ui.theme.themeById
 fun AppTheme(
     themeId: String,
     dark: Boolean,
-    fontId: String = "roboto",
+    fontId: String = "jetbrains_mono",
     content: @Composable () -> Unit
 ) {
     val theme = remember(themeId) { themeById(themeId) }

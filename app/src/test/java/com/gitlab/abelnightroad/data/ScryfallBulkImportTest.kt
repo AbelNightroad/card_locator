@@ -76,4 +76,43 @@ class ScryfallBulkImportTest {
         assertEquals("Black Lotus", inserted[0].name)
         assertEquals("Ancestral Recall", inserted[1].name)
     }
+
+    @Test
+    fun `multi-faced card joins mana cost from card faces`() {
+        val dfcJson = """
+            [
+              {
+                "id": "d1",
+                "name": "Delver of Secrets // Insectile Aberration",
+                "set": "isd",
+                "set_name": "Innistrad",
+                "collector_number": "50",
+                "rarity": "common",
+                "mana_cost": null,
+                "card_faces": [
+                  { "mana_cost": "{U}" },
+                  { "mana_cost": "{3}{U}" }
+                ],
+                "type_line": "Creature — Human Wizard // Creature — Human Insect"
+              },
+              {
+                "id": "l1",
+                "name": "Island",
+                "set": "lea",
+                "set_name": "Limited Edition Alpha",
+                "collector_number": "234",
+                "rarity": "basic",
+                "type_line": "Basic Land — Island"
+              }
+            ]
+        """.trimIndent()
+        val inserted = mutableListOf<ScryfallCardEntity>()
+        runBlocking {
+            ScryfallBulkImport.import(ByteArrayInputStream(dfcJson.toByteArray(Charsets.UTF_8))) {
+                inserted += it
+            }
+        }
+        assertEquals("{U} // {3}{U}", inserted[0].manaCost)
+        assertEquals("", inserted[1].manaCost)
+    }
 }
