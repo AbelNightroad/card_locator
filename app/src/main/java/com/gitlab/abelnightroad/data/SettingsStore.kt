@@ -22,6 +22,8 @@ class SettingsStore(private val context: Context) {
     private val onboardingKey = booleanPreferencesKey("onboarding_complete")
     private val hapticFeedbackKey = booleanPreferencesKey("haptic_feedback")
     private val bulkResyncPendingKey = booleanPreferencesKey("bulk_mana_resync_pending")
+    private val lastUpdateCheckKey = longPreferencesKey("update_last_check")
+    private val updateDismissedVersionKey = stringPreferencesKey("update_dismissed_version")
 
     val themeId: Flow<String> = context.dataStore.data.map { it[themeKey] ?: "nord" }
     val darkMode: Flow<Boolean> = context.dataStore.data.map { it[darkKey] ?: true }
@@ -70,5 +72,22 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setBulkManaResyncPending(pending: Boolean) {
         context.dataStore.edit { it[bulkResyncPendingKey] = pending }
+    }
+
+    suspend fun lastUpdateCheck(): Long =
+        context.dataStore.data.first()[lastUpdateCheckKey] ?: 0L
+
+    suspend fun setLastUpdateCheck(value: Long) {
+        context.dataStore.edit { it[lastUpdateCheckKey] = value }
+    }
+
+    suspend fun updateDismissedVersion(): String? =
+        context.dataStore.data.first()[updateDismissedVersionKey]
+
+    suspend fun setUpdateDismissedVersion(value: String?) {
+        context.dataStore.edit {
+            if (value == null) it.remove(updateDismissedVersionKey)
+            else it[updateDismissedVersionKey] = value
+        }
     }
 }

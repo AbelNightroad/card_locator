@@ -1,0 +1,14 @@
+{
+  "tag_name": "v1.6.0",
+  "body": "### Added\n- Deck card sheet with condition editing\n- Update checks from GitHub Releases",
+  "assets": [
+    {
+      "name": "notes.txt",
+      "browser_download_url": "https://github.com/AbelNightroad/card_locator/releases/download/v1.6.0/notes.txt"
+    },
+    {
+      "name": "MtGCardTracker-1.6.0.apk",
+      "browser_download_url": "https://github.com/AbelNightroad/card_locator/releases/download/v1.6.0/MtGCardTracker-1.6.0.apk"
+    }
+  ]
+}
