@@ -56,19 +56,22 @@ private val rarityColors = mapOf(
     "special" to Color(0xFF9370DB),
 )
 
+private val STATS_CHART_HEIGHT = 160.dp
+
 @Composable
 internal fun BarChart(
     data: List<CmcStat>,
     modifier: Modifier = Modifier
 ) {
     val textColor = MaterialTheme.colorScheme.onSurface
-    Canvas(modifier.fillMaxWidth().height(200.dp)) {
+    Canvas(modifier.fillMaxWidth().height(STATS_CHART_HEIGHT)) {
         if (data.isEmpty()) return@Canvas
         val maxCount = (data.maxOfOrNull { it.count } ?: 1).coerceAtLeast(1)
         val barWidth = (size.width / data.size * 0.7f).coerceAtLeast(0f)
         val spacing = size.width / data.size * 0.3f
         val bottomPadding = 30f
-        val topPadding = 20f
+        val labelTextSize = 24f
+        val topPadding = labelTextSize + 12f
         val chartHeight = (size.height - bottomPadding - topPadding).coerceAtLeast(0f)
 
         data.forEachIndexed { index, stat ->
@@ -85,7 +88,7 @@ internal fun BarChart(
             drawContext.canvas.nativeCanvas.apply {
                 val paint = android.graphics.Paint().apply {
                     color = textColor.toArgb()
-                    textSize = 24f
+                    textSize = labelTextSize
                     textAlign = android.graphics.Paint.Align.CENTER
                     isAntiAlias = true
                 }
@@ -103,7 +106,7 @@ internal fun DonutChart(
     data: List<ColorStat>,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier.fillMaxWidth().height(160.dp)) {
+    Canvas(modifier.fillMaxWidth().height(STATS_CHART_HEIGHT)) {
         if (data.isEmpty()) return@Canvas
         val total = data.sumOf { it.count }.toFloat()
         if (total <= 0f || !total.isFinite()) return@Canvas
@@ -143,7 +146,7 @@ internal fun PieChartWithLegend(
 ) {
     val total = entries.sumOf { it.second }.coerceAtLeast(1)
     Column(modifier.fillMaxWidth()) {
-        Canvas(Modifier.fillMaxWidth().height(200.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(STATS_CHART_HEIGHT)) {
             if (entries.isEmpty()) return@Canvas
             val sum = entries.sumOf { it.second }.toFloat()
             if (sum <= 0f || !sum.isFinite()) return@Canvas
