@@ -96,6 +96,19 @@ class DeckViewViewModel(
 
     fun clearRemovedCard() { _removedCard.value = null }
 
+    fun recordGame(won: Boolean) {
+        viewModelScope.launch {
+            deckRepository.recordGame(deckId, won)
+        }
+    }
+
+    fun setGameRecord(games: Int, wins: Int) {
+        if (!isValidGameRecord(games, wins)) return
+        viewModelScope.launch {
+            deckRepository.setGameRecord(deckId, games, wins)
+        }
+    }
+
     fun addCardToDeck(
         card: ScryfallCardEntity,
         slot: String,

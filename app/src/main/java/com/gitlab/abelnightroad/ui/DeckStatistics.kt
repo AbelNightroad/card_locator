@@ -112,3 +112,30 @@ private fun parseCmc(manaCost: String): Double {
     cmc += pipRegex.findAll(manaCost).count()
     return cmc
 }
+
+data class GameRecordSummary(
+    val games: Int,
+    val wins: Int,
+    val losses: Int,
+    val winRatePercent: Float
+)
+
+/**
+ * Clamps persisted game-record counters into a displayable summary: negatives
+ * become 0, wins never exceed games, and a zero-game deck reports 0% instead
+ * of NaN (same divide-by-zero discipline as the other stats).
+ */
+internal fun gameRecordSummary(games: Int, wins: Int): GameRecordSummary {
+    val safeGames = games.coerceAtLeast(0)
+    val safeWins = wins.coerceIn(0, safeGames)
+    val winRate = if (safeGames == 0) 0f else safeWins * 100f / safeGames
+    return GameRecordSummary(
+        games = safeGames,
+        wins = safeWins,
+        losses = safeGames - safeWins,
+        winRatePercent = winRate
+    )
+}
+
+internal fun isValidGameRecord(games: Int, wins: Int): Boolean =
+    games >= 0 && wins in 0..games
