@@ -33,6 +33,11 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
 
     suspend fun renameDeck(deckId: Long, name: String) = dao.renameDeck(deckId, name)
 
+    suspend fun recordGame(deckId: Long, won: Boolean) = dao.recordGame(deckId, won)
+
+    suspend fun setGameRecord(deckId: Long, games: Int, wins: Int) =
+        dao.setGameRecord(deckId, games, wins)
+
     suspend fun addCardToDeck(deckId: Long, scryfallId: String, cardName: String, setCode: String, setName: String, collectorNumber: String, rarity: String, quantity: Int = 1, manaCost: String = "", typeLine: String = "", slot: String = "mainboard", condition: String = "NM", priceUsd: Double = 0.0): Long {
         val ci = withContext(Dispatchers.IO) {
             scryfallDao.byId(scryfallId)?.colorIdentity ?: ""
@@ -91,7 +96,13 @@ class DeckRepository(private val dao: DeckDao, private val scryfallDao: Scryfall
         val dwc = dao.getDeckWithCards(deckId).first()
             ?: throw Exception("Deck not found")
         val newId = dao.insertDeck(
-            dwc.deck.copy(id = 0, name = "${dwc.deck.name} (copy)", createdAt = System.currentTimeMillis())
+            dwc.deck.copy(
+                id = 0,
+                name = "${dwc.deck.name} (copy)",
+                gamesPlayed = 0,
+                gamesWon = 0,
+                createdAt = System.currentTimeMillis()
+            )
         )
         for (card in dwc.cards) {
             dao.insertCard(card.copy(id = 0, deckId = newId))

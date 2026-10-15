@@ -11,5 +11,7 @@ data class DeckEntity(
     val format: String,
     val source: String,
     @ColumnInfo(name = "cover_scryfall_id") val coverScryfallId: String? = null,
+    @ColumnInfo(name = "games_played") val gamesPlayed: Int = 0,
+    @ColumnInfo(name = "games_won") val gamesWon: Int = 0,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis()
 )

@@ -73,6 +73,15 @@ interface DeckDao {
     @Query("UPDATE decks SET name = :name WHERE id = :deckId")
     suspend fun renameDeck(deckId: Long, name: String)
 
+    @Query(
+        "UPDATE decks SET games_played = games_played + 1, " +
+            "games_won = games_won + CASE WHEN :won = 1 THEN 1 ELSE 0 END WHERE id = :deckId"
+    )
+    suspend fun recordGame(deckId: Long, won: Boolean)
+
+    @Query("UPDATE decks SET games_played = :games, games_won = :wins WHERE id = :deckId")
+    suspend fun setGameRecord(deckId: Long, games: Int, wins: Int)
+
     @Query("SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = :deckId")
     suspend fun cardCount(deckId: Long): Int
 

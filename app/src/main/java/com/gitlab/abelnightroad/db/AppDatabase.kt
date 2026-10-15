@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [CardEntity::class, ScryfallCardEntity::class, DeckEntity::class, DeckCardEntity::class, TagEntity::class, ScanSessionEntity::class, ScannedCardEntity::class],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -71,6 +71,11 @@ abstract class AppDatabase : RoomDatabase() {
                     "SELECT `mana_cost` FROM `scryfall_cards` WHERE `scryfall_cards`.`id` = `cards`.`scryfall_id`" +
                     ") WHERE (`mana_cost` IS NULL OR `mana_cost` = '') AND `scryfall_id` != ''"
             )
+        }
+
+        val MIGRATION_12_13 = Migration(12, 13) { db ->
+            db.execSQL("ALTER TABLE `decks` ADD COLUMN `games_played` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `decks` ADD COLUMN `games_won` INTEGER NOT NULL DEFAULT 0")
         }
     }
 }
