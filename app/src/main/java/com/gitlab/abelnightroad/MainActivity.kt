@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.gitlab.abelnightroad.data.AppUpdateManager
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.CrashLog
 import com.gitlab.abelnightroad.data.DeckRepository
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
         val scryfall = ScryfallRepository.create(this)
         val scanRepository = ScanRepository.create(this)
         val settings = SettingsStore(this)
+        val updateManager = AppUpdateManager(settings)
         val mainViewModel = MainViewModel(repository, settings)
 
         lifecycleScope.launch {
@@ -57,6 +59,8 @@ class MainActivity : ComponentActivity() {
             msg?.let { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() }
         }
 
+        lifecycleScope.launch { updateManager.checkWeekly() }
+
         setContent {
             val themeId by mainViewModel.themeId.collectAsState(initial = "nord")
             val dark by mainViewModel.darkMode.collectAsState(initial = true)
@@ -69,7 +73,8 @@ class MainActivity : ComponentActivity() {
                         deckRepository = deckRepository,
                         scryfall = scryfall,
                         scanRepository = scanRepository,
-                        settings = settings
+                        settings = settings,
+                        updateManager = updateManager
                     )
                 }
             }

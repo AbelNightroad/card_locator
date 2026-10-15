@@ -52,6 +52,7 @@ import compose.icons.fontawesomeicons.solid.*
 import com.gitlab.abelnightroad.BuildConfig
 import com.gitlab.abelnightroad.data.CollectionCsv
 import com.gitlab.abelnightroad.data.CardRepository
+import com.gitlab.abelnightroad.data.AppUpdateManager
 import com.gitlab.abelnightroad.data.CrashLog
 import com.gitlab.abelnightroad.data.ScryfallRepository
 import com.gitlab.abelnightroad.data.ThirdPartyImport
@@ -70,6 +71,7 @@ internal fun SettingsScreen(
     viewModel: MainViewModel,
     repository: CardRepository,
     scryfall: ScryfallRepository,
+    updateManager: AppUpdateManager,
     onBack: () -> Unit,
     onManageTags: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {}
@@ -276,7 +278,7 @@ internal fun SettingsScreen(
             ScryfallCard(scryfallUpdatedAt = scryfallUpdatedAt)
 
             Spacer(Modifier.height(12.dp))
-            AboutCard()
+            AboutCard(updateManager = updateManager)
         }
     }
 
@@ -363,8 +365,11 @@ private fun ScryfallCard(scryfallUpdatedAt: String?) {
 }
 
 @Composable
-private fun AboutCard() {
+private fun AboutCard(updateManager: AppUpdateManager) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showCrashLog by remember { mutableStateOf(false) }
+    var checkingUpdate by remember { mutableStateOf(false) }
     Card(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         elevation = CardDefaults.cardElevation(2.dp)
@@ -386,7 +391,35 @@ private fun AboutCard() {
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { showCrashLog = true }) { Text("Crash logs") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            checkingUpdate = true
+                            when (val result = updateManager.checkManual()) {
+                                is AppUpdateManager.CheckResult.UpToDate ->
+                                    Toast.makeText(
+                                        context,
+                                        "You're on the latest version (v${result.version})",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                is AppUpdateManager.CheckResult.UpdateFound -> Unit
+                                is AppUpdateManager.CheckResult.Failed ->
+                                    Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                            }
+                            checkingUpdate = false
+                        }
+                    },
+                    enabled = !checkingUpdate
+                ) {
+                    if (checkingUpdate) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Check for Updates")
+                    }
+                }
+                OutlinedButton(onClick = { showCrashLog = true }) { Text("Crash logs") }
+            }
         }
     }
     if (showCrashLog) {

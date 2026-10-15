@@ -11,6 +11,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.gitlab.abelnightroad.BuildConfig
+import com.gitlab.abelnightroad.data.AppUpdateManager
 import com.gitlab.abelnightroad.data.CardRepository
 import com.gitlab.abelnightroad.data.DeckRepository
 import com.gitlab.abelnightroad.data.ScanRepository
@@ -22,6 +24,7 @@ import com.gitlab.abelnightroad.ui.navigation.Screen
 import com.gitlab.abelnightroad.ui.navigation.FilledBottomNavigationBar
 import com.gitlab.abelnightroad.ui.navigation.NAV_ITEMS
 import com.gitlab.abelnightroad.ui.components.FullscreenOverlay
+import com.gitlab.abelnightroad.ui.components.UpdateDialog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -31,7 +34,8 @@ fun AppNavigation(
     deckRepository: DeckRepository,
     scryfall: ScryfallRepository,
     scanRepository: ScanRepository,
-    settings: SettingsStore
+    settings: SettingsStore,
+    updateManager: AppUpdateManager
 ) {
     val onboardingComplete by settings.onboardingComplete.collectAsState(initial = true)
     val hapticFeedback by settings.hapticFeedback.collectAsState(initial = true)
@@ -138,6 +142,7 @@ fun AppNavigation(
             viewModel = mainViewModel,
             repository = repository,
             scryfall = scryfall,
+            updateManager = updateManager,
             onBack = { goBack() },
             onManageTags = { navigate(Screen.ManageTags) },
             bottomBar = bottomBar
@@ -194,5 +199,15 @@ fun AppNavigation(
 
     selectedDeckCardScryfallId?.let { scryfallId ->
         FullscreenOverlay(scryfallId = scryfallId, onDismiss = { selectedDeckCardScryfallId = null })
+    }
+
+    val pendingUpdate by updateManager.pending.collectAsState()
+    pendingUpdate?.let { release ->
+        UpdateDialog(
+            release = release,
+            currentVersion = BuildConfig.VERSION_NAME,
+            onLater = { scope.launch { updateManager.dismissPending() } },
+            onDone = { updateManager.clearPending() }
+        )
     }
 }
